@@ -1,238 +1,248 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from collections import defaultdict
-from uuid import uuid4
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
+import configparser
+import datetime
+import json
+import jwt
+import logging
 import os
 import time
-import json
-import logging
-import jwt
-import datetime
-from django.shortcuts import render
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.conf import settings
-from omeroweb.webclient.decorators import login_required, render_response
-from omero.gateway import BlitzGateway
-from omero.rtypes import unwrap, rbool, wrap, rlong
-from biomero import SlurmClient
-from .utils import create_upload_order, get_react_build_file, prepare_workflow_parameters
-import configparser
-from configupdater import ConfigUpdater, Comment
-import datetime
 import uuid
+
+from biomero import SlurmClient
 from collections import defaultdict
+from configupdater import ConfigUpdater, Comment
+from django.http import JsonResponse, HttpResponseBadRequest
+from django.views.decorators.http import require_http_methods
+from omeroweb.webclient.decorators import login_required, render_response
+from omero.rtypes import unwrap, rbool, wrap, rlong
 from omero_adi.utils.ingest_tracker import initialize_ingest_tracker
-from .constants import BROWSABLE_FILE_EXTENSIONS, SUPPORTED_FILE_EXTENSIONS
-from .file_browser.ReadLeicaFile import read_leica_file
-from .utils import parse_bool_env
+
+from .utils import (
+    create_upload_order,
+    get_react_build_file,
+    prepare_workflow_parameters,
+    parse_bool_env,
+)
+from .settings import (
+    EXTENSION_TO_FILE_BROWSER,
+    SUPPORTED_FILE_EXTENSIONS,
+    EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES,
+    DEFAULT_MOUNT_PATH,
+    EXTENSIONS_REQUIRING_PREPROCESSING,
+    EXTENSIONS_NON_BROWSABLE,
+    MAPPINGS_FILE,
+)
 
 logger = logging.getLogger(__name__)
 
-# Add near other constants at the top # TODO replace with postgres entries
-MAPPINGS_FILE = os.path.join(os.path.dirname(__file__), 'group_mappings.json')
-
-
 @login_required()
-@require_http_methods(["GET"])
-def get_biomero_config(request, conn=None, **kwargs):
+@require_http_methods(["GET", "POST"])
+def admin_config(request, conn=None, **kwargs):
     """
     Read the biomero config
     """
-    try:
-        current_user = conn.getUser()
-        username = current_user.getName()
-        user_id = current_user.getId()
-        is_admin = conn.isAdmin()
-        if not is_admin:
-            logger.error(f"Unauthorized request for user {user_id}:{username}")
-            return JsonResponse({"error": "Unauthorized request"}, status=403)
-        # Load the configuration file
-        configs = configparser.ConfigParser(allow_no_value=True)
-        # Loads from default locations and given location, missing files are ok
-        configs.read(
-            [
-                os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_1),
-                os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_2),
-                os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3),
-            ]
-        )
-        # Convert configparser object to JSON-like dict
-        config_dict = {
-            section: dict(configs.items(section)) for section in configs.sections()
-        }
+    if request.method == "GET":
+        try:
+            current_user = conn.getUser()
+            username = current_user.getName()
+            user_id = current_user.getId()
+            is_admin = conn.isAdmin()
+            if not is_admin:
+                logger.error(f"Unauthorized request for user {user_id}:{username}")
+                return JsonResponse({"error": "Unauthorized request"}, status=403)
+            # Load the configuration file
+            configs = configparser.ConfigParser(allow_no_value=True)
+            # Loads from default locations and given location, missing files are ok
+            configs.read(
+                [
+                    os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_1),
+                    os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_2),
+                    os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3),
+                ]
+            )
+            # Convert configparser object to JSON-like dict
+            config_dict = {
+                section: dict(configs.items(section)) for section in configs.sections()
+            }
 
-        return JsonResponse({"config": config_dict})
-    except Exception as e:
-        logger.error(f"Error retrieving BIOMERO config: {str(e)}")
-        return JsonResponse({"error": str(e)}, status=500)
+            return JsonResponse({"config": config_dict})
+        except Exception as e:
+            logger.error(f"Error retrieving BIOMERO config: {str(e)}")
+            return JsonResponse({"error": str(e)}, status=500)
 
+    elif request.method == "POST":
+        """
+        Save the biomero config
+        """
+        try:
+            # Parse the incoming JSON payload
+            data = json.loads(request.body)
+            current_user = conn.getUser()
+            username = current_user.getName()
+            user_id = current_user.getId()
+            is_admin = conn.isAdmin()
+            if not is_admin:
+                logger.error(f"Unauthorized request for user {user_id}:{username}")
+                return JsonResponse({"error": "Unauthorized request"}, status=403)
 
-@login_required()
-@require_http_methods(["POST"])
-def save_biomero_config(request, conn=None, **kwargs):
-    try:
-        # Parse the incoming JSON payload
-        data = json.loads(request.body)
-        current_user = conn.getUser()
-        username = current_user.getName()
-        user_id = current_user.getId()
-        is_admin = conn.isAdmin()
-        if not is_admin:
-            logger.error(f"Unauthorized request for user {user_id}:{username}")
-            return JsonResponse({"error": "Unauthorized request"}, status=403)
+            # Define the file path for saving the configuration
+            config_path = os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3)
 
-        # Define the file path for saving the configuration
-        config_path = os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3)
+            # Create ConfigUpdater object
+            config = ConfigUpdater()
 
-        # Create ConfigUpdater object
-        config = ConfigUpdater()
+            # Read the existing configuration if the file exists
+            if os.path.exists(config_path):
+                config.read(config_path)
 
-        # Read the existing configuration if the file exists
-        if os.path.exists(config_path):
-            config.read(config_path)
+            # Extract the 'config' section from the incoming data
+            config_data = data.get("config", {})
 
-        # Extract the 'config' section from the incoming data
-        config_data = data.get("config", {})
+            def generate_model_comment(key):
+                if key.endswith("_job"):
+                    c = "# The jobscript in the 'slurm_script_repo'"
+                elif key.endswith("_repo"):
+                    c = "# The (e.g. github) repository with the descriptor.json file"
+                else:
+                    c = "# Adding or overriding job value for this workflow"
+                return c
 
-        def generate_model_comment(key):
-            if key.endswith("_job"):
-                c = "# The jobscript in the 'slurm_script_repo'"
-            elif key.endswith("_repo"):
-                c = "# The (e.g. github) repository with the descriptor.json file"
-            else:
-                c = "# Adding or overriding job value for this workflow"
-            return c
+            # Update the config with new values
+            for section, settingsd in config_data.items():
+                if not isinstance(settingsd, dict):
+                    raise ValueError(
+                        f"Section '{section}' must contain key-value pairs."
+                    )
 
-        # Update the config with new values
-        for section, settingsd in config_data.items():
-            if not isinstance(settingsd, dict):
-                raise ValueError(f"Section '{section}' must contain key-value pairs.")
+                # If the section doesn't exist, add it
+                if section not in config:
+                    config.add_section(section)
 
-            # If the section doesn't exist, add it
-            if section not in config:
-                config.add_section(section)
+                if section == "MODELS":
+                    # Group keys by prefix (cellpose, stardist, etc.)
+                    model_keys = defaultdict(list)
+                    for key, value in settingsd.items():
+                        # Split the key on the known suffixes
+                        model_prefix = key
+                        for suffix in ["repo", "job"]:
+                            if f"_{suffix}" in key:
+                                model_prefix = key.split(f"_{suffix}")[0]
+                                break
+                        model_keys[model_prefix].append((key, value))
 
-            if section == "MODELS":
-                # Group keys by prefix (cellpose, stardist, etc.)
-                model_keys = defaultdict(list)
-                for key, value in settingsd.items():
-                    # Split the key on the known suffixes
-                    model_prefix = key
-                    for suffix in ["repo", "job"]:
-                        if f"_{suffix}" in key:
-                            model_prefix = key.split(f"_{suffix}")[0]
-                            break
-                    model_keys[model_prefix].append((key, value))
-
-                # Sort the prefixes and insert the keys in the correct order
-                for model_prefix in sorted(model_keys.keys()):
-                    # Add the model-specific keys
-                    for key, value in model_keys[model_prefix]:
-                        # If the key already exists, just update it
-                        if key in config[section]:
-                            config.set(section, key, value)
-                        else:
-                            if key == model_prefix:
-                                comment = f"""
-# -------------------------------------
-# {model_prefix.capitalize()} (added via web UI)
-# -------------------------------------
-# The path to store the container on the slurm_images_path"""
+                    # Sort the prefixes and insert the keys in the correct order
+                    for model_prefix in sorted(model_keys.keys()):
+                        # Add the model-specific keys
+                        for key, value in model_keys[model_prefix]:
+                            # If the key already exists, just update it
+                            if key in config[section]:
                                 config.set(section, key, value)
-                                (
-                                    config[section][model_prefix].add_before.comment(
-                                        comment
-                                    )
-                                )
                             else:
-                                # For new keys, add the key and a comment before it
-                                model_comment = generate_model_comment(key)
-
-                                if "job_" in key:
+                                if key == model_prefix:
+                                    comment = f"""
+    # -------------------------------------
+    # {model_prefix.capitalize()} (added via web UI)
+    # -------------------------------------
+    # The path to store the container on the slurm_images_path"""
+                                    config.set(section, key, value)
                                     (
-                                        config[section][model_prefix + "_job"]
-                                        .add_after.comment(model_comment)
-                                        .option(key, value)
-                                    )
-                                elif "_job" in key:
-                                    (
-                                        config[section][model_prefix + "_repo"]
-                                        .add_after.comment(model_comment)
-                                        .option(key, value)
+                                        config[section][
+                                            model_prefix
+                                        ].add_before.comment(comment)
                                     )
                                 else:
-                                    (
-                                        config[section][model_prefix]
-                                        .add_after.comment(model_comment)
-                                        .option(key, value)
-                                    )
+                                    # For new keys, add the key and a comment before it
+                                    model_comment = generate_model_comment(key)
 
-                # Check for removing top-level keys and related keys
-                for key in list(config[section].keys()):
-                    model_prefix = key
-                    for suffix in ["repo", "job"]:
-                        if f"_{suffix}" in key:
-                            model_prefix = key.split(f"_{suffix}")[0]
-                            break
-                    if model_prefix not in model_keys:
-                        # Remove the unwanted key or subsection
-                        del config[section][key]
-                
-                for key in list(config[section].keys()):
-                    if key not in settingsd:  # If key isn't in new settings, remove it
-                        del config[section][key]
+                                    if "job_" in key:
+                                        (
+                                            config[section][model_prefix + "_job"]
+                                            .add_after.comment(model_comment)
+                                            .option(key, value)
+                                        )
+                                    elif "_job" in key:
+                                        (
+                                            config[section][model_prefix + "_repo"]
+                                            .add_after.comment(model_comment)
+                                            .option(key, value)
+                                        )
+                                    else:
+                                        (
+                                            config[section][model_prefix]
+                                            .add_after.comment(model_comment)
+                                            .option(key, value)
+                                        )
 
-            elif section == "CONVERTERS":
-                # add new or edits as normal
-                for key, value in settingsd.items():
-                    config.set(section, key, value)
-                # Check for removing top-level keys and related keys
-                for key in list(config[section].keys()):
-                    if key not in settingsd.keys():
-                        del config[section][key]
-            else:
-                # Update or add the keys in the section
-                for key, value in settingsd.items():
-                    config.set(section, key, value)
+                    # Check for removing top-level keys and related keys
+                    for key in list(config[section].keys()):
+                        model_prefix = key
+                        for suffix in ["repo", "job"]:
+                            if f"_{suffix}" in key:
+                                model_prefix = key.split(f"_{suffix}")[0]
+                                break
+                        if model_prefix not in model_keys:
+                            # Remove the unwanted key or subsection
+                            del config[section][key]
 
-        # Prepare the update timestamp comment
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        change_comment = f"Config automatically updated by {username} ({user_id}) via the web UI on {timestamp}"
-        # Check if the changelog section exists, and create it if not
-        if "changelog" not in config:
-            config.add_section("changelog")
+                    for key in list(config[section].keys()):
+                        if (
+                            key not in settingsd
+                        ):  # If key isn't in new settings, remove it
+                            del config[section][key]
 
-        # Add the change comment as the first block of the changelog section
-        changelog_section = config["changelog"]
-        if isinstance(changelog_section.first_block, Comment):
-            changelog_section.first_block.detach()
-        changelog_section.add_after.comment(change_comment)
+                elif section == "CONVERTERS":
+                    # add new or edits as normal
+                    for key, value in settingsd.items():
+                        config.set(section, key, value)
+                    # Check for removing top-level keys and related keys
+                    for key in list(config[section].keys()):
+                        if key not in settingsd.keys():
+                            del config[section][key]
+                else:
+                    # Update or add the keys in the section
+                    for key, value in settingsd.items():
+                        config.set(section, key, value)
 
-        # Save the updated configuration while preserving comments
-        with open(config_path, "w") as config_file:
-            config.write(config_file)
+            # Prepare the update timestamp comment
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            change_comment = f"Config automatically updated by {username} ({user_id}) via the web UI on {timestamp}"
+            # Check if the changelog section exists, and create it if not
+            if "changelog" not in config:
+                config.add_section("changelog")
 
-        logger.info(f"Configuration saved successfully to {config_path}")
-        return JsonResponse(
-            {"message": "Configuration saved successfully", "path": config_path},
-            status=200,
-        )
+            # Add the change comment as the first block of the changelog section
+            changelog_section = config["changelog"]
+            if isinstance(changelog_section.first_block, Comment):
+                changelog_section.first_block.detach()
+            changelog_section.add_after.comment(change_comment)
 
-    except json.JSONDecodeError:
-        logger.error("Invalid JSON data in the request")
-        return JsonResponse({"error": "Invalid JSON data"}, status=400)
-    except ValueError as e:
-        logger.error(f"Invalid configuration format: {str(e)}")
-        return JsonResponse(
-            {"error": f"Invalid configuration format: {str(e)}"}, status=400
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return JsonResponse(
-            {"error": f"Failed to save configuration: {str(e)}"}, status=500
-        )
+            # Save the updated configuration while preserving comments
+            with open(config_path, "w") as config_file:
+                config.write(config_file)
+
+            logger.info(f"Configuration saved successfully to {config_path}")
+            return JsonResponse(
+                {"message": "Configuration saved successfully", "path": config_path},
+                status=200,
+            )
+
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON data in the request")
+            return JsonResponse({"error": "Invalid JSON data"}, status=400)
+        except ValueError as e:
+            logger.error(f"Invalid configuration format: {str(e)}")
+            return JsonResponse(
+                {"error": f"Invalid configuration format: {str(e)}"}, status=400
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            return JsonResponse(
+                {"error": f"Failed to save configuration: {str(e)}"}, status=500
+            )
+    else:
+        logger.error("Unsupported HTTP method for 'config' endpoint")
+        return HttpResponseBadRequest("Unsupported HTTP method. Use GET or POST.")
 
 
 @login_required()
@@ -655,9 +665,10 @@ def import_selected(request, conn=None, **kwargs):
         # Validate the group
         available_groups = [g.getName() for g in conn.getGroupsMemberOf()]
         if selected_group not in available_groups:
-            return JsonResponse({
-                "error": f"User is not a member of group: {selected_group}"
-            }, status=403)
+            return JsonResponse(
+                {"error": f"User is not a member of group: {selected_group}"},
+                status=403,
+            )
 
         # Log the import attempt
         logger.info(
@@ -667,10 +678,12 @@ def import_selected(request, conn=None, **kwargs):
         # Call process_files with validated group
         process_files(selected_items, selected_destinations, selected_group, username)
 
-        return JsonResponse({
-            "status": "success",
-            "message": f"Successfully queued {len(selected_items)} items for import",
-        })
+        return JsonResponse(
+            {
+                "status": "success",
+                "message": f"Successfully queued {len(selected_items)} items for import",
+            }
+        )
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON data"}, status=400)
     except Exception as e:
@@ -685,7 +698,7 @@ def process_files(selected_items, selected_destinations, group, username):
     files_by_preprocessing = defaultdict(list)  # Group files by preprocessing config
     # Path to root folder from settings
     base_dir = os.getenv("IMPORT_MOUNT_PATH", "/L-Drive")
-    
+
     for item in selected_items:
         # Handle both old string format and new object format for backward compatibility
         if isinstance(item, dict):
@@ -696,10 +709,12 @@ def process_files(selected_items, selected_destinations, group, username):
             # Old format - just a string path
             local_path = item
             subfile_uuid = None
-            
+
         abs_path = os.path.abspath(os.path.join(base_dir, local_path))
 
-        logger.info(f"Importing: {abs_path} to {selected_destinations} (UUID: {subfile_uuid})")
+        logger.info(
+            f"Importing: {abs_path} to {selected_destinations} (UUID: {subfile_uuid})"
+        )
 
         for sample_parent_type, sample_parent_id in selected_destinations:
             if sample_parent_type in ("screens", "Screen"):
@@ -710,9 +725,12 @@ def process_files(selected_items, selected_destinations, group, username):
                     preprocessing_key = "screen_no_preprocessing"
             elif sample_parent_type in ("datasets", "Dataset"):
                 sample_parent_type = "Dataset"
-                
+
                 # Check if this is a Leica file with UUID (sub-image selection)
-                if subfile_uuid and any(ext in local_path.lower() for ext in ['.lif', '.xlef', '.lof']):
+                if subfile_uuid and any(
+                    ext in local_path.lower()
+                    for ext in EXTENSIONS_REQUIRING_PREPROCESSING
+                ):
                     preprocessing_key = "dataset_leica_uuid"
                 else:
                     preprocessing_key = "dataset_no_preprocessing"
@@ -722,11 +740,7 @@ def process_files(selected_items, selected_destinations, group, username):
                 )
 
             # Group files by preprocessing key, including UUID info
-            file_info = {
-                "path": abs_path,
-                "uuid": subfile_uuid,
-                "original_item": item
-            }
+            file_info = {"path": abs_path, "uuid": subfile_uuid, "original_item": item}
             files_by_preprocessing[
                 (sample_parent_type, sample_parent_id, preprocessing_key)
             ].append(file_info)
@@ -737,10 +751,10 @@ def process_files(selected_items, selected_destinations, group, username):
         sample_parent_id,
         preprocessing_key,
     ), file_infos in files_by_preprocessing.items():
-        
+
         # Extract just the file paths for the Files field
         files = [file_info["path"] for file_info in file_infos]
-        
+
         order_info = {
             "Group": group,
             "Username": username,
@@ -768,13 +782,11 @@ def process_files(selected_items, selected_destinations, group, username):
             order_info["preprocessing_inputfile"] = "{Files}"
             order_info["preprocessing_outputfolder"] = "/data"
             order_info["preprocessing_altoutputfolder"] = "/out"
-            
+
             # Handle multiple files with UUIDs
             if len(file_infos) == 1 and file_infos[0]["uuid"]:
                 # Single file with UUID
-                order_info["extra_params"] = {
-                    "image_uuid": file_infos[0]["uuid"]
-                }
+                order_info["extra_params"] = {"image_uuid": file_infos[0]["uuid"]}
             else:
                 # Multiple files or mixed UUID/non-UUID files
                 # Create separate orders for each UUID file
@@ -789,7 +801,7 @@ def process_files(selected_items, selected_destinations, group, username):
                             "image_uuid": file_info["uuid"]
                         }
                         create_upload_order(single_order_info)
-                    
+
                     # Process non-UUID files together (if any)
                     non_uuid_files = [f["path"] for f in file_infos if not f["uuid"]]
                     if non_uuid_files:
@@ -820,7 +832,7 @@ def biomero(request, conn=None, **kwargs):
     metabase_dashboard_id_imports = os.environ.get(
         "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID"
     )
-    
+
     # Gracefully parse ADI_ENABLED with multiple format support
     adi_enabled = parse_bool_env(os.environ.get("ADI_ENABLED"), default=True)
     analyze_enabled = parse_bool_env(os.environ.get("ANALYZE_ENABLED"), default=True)
@@ -871,9 +883,7 @@ def get_folder_contents(request, conn=None, **kwargs):
     """
     Handles the GET request to retrieve folder contents.
     """
-    base_dir = os.getenv(
-        "IMPORT_MOUNT_PATH", "/L-Drive"
-    )  # Path to root folder from settings
+    base_dir = os.getenv("IMPORT_MOUNT_PATH", DEFAULT_MOUNT_PATH)
 
     # Extract the folder ID from the request
     item_id = request.GET.get("item_id", None)
@@ -899,18 +909,22 @@ def get_folder_contents(request, conn=None, **kwargs):
     # Get the contents of the folder/file
     contents = []
     clicked_item_metadata = None
+    logger.info(f"Item path: {target_path}, Item UUID: {item_uuid}")
 
     # Check if path is a file or folder
     if os.path.isfile(target_path):
         ext = os.path.splitext(target_path)[1]
-        if ext in BROWSABLE_FILE_EXTENSIONS:
-
+        if ext in EXTENSION_TO_FILE_BROWSER:
             if is_folder:
-                metadata = read_leica_file(target_path, folder_uuid=item_uuid)
+                metadata = EXTENSION_TO_FILE_BROWSER[ext](
+                    target_path, folder_uuid=item_uuid
+                )
             elif item_uuid:
-                metadata = read_leica_file(target_path, image_uuid=item_uuid)
+                metadata = EXTENSION_TO_FILE_BROWSER[ext](
+                    target_path, image_uuid=item_uuid
+                )
             else:
-                metadata = read_leica_file(target_path)
+                metadata = EXTENSION_TO_FILE_BROWSER[ext](target_path)
 
             clicked_item_metadata = json.loads(metadata)
 
@@ -938,74 +952,67 @@ def get_folder_contents(request, conn=None, **kwargs):
             )
         else:
             return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
-    else:
-        # If filename is .zarr, treat as a file
-        if os.path.basename(target_path).endswith(".zarr"):
+
+    elif target_path.endswith(".zarr"):  # Handle .zarr folders as files
+        contents.append(
+            {
+                "name": os.path.basename(target_path),
+                "is_folder": False,
+                "id": item_path,
+                "metadata": None,
+                "source": "filesystem",
+            }
+        )
+    else:  # Folder case
+        items = os.listdir(target_path)
+        # If there is a file with extension in EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES, hide the accompanying files
+        primary_items = []
+        for item in items:
+            if item in EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES:
+                primary_items.append(item)
+
+        if primary_items:
+            # There can be only one key item, return error if there are multiple
+            if len(primary_items) > 1:
+                ext_list = ", ".join(EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES)
+                return HttpResponseBadRequest(
+                    f"There can be only one file with extension [{ext_list}] in the folder '{target_path}'"
+                )
+
             contents.append(
                 {
-                    "name": os.path.basename(target_path),
+                    "name": primary_items[0],
                     "is_folder": False,
-                    "id": item_path,
+                    "id": os.path.relpath(primary_items[0], base_dir),
                     "metadata": None,
                     "source": "filesystem",
                 }
             )
+
         else:
-            items = os.listdir(target_path)
-            # If there is a .xlef or experiment.db file in the folder, only show that
-            xlef_files = [item for item in items if item.endswith(".xlef")]
-            experiment_db_files = [
-                item for item in items if item.endswith("experiment.db")
-            ]
+            for item in items:
+                item_path = os.path.join(target_path, item)
+                # Get extension, if any
+                ext = os.path.splitext(item)[1]
+                info = f"Item: {item}, Path: {item_path}, Extension: {ext}"
+                is_folder = (
+                    os.path.isdir(item_path) or ext in EXTENSION_TO_FILE_BROWSER
+                ) and ext not in EXTENSIONS_NON_BROWSABLE
 
-            if xlef_files or experiment_db_files:
-                if xlef_files:
-                    selected_items = xlef_files
-                elif experiment_db_files:
-                    selected_items = experiment_db_files
+                metadata = None
+                if ext in EXTENSION_TO_FILE_BROWSER:
+                    metadata = EXTENSION_TO_FILE_BROWSER[ext](item_path)
 
-                for item in selected_items:
-                    contents.append(
-                        {
-                            "name": item,
-                            "is_folder": False,
-                            "id": os.path.relpath(item, base_dir),
-                            "metadata": None,
-                            "source": "filesystem",
-                        }
-                    )
-
-            else:
-                for item in items:
-                    item_path = os.path.join(target_path, item)
-                    # Get extension, if any
-                    ext = os.path.splitext(item)[1]
-                    info = f"Item: {item}, Path: {item_path}, Extension: {ext}"
-                    is_folder = (
-                        os.path.isdir(item_path) or ext in BROWSABLE_FILE_EXTENSIONS
-                    )
-                    metadata = None
-                    if ext in BROWSABLE_FILE_EXTENSIONS:
-                        # Read metadata for Leica files
-                        metadata = read_leica_file(item_path)
-
-                    # .zarr folders should be treated as files
-                    is_folder = (
-                        False
-                        if os.path.basename(item_path).endswith(".zarr")
-                        else is_folder
-                    )
-
-                    contents.append(
-                        {
-                            "name": item,
-                            "is_folder": is_folder,
-                            "id": os.path.relpath(item_path, base_dir),
-                            "info": info,
-                            "metadata": metadata,
-                            "source": "filesystem",
-                        }
-                    )
+                contents.append(
+                    {
+                        "name": item,
+                        "is_folder": is_folder,
+                        "id": os.path.relpath(item_path, base_dir),
+                        "info": info,
+                        "metadata": metadata,
+                        "source": "filesystem",
+                    }
+                )
 
     # Sort the contents by name, folders first
     contents.sort(key=lambda x: (not x["is_folder"], x["name"].lower()))
@@ -1021,11 +1028,11 @@ def group_mappings(request, conn=None, **kwargs):
         if request.method == "GET":
             # Read mappings from file if it exists
             if os.path.exists(MAPPINGS_FILE):
-                with open(MAPPINGS_FILE, 'r') as f:
+                with open(MAPPINGS_FILE, "r") as f:
                     mappings = json.load(f)
             else:
                 mappings = {}
-            
+
             return JsonResponse({"mappings": mappings})
 
         elif request.method == "POST":
@@ -1038,16 +1045,16 @@ def group_mappings(request, conn=None, **kwargs):
             # Only allow admins to update mappings
             if not is_admin:
                 return JsonResponse(
-                    {"error": "Only administrators can update group mappings"}, 
-                    status=403
+                    {"error": "Only administrators can update group mappings"},
+                    status=403,
                 )
 
             try:
                 data = json.loads(request.body)
-                mappings = data.get('mappings', {})
+                mappings = data.get("mappings", {})
 
                 # Save mappings to file
-                with open(MAPPINGS_FILE, 'w') as f:
+                with open(MAPPINGS_FILE, "w") as f:
                     json.dump(mappings, f, indent=2)
 
                 logger.info(f"Group mappings updated by {username} (ID: {user_id})")

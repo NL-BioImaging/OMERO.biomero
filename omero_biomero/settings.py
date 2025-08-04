@@ -1,6 +1,29 @@
-BROWSABLE_FILE_EXTENSIONS = [
-    ".lif",
+import os
+from .leica_file_browser.ReadLeicaFile import read_leica_file
+
+EXTENSION_TO_FILE_BROWSER = {
+    ".lif": read_leica_file,
+    ".xlef": read_leica_file,
+}
+
+EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES = [
+    ".db",
+    ".xlef",
 ]
+
+EXTENSIONS_REQUIRING_PREPROCESSING = [
+    ".lif",
+    ".xlef",
+    ".lof",
+]
+
+EXTENSIONS_NON_BROWSABLE = [
+    ".zarr",
+]
+
+DEFAULT_MOUNT_PATH = "/L-Drive"
+
+MAPPINGS_FILE = os.path.join(os.path.dirname(__file__), "group_mappings.json")
 
 # This is a list of file extensions that are supported by Bio-Formats.
 # Generated from https://bio-formats.readthedocs.io/en/latest/_sources/supported-formats.rst.txt

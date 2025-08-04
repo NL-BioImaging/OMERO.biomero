@@ -17,7 +17,7 @@ export const apiRequest = async (
     });
     return response.data;
   } catch (error) {
-    console.error("API Request Error:", error);
+    console.error("API Request Error in apiService:", error);
     throw error;
   }
 };
@@ -47,7 +47,7 @@ export const fetchProjectData = async (item) => {
   return apiRequest(urls.api_datasets, "GET", null, { params });
 };
 
-export const fetchFolderData = async (itemId = null, isFolder = true) => {
+export const fetchFolderData = (itemId = null, isFolder = true) => {
   const { urls, user } = getDjangoConstants();
   const params = {
     item_id: itemId,
@@ -84,7 +84,7 @@ export const fetchScriptData = async (scriptId, directory) => {
     directory: directory, // Include the directory as a query parameter
   };
 
-  return apiRequest(urls.get_script_menu, "GET", null, { params });
+  return apiRequest(urls.get_workflows, "GET", null, { params });
 };
 
 // Fetch available workflows

@@ -117,3 +117,22 @@ def prepare_workflow_parameters(workflow_name, params):
             converted_params[key] = value
     
     return converted_params
+
+
+def check_directory_permissions(path):
+    """Check if a directory exists and is accessible."""
+    try:
+        exists = os.path.exists(path)
+        readable = os.access(path, os.R_OK) if exists else False
+        executable = os.access(path, os.X_OK) if exists else False
+
+        if not exists:
+            return False, f"Directory does not exist: {path}"
+        if not readable:
+            return False, f"Directory is not readable: {path}"
+        if not executable:
+            return False, f"Directory is not executable (searchable): {path}"
+
+        return True, "Directory is accessible"
+    except Exception as e:
+        return False, f"Error checking directory access: {str(e)}"

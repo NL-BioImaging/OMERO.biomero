@@ -46,12 +46,12 @@ export const getDjangoConstants = () => {
     workflows: "/omero_biomero/api/biomero/workflows/",
     api_config: "/omero_biomero/api/biomero/admin/config/",
     api_run_workflow: "/omero_biomero/api/biomero/workflows/run/",
-    get_script_menu: "/omero_biomero/api/biomero/get_script_menu/",
+    get_workflows: "/omero_biomero/api/biomero/get_workflows/",
   };
 
   const ui = {
-    adi_enabled: WEBCLIENT.UI.ADI_ENABLED,
-    analyze_enabled: WEBCLIENT.UI.ANALYZE_ENABLED,
+    importer_enabled: WEBCLIENT.UI.IMPORTER_ENABLED,
+    analyzer_enabled: WEBCLIENT.UI.ANALYZER_ENABLED,
   };
 
   return { user, urls, ui };

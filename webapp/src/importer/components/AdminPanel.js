@@ -12,7 +12,7 @@ import {
 import { Select } from "@blueprintjs/select";
 
 const AdminPanel = () => {
-  const { state, saveGroupMappings } = useAppContext();  // Only need saveGroupMappings now
+  const { state, saveGroupMappings } = useAppContext();
   const [folderMappings, setFolderMappings] = useState(state.groupFolderMappings || {});
   
   // Update local state when global state changes
@@ -58,7 +58,7 @@ const AdminPanel = () => {
     setSelectedFolder(item.id);
   };
 
-  const handleAddMapping = () => {
+  const handleAddMapping = async () => {
     if (selectedGroup !== "" && selectedFolder) {
       const selectedGroupObj = state?.user?.groups?.find(g => g.id === selectedGroup);
       const newMappings = {
@@ -68,8 +68,10 @@ const AdminPanel = () => {
           groupName: selectedGroupObj?.name
         }
       };
-      setFolderMappings(newMappings);
-      saveGroupMappings(newMappings);
+      
+      if (await saveGroupMappings(newMappings)) {
+        setFolderMappings(newMappings);
+      }
       setSelectedGroup("");
       setSelectedFolder("");
     }
@@ -80,11 +82,12 @@ const AdminPanel = () => {
     setSelectedFolder(folder);
   };
 
-  const handleDeleteMapping = (groupId) => {
+  const handleDeleteMapping = async (groupId) => {
     const newMappings = { ...folderMappings };
     delete newMappings[groupId];
-    setFolderMappings(newMappings);
-    saveGroupMappings(newMappings);
+    if (await saveGroupMappings(newMappings)) {
+      setFolderMappings(newMappings);
+    }
   };
 
   return (

@@ -82,8 +82,8 @@
     WEBCLIENT.UI.TREE = {};
     WEBCLIENT.UI.TREE.pagination_nodes = ["experimenter", "screen", "plate", "acquisition", "project", "tagset", "image"];
     WEBCLIENT.UI.TREE.type_order = "{{ui.tree.type_order}}".toLowerCase().split(",").filter(function(e){return e});
-    WEBCLIENT.UI.ADI_ENABLED = {{ adi_enabled|yesno:"true,false" }};
-    WEBCLIENT.UI.ANALYZE_ENABLED = {{ analyze_enabled|yesno:"true,false" }};
+    WEBCLIENT.UI.IMPORTER_ENABLED = {{ importer_enabled|yesno:"true,false" }};
+    WEBCLIENT.UI.ANALYZER_ENABLED = {{ analyzer_enabled|yesno:"true,false" }};
 
 
     {% if page_size %}
@@ -114,7 +114,7 @@
     data-metabase-token-monitor-workflows="{{ metabase_token_monitor_workflows }}"
     data-metabase-token-imports="{{ metabase_token_imports }}"
     data-is-admin="{{ is_admin|yesno:'true,false' }}"
-    data-adi-enabled="{{ adi_enabled|yesno:'true,false' }}">
+    data-adi-enabled="{{ importer_enabled|yesno:'true,false' }}">
   </div>
 
 {% endblock %} 

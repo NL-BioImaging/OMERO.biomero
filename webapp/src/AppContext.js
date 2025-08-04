@@ -418,6 +418,12 @@ export const AppProvider = ({ children }) => {
       });
     } catch (err) {
       setError(err.message);
+      console.error("Failed to load folder data:", err);
+      toaster?.show({
+          intent: "danger",
+          icon: "error",
+          message: `Failed to load folder data`,
+        });
     } finally {
       setLoading(false);
     }
@@ -579,6 +585,8 @@ export const AppProvider = ({ children }) => {
         icon: "tick-circle",
         message: "Group mappings saved successfully",
       });
+      setLoading(false);
+      return true; // Indicate success
     } catch (err) {
       setError(err.message);
       toaster?.show({
@@ -586,8 +594,8 @@ export const AppProvider = ({ children }) => {
         icon: "error",
         message: `Failed to save group mappings: ${err.message}`,
       });
-    } finally {
       setLoading(false);
+      return false; // Indicate failure
     }
   };
 

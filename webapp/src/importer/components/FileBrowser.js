@@ -4,7 +4,7 @@ import FileTree from "../../shared/components/FileTree";
 import { fetchFolderData } from "../../apiService";
 
 const FileBrowser = ({ onSelectCallback, rootFolder = null }) => {
-  const { state, updateState, loadFolderData } = useAppContext();
+  const { state, updateState, loadFolderData, toaster } = useAppContext();
 
   // Add useEffect to fetch data for non-root folders when component mounts
   React.useEffect(() => {
@@ -48,35 +48,43 @@ const FileBrowser = ({ onSelectCallback, rootFolder = null }) => {
   const treeData = getFilteredTreeData();
 
   const handleFolderDataFetch = async (node) => {
-    const response = await fetchFolderData(node.index, node.isFolder);
-    const contents = response.contents || [];
+    try {
+      const response = await fetchFolderData(node.index, node.isFolder);
+      const contents = response.contents || [];
 
-    const newNodes = contents.reduce((acc, item) => {
-      acc[item.id] = {
-        index: item.id,
-        isFolder: item.is_folder,
-        children: [],
-        data: item.name,
-        metadata: item.metadata,
-        source: item.source,
+      const newNodes = contents.reduce((acc, item) => {
+        acc[item.id] = {
+          index: item.id,
+          isFolder: item.is_folder,
+          children: [],
+          data: item.name,
+          metadata: item.metadata,
+          source: item.source,
+        };
+        return acc;
+      }, {});
+
+      const updatedNode = {
+        ...state.localFileTreeData[node.index],
+        children: contents.map((item) => item.id),
       };
-      return acc;
-    }, {});
 
-    const updatedNode = {
-      ...state.localFileTreeData[node.index],
-      children: contents.map((item) => item.id),
-    };
+      updateState({
+        localFileTreeData: {
+          ...state.localFileTreeData,
+          ...newNodes,
+          [node.index]: updatedNode,
+        },
+      });
 
-    updateState({
-      localFileTreeData: {
-        ...state.localFileTreeData,
-        ...newNodes,
-        [node.index]: updatedNode,
-      },
-    });
-
-    return newNodes;
+      return newNodes;
+    } catch (error) {
+      toaster?.show({
+          intent: "danger",
+          icon: "error",
+          message: `Failed to load folder data`,
+        });
+    }
   };
 
   return (

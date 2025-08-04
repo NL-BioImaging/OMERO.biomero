@@ -43,7 +43,7 @@ urlpatterns = [
         views.run_workflow_script,
         name="run_workflow_script",
     ),
-    path("api/biomero/get_script_menu/", views.get_script_menu, name="get_script_menu"),
+    path("api/biomero/get_workflows/", views.get_workflows, name="get_workflows"),
     # Main Biomero URL
     path(
         "biomero/",

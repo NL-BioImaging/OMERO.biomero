@@ -23,18 +23,115 @@ from .utils import (
     get_react_build_file,
     prepare_workflow_parameters,
     parse_bool_env,
+    check_directory_permissions,
 )
 from .settings import (
-    EXTENSION_TO_FILE_BROWSER,
     SUPPORTED_FILE_EXTENSIONS,
-    EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES,
-    DEFAULT_MOUNT_PATH,
+    EXTENSION_TO_FILE_BROWSER,
+    EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES,
     EXTENSIONS_REQUIRING_PREPROCESSING,
-    EXTENSIONS_NON_BROWSABLE,
-    MAPPINGS_FILE,
+    FOLDER_EXTENSIONS_NON_BROWSABLE,
+    GROUP_TO_FOLDER_MAPPING_FILE_PATH,
+    BASE_DIR,
 )
 
 logger = logging.getLogger(__name__)
+
+# TODO remove this check when the app is ready
+def check_base_directory():
+    logger.info("\n=== Directory Access Check ===")
+    logger.info(f"Checking directory structure and permissions:")
+    logger.info(f"L-Drive directory: {BASE_DIR}")
+    logger.info(f"   - Exists: {os.path.exists(BASE_DIR)}")
+    logger.info(
+        f"   - Readable: {os.access(BASE_DIR, os.R_OK) if os.path.exists(BASE_DIR) else 'N/A'}"
+    )
+    logger.info(
+        f"   - Executable: {os.access(BASE_DIR, os.X_OK) if os.path.exists(BASE_DIR) else 'N/A'}"
+    )
+check_base_directory()
+
+# TODO move this into the view function that needs it
+def initialize_adi():
+    """
+    Called when the app is ready. We initialize the IngestTracker from ADI using an environment variable.
+    """
+    db_url = os.getenv("INGEST_TRACKING_DB_URL")
+    if not db_url:
+        logger.error("Environment variable 'INGEST_TRACKING_DB_URL' not set")
+        return
+
+    config = {"ingest_tracking_db": db_url}
+
+    try:
+        if initialize_ingest_tracker(config):
+            logger.info("IngestTracker initialized successfully")
+        else:
+            logger.error("Failed to initialize IngestTracker")
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during IngestTracker initialization: {e}", exc__info=True
+        )
+initialize_adi()
+
+
+@login_required()
+@render_response()
+def biomero(request, conn=None, **kwargs):
+    """
+    Render the main Biomero page with Metabase integration and user context.
+    """
+
+    metabase_site_url = os.environ.get("METABASE_SITE_URL")
+    metabase_secret_key = os.environ.get("METABASE_SECRET_KEY")
+    metabase_dashboard_id_monitor_workflows = os.environ.get(
+        "METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID"
+    )
+    metabase_dashboard_id_imports = os.environ.get(
+        "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID"
+    )
+
+    importer_enabled = parse_bool_env(os.environ.get("IMPORTER_ENABLED"), default=True)
+    analyzer_enabled = parse_bool_env(os.environ.get("ANALYZER_ENABLED"), default=True)
+
+    current_user = conn.getUser()
+    username = current_user.getName()
+    user_id = current_user.getId()
+    is_admin = conn.isAdmin()
+
+    payload_monitor_workflows = {
+        "resource": {"dashboard": int(metabase_dashboard_id_monitor_workflows)},
+        "params": {"user": [user_id]},
+        "exp": round(time.time()) + (60 * 30),
+    }
+    token_monitor_workflows = jwt.encode(
+        payload_monitor_workflows, metabase_secret_key, algorithm="HS256"
+    )
+
+    payload_imports = {
+        "resource": {"dashboard": int(metabase_dashboard_id_imports)},
+        "params": {"user_name": [username]},
+        "exp": round(time.time()) + (60 * 30),
+    }
+    token_imports = jwt.encode(payload_imports, metabase_secret_key, algorithm="HS256")
+
+    context = {
+        "metabase_site_url": metabase_site_url,
+        "metabase_token_monitor_workflows": token_monitor_workflows,
+        "metabase_token_imports": token_imports,
+        "template": "omero_biomero/webclient_plugins/react_app.html",
+        "user_name": username,
+        "user_id": user_id,
+        "is_admin": is_admin,
+        "main_js": get_react_build_file("main.js"),
+        "main_css": get_react_build_file("main.css"),
+        "title": "Biomero",
+        "app_name": "biomero",
+        "importer_enabled": importer_enabled,
+        "analyzer_enabled": analyzer_enabled,
+    }
+    return context
+
 
 @login_required()
 @require_http_methods(["GET", "POST"])
@@ -437,7 +534,7 @@ def get_workflow_github(request, conn=None, **kwargs):
 
 
 @login_required()
-def get_script_menu(request, conn=None, **kwargs):
+def get_workflows(request, conn=None, **kwargs):
     script_ids = request.GET.get("script_ids", "").split(",")
     script_ids = [int(id) for id in script_ids if id.isdigit()]
 
@@ -490,104 +587,6 @@ def get_script_menu(request, conn=None, **kwargs):
     return JsonResponse({"script_menu": script_menu_data, "error_logs": error_logs})
 
 
-### Importer and other database pages ###
-
-# Configure base directory to point to the mounted L-Drive
-BASE_DIR = "/L-Drive"
-
-logger.info("\n=== Directory Access Check ===")
-logger.info(f"Checking directory structure and permissions:")
-logger.info(f"L-Drive directory: {BASE_DIR}")
-logger.info(f"   - Exists: {os.path.exists(BASE_DIR)}")
-logger.info(
-    f"   - Readable: {os.access(BASE_DIR, os.R_OK) if os.path.exists(BASE_DIR) else 'N/A'}"
-)
-logger.info(
-    f"   - Executable: {os.access(BASE_DIR, os.X_OK) if os.path.exists(BASE_DIR) else 'N/A'}"
-)
-
-
-def ready():
-    """
-    Called when the app is ready. We initialize the IngestTracker using an environment variable.
-    """
-    db_url = os.getenv("INGEST_TRACKING_DB_URL")
-    if not db_url:
-        logger.error("Environment variable 'INGEST_TRACKING_DB_URL' not set")
-        return
-
-    config = {"ingest_tracking_db": db_url}
-
-    try:
-        if initialize_ingest_tracker(config):
-            logger.info("IngestTracker initialized successfully")
-        else:
-            logger.error("Failed to initialize IngestTracker")
-    except Exception as e:
-        logger.error(
-            f"Unexpected error during IngestTracker initialization: {e}", exc__info=True
-        )
-
-
-logger.info("Setting up IngestTracker for imports")
-ready()
-logger.info("IngestTracker ready")
-
-
-def check_directory_access(path):
-    """Check if a directory exists and is accessible."""
-    try:
-        exists = os.path.exists(path)
-        readable = os.access(path, os.R_OK) if exists else False
-        executable = os.access(path, os.X_OK) if exists else False
-
-        if not exists:
-            return False, f"Directory does not exist: {path}"
-        if not readable:
-            return False, f"Directory is not readable: {path}"
-        if not executable:
-            return False, f"Directory is not executable (searchable): {path}"
-
-        return True, "Directory is accessible"
-    except Exception as e:
-        return False, f"Error checking directory access: {str(e)}"
-
-
-@login_required()
-@render_response()
-def omero_biomero_upload(request, conn=None, **kwargs):
-    """Render the server-side browser page."""
-    metabase_site_url = os.environ.get("METABASE_SITE_URL")
-    metabase_secret_key = os.environ.get("METABASE_SECRET_KEY")
-    metabase_dashboard_id = os.environ.get("METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID")
-
-    current_user = conn.getUser()
-    username = current_user.getName()
-    user_id = current_user.getId()
-    is_admin = conn.isAdmin()
-
-    payload = {
-        "resource": {"dashboard": int(metabase_dashboard_id)},
-        "params": {"user_name": [username]},
-        "exp": round(time.time()) + (60 * 30),  # 30-minute expiration
-    }
-    token = jwt.encode(payload, metabase_secret_key, algorithm="HS256")
-
-    context = {
-        "template": "omero_biomero/webclient_plugins/react_app.html",  # Unified template
-        "user_name": username,
-        "user_id": user_id,
-        "is_admin": is_admin,
-        "metabase_site_url": metabase_site_url,
-        "metabase_token": token,
-        "app_name": "uploader",  # Pass different app name
-        "main_js": get_react_build_file("main.js"),  # Unified JS key
-        "main_css": get_react_build_file("main.css"),  # Unified CSS key
-        "title": "Server Side Browser & Imports Database",
-    }
-    return context
-
-
 @login_required()
 @require_http_methods(["GET"])
 def list_directory(request, conn=None, **kwargs):
@@ -597,7 +596,7 @@ def list_directory(request, conn=None, **kwargs):
     logger.info(f"Request GET params: {request.GET}")
 
     # Check access to L-Drive
-    can_access, message = check_directory_access(BASE_DIR)
+    can_access, message = check_directory_permissions(BASE_DIR)
     if not can_access:
         logger.error(f"L-Drive access check failed: {message}")
         return JsonResponse({"error": message}, status=403)
@@ -606,7 +605,7 @@ def list_directory(request, conn=None, **kwargs):
     abs_current_path = os.path.abspath(os.path.join(BASE_DIR, current_path))
 
     logger.info(f"Checking access to requested path: {abs_current_path}")
-    can_access, message = check_directory_access(abs_current_path)
+    can_access, message = check_directory_permissions(abs_current_path)
     if not can_access:
         logger.error(f"Target directory access check failed: {message}")
         return JsonResponse({"error": message}, status=403)
@@ -696,8 +695,6 @@ def process_files(selected_items, selected_destinations, group, username):
     Process the selected files and destinations to create upload orders with appropriate preprocessing.
     """
     files_by_preprocessing = defaultdict(list)  # Group files by preprocessing config
-    # Path to root folder from settings
-    base_dir = os.getenv("IMPORT_MOUNT_PATH", "/L-Drive")
 
     for item in selected_items:
         # Handle both old string format and new object format for backward compatibility
@@ -710,7 +707,7 @@ def process_files(selected_items, selected_destinations, group, username):
             local_path = item
             subfile_uuid = None
 
-        abs_path = os.path.abspath(os.path.join(base_dir, local_path))
+        abs_path = os.path.abspath(os.path.join(BASE_DIR, local_path))
 
         logger.info(
             f"Importing: {abs_path} to {selected_destinations} (UUID: {subfile_uuid})"
@@ -823,67 +820,11 @@ def process_files(selected_items, selected_destinations, group, username):
 
 @login_required()
 @render_response()
-def biomero(request, conn=None, **kwargs):
-    metabase_site_url = os.environ.get("METABASE_SITE_URL")
-    metabase_secret_key = os.environ.get("METABASE_SECRET_KEY")
-    metabase_dashboard_id_monitor_workflows = os.environ.get(
-        "METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID"
-    )
-    metabase_dashboard_id_imports = os.environ.get(
-        "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID"
-    )
-
-    # Gracefully parse ADI_ENABLED with multiple format support
-    adi_enabled = parse_bool_env(os.environ.get("ADI_ENABLED"), default=True)
-    analyze_enabled = parse_bool_env(os.environ.get("ANALYZE_ENABLED"), default=True)
-
-    current_user = conn.getUser()
-    username = current_user.getName()
-    user_id = current_user.getId()
-    is_admin = conn.isAdmin()
-
-    payload_monitor_workflows = {
-        "resource": {"dashboard": int(metabase_dashboard_id_monitor_workflows)},
-        "params": {"user": [user_id]},
-        "exp": round(time.time()) + (60 * 30),
-    }
-    token_monitor_workflows = jwt.encode(
-        payload_monitor_workflows, metabase_secret_key, algorithm="HS256"
-    )
-
-    payload_imports = {
-        "resource": {"dashboard": int(metabase_dashboard_id_imports)},
-        "params": {"user_name": [username]},
-        "exp": round(time.time()) + (60 * 30),
-    }
-    token_imports = jwt.encode(payload_imports, metabase_secret_key, algorithm="HS256")
-
-    context = {
-        "metabase_site_url": metabase_site_url,
-        "metabase_token_monitor_workflows": token_monitor_workflows,
-        "metabase_token_imports": token_imports,
-        "template": "omero_biomero/webclient_plugins/react_app.html",
-        "user_name": username,
-        "user_id": user_id,
-        "is_admin": is_admin,
-        "main_js": get_react_build_file("main.js"),
-        "main_css": get_react_build_file("main.css"),
-        "title": "Biomero",
-        "app_name": "biomero",
-        "adi_enabled": adi_enabled,
-        "analyze_enabled": analyze_enabled,
-    }
-    return context
-
-
-@login_required()
-@render_response()
 @require_http_methods(["GET"])
 def get_folder_contents(request, conn=None, **kwargs):
     """
     Handles the GET request to retrieve folder contents.
     """
-    base_dir = os.getenv("IMPORT_MOUNT_PATH", DEFAULT_MOUNT_PATH)
 
     # Extract the folder ID from the request
     item_id = request.GET.get("item_id", None)
@@ -899,7 +840,7 @@ def get_folder_contents(request, conn=None, **kwargs):
     logger.info(f"Connection: {conn.getUser().getName()}")
 
     # Determine the target path based on item_path or default to the root folder
-    target_path = base_dir if item_path is None else os.path.join(base_dir, item_path)
+    target_path = BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
     logger.info(f"Target folder: {target_path}")
 
     # Validate if the path exists
@@ -911,7 +852,6 @@ def get_folder_contents(request, conn=None, **kwargs):
     clicked_item_metadata = None
     logger.info(f"Item path: {target_path}, Item UUID: {item_uuid}")
 
-    # Check if path is a file or folder
     if os.path.isfile(target_path):
         ext = os.path.splitext(target_path)[1]
         if ext in EXTENSION_TO_FILE_BROWSER:
@@ -965,25 +905,27 @@ def get_folder_contents(request, conn=None, **kwargs):
         )
     else:  # Folder case
         items = os.listdir(target_path)
-        # If there is a file with extension in EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES, hide the accompanying files
-        primary_items = []
+        # If there is a file with extension in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES, hide the accompanying files
+        special_items = []
         for item in items:
-            if item in EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES:
-                primary_items.append(item)
+            item_ext = os.path.splitext(item)[1]
+            if item_ext in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES:
+                special_items.append(item)
 
-        if primary_items:
+        if special_items:
             # There can be only one key item, return error if there are multiple
-            if len(primary_items) > 1:
-                ext_list = ", ".join(EXTENSIONS_WITH_INVISIBLE_ACCOMPANYING_FILES)
+            if len(special_items) != 1:
+                ext_list = ", ".join(EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES)
                 return HttpResponseBadRequest(
                     f"There can be only one file with extension [{ext_list}] in the folder '{target_path}'"
                 )
-
+            item_ext = os.path.splitext(special_items[0])[1]
+            logger.info(f"Special item found: {special_items[0]} with extension {item_ext}")
             contents.append(
                 {
-                    "name": primary_items[0],
-                    "is_folder": False,
-                    "id": os.path.relpath(primary_items[0], base_dir),
+                    "name": special_items[0],
+                    "is_folder": item_ext in EXTENSION_TO_FILE_BROWSER,
+                    "id": os.path.relpath(special_items[0], BASE_DIR),
                     "metadata": None,
                     "source": "filesystem",
                 }
@@ -997,7 +939,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                 info = f"Item: {item}, Path: {item_path}, Extension: {ext}"
                 is_folder = (
                     os.path.isdir(item_path) or ext in EXTENSION_TO_FILE_BROWSER
-                ) and ext not in EXTENSIONS_NON_BROWSABLE
+                ) and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE
 
                 metadata = None
                 if ext in EXTENSION_TO_FILE_BROWSER:
@@ -1007,7 +949,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                     {
                         "name": item,
                         "is_folder": is_folder,
-                        "id": os.path.relpath(item_path, base_dir),
+                        "id": os.path.relpath(item_path, BASE_DIR),
                         "info": info,
                         "metadata": metadata,
                         "source": "filesystem",
@@ -1027,8 +969,8 @@ def group_mappings(request, conn=None, **kwargs):
     try:
         if request.method == "GET":
             # Read mappings from file if it exists
-            if os.path.exists(MAPPINGS_FILE):
-                with open(MAPPINGS_FILE, "r") as f:
+            if os.path.exists(GROUP_TO_FOLDER_MAPPING_FILE_PATH):
+                with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "r") as f:
                     mappings = json.load(f)
             else:
                 mappings = {}
@@ -1054,7 +996,7 @@ def group_mappings(request, conn=None, **kwargs):
                 mappings = data.get("mappings", {})
 
                 # Save mappings to file
-                with open(MAPPINGS_FILE, "w") as f:
+                with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "w") as f:
                     json.dump(mappings, f, indent=2)
 
                 logger.info(f"Group mappings updated by {username} (ID: {user_id})")

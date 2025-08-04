@@ -1,4 +1,5 @@
 #!/bin/bash
+# Update OMERO.biomero assets in the OMERO.web container
 
 # Define the Docker container name
 CONTAINER_NAME="nl-biomero-omeroweb-1"

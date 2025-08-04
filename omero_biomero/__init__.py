@@ -1,1 +1,1 @@
-default_app_config = 'omero-biomero.apps.OmeroBiomeroAppConfig'
+default_app_config = 'omero_biomero.apps.OmeroBiomeroConfig'

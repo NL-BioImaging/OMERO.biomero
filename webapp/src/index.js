@@ -11,7 +11,7 @@ import "./index.css";
 import "./tailwind.css";
 import { AppProvider } from "./AppContext";
 import BiomeroApp from "./biomero/BiomeroApp";
-import ImporterApp from "./uploader/ImporterApp";
+import ImporterApp from "./importer/ImporterApp";
 import {
   Navbar,
   NavbarGroup,
@@ -20,13 +20,17 @@ import {
   Button,
 } from "@blueprintjs/core";
 
-const BiomeroIcon = () => <div className="mr-2 w-[20px]"><svg
-  viewBox="0 0 300 388"
-  xmlns="http://www.w3.org/2000/svg"
-  role="img"
-  aria-label="OMERO.biomero leaf–circuit icon">
-  <g transform="translate(0 388) scale(0.1 -0.1)" fill="currentColor">
-    <path d="M1399 3578 c-155 -144 -445 -451 -555 -589 -248 -310 -407 -620 -458
+const BiomeroIcon = () => (
+  <div className="mr-2 w-[20px]">
+    <svg
+      viewBox="0 0 300 388"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="OMERO.biomero leaf–circuit icon"
+    >
+      <g transform="translate(0 388) scale(0.1 -0.1)" fill="currentColor">
+        <path
+          d="M1399 3578 c-155 -144 -445 -451 -555 -589 -248 -310 -407 -620 -458
 -887 -49 -258 -16 -555 84 -769 107 -228 274 -394 578 -574 176 -104 249 -156
 305 -219 53 -58 74 -114 83 -219 5 -52 13 -80 26 -93 41 -41 108 -7 108 55 0
 29 37 69 427 454 291 287 433 420 443 416 73 -27 158 -2 202 59 33 47 33 159
@@ -52,16 +56,20 @@ c-64 60 -112 93 -271 188 -375 222 -525 400 -604 719 -18 72 -22 117 -22 257
 8 -468z m1104 -371 c26 -29 17 -73 -16 -85 -41 -15 -78 6 -78 43 0 56 58 82
 94 42z m126 -599 c25 -20 30 -63 10 -87 -15 -18 -71 -20 -88 -3 -21 21 -15 75
 10 92 29 20 41 20 68 -2z m-128 -619 c35 -32 10 -93 -39 -93 -25 0 -63 32 -63
-53 0 48 65 74 102 40z"/>
-  </g>
-</svg></div>;
+53 0 48 65 74 102 40z"
+        />
+      </g>
+    </svg>
+  </div>
+);
 
 const AppRouter = () => {
   const [searchParams] = useSearchParams();
   const WEBCLIENT = window.WEBCLIENT;
   const { ADI_ENABLED, ANALYZE_ENABLED } = WEBCLIENT.UI;
   const navigate = useNavigate();
-  const appName = searchParams.get("tab") || (ADI_ENABLED ? "import" : "biomero");
+  const appName =
+    searchParams.get("tab") || (ADI_ENABLED ? "import" : "biomero");
 
   return (
     <AppProvider>
@@ -72,28 +80,32 @@ const AppRouter = () => {
             <BiomeroIcon />
             <NavbarHeading>Biomero</NavbarHeading>
             <NavbarDivider />
-            {ADI_ENABLED && <Button
-              className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
-                appName === "import"
-                  ? "bp5-intent-primary font-bold shadow-md"
-                  : ""
-              }`}
-              icon="cloud-upload"
-              text="Import"
-              onClick={() => navigate("?tab=import")}
-              outlined={appName === "import"}
-            />}
-            {ANALYZE_ENABLED && <Button
-              className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
-                appName === "biomero"
-                  ? "bp5-intent-primary font-bold shadow-md"
-                  : ""
-              }`}
-              icon="data-sync"
-              text="Analyze"
-              onClick={() => navigate("?tab=biomero")}
-              outlined={appName === "biomero"}
-            />}
+            {ADI_ENABLED && (
+              <Button
+                className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
+                  appName === "import"
+                    ? "bp5-intent-primary font-bold shadow-md"
+                    : ""
+                }`}
+                icon="cloud-upload"
+                text="Import"
+                onClick={() => navigate("?tab=import")}
+                outlined={appName === "import"}
+              />
+            )}
+            {ANALYZE_ENABLED && (
+              <Button
+                className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
+                  appName === "biomero"
+                    ? "bp5-intent-primary font-bold shadow-md"
+                    : ""
+                }`}
+                icon="data-sync"
+                text="Analyze"
+                onClick={() => navigate("?tab=biomero")}
+                outlined={appName === "biomero"}
+              />
+            )}
           </NavbarGroup>
         </Navbar>
         <div className="pt-[50px]">
@@ -102,7 +114,7 @@ const AppRouter = () => {
       </div>
     </AppProvider>
   );
-}
+};
 
 window.onload = function () {
   const rootElement = document.getElementById("root");

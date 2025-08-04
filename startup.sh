@@ -1,4 +1,6 @@
 #!/bin/bash
+# Startup script for OMERO.web with OMERO.biomero. Prevents the container from exiting immediately after omero server restart.
+
 set -eu
 
 export PATH="/opt/omero/web/venv3/bin:$PATH"

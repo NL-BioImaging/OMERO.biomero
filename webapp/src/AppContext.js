@@ -346,23 +346,23 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const loadWorkflowGithub = async (workflow) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const githubUrl = await fetchWorkflowGithub(workflow);
-      updateState({
-        githubUrls: {
-          ...state.githubUrls,
-          [workflow]: githubUrl.url,
-        },
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const loadWorkflowGithub = async (workflow) => {
+  //   setLoading(true);
+  //   setError(null);
+  //   try {
+  //     const githubUrl = await fetchWorkflowGithub(workflow);
+  //     updateState({
+  //       githubUrls: {
+  //         ...state.githubUrls,
+  //         [workflow]: githubUrl.url,
+  //       },
+  //     });
+  //   } catch (err) {
+  //     setError(err.message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const loadOmeroTreeData = async () => {
     setLoading(true);

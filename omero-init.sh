@@ -1,4 +1,5 @@
 #!/bin/bash
+# Initialize OMERO.biomero for development in the OMERO.web container
 
 # Name of the Docker container
 CONTAINER_NAME="nl-biomero-omeroweb-1"

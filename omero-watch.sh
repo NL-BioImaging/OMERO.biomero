@@ -1,4 +1,5 @@
 #!/bin/bash
+# Watch for changes in the OMERO.biomero directory and update the OMERO.web container
 
 # Directory to monitor
 WATCHED_DIR="omero_biomero"

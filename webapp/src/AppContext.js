@@ -420,10 +420,10 @@ export const AppProvider = ({ children }) => {
       setError(err.message);
       console.error("Failed to load folder data:", err);
       toaster?.show({
-          intent: "danger",
-          icon: "error",
-          message: `Failed to load folder data`,
-        });
+        intent: "danger",
+        icon: "error",
+        message: `Failed to load folder data`,
+      });
     } finally {
       setLoading(false);
     }

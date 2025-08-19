@@ -17,11 +17,13 @@ from .settings import (
     SUPPORTED_FILE_EXTENSIONS,
     EXTENSION_TO_FILE_BROWSER,
     EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES,
-    EXTENSIONS_REQUIRING_PREPROCESSING,
+    PREPROCESSING_EXTENSION_MAP,
     GROUP_TO_FOLDER_MAPPING_FILE_PATH,
     FOLDER_EXTENSIONS_NON_BROWSABLE,
     BASE_DIR,
+    PREPROCESSING_CONFIG,
 )
+from .utils import build_extra_params
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,8 @@ logger = logging.getLogger(__name__)
 # TODO move this into the view function that needs it
 def initialize_adi():
     """
-    Called when the app is ready. We initialize the IngestTracker from ADI using an environment variable.
+    Called when the app is ready. We initialize the IngestTracker from ADI
+    using an environment variable.
     """
     db_url = os.getenv("INGEST_TRACKING_DB_URL")
     if not db_url:
@@ -45,7 +48,8 @@ def initialize_adi():
             logger.error("Failed to initialize IngestTracker")
     except Exception as e:
         logger.error(
-            f"Unexpected error during IngestTracker initialization: {e}", exc__info=True
+            f"Unexpected error during IngestTracker initialization: {e}",
+            exc__info=True,
         )
 
 
@@ -73,13 +77,17 @@ def get_folder_contents(request, conn=None, **kwargs):
 
     logger.info(f"Connection: {conn.getUser().getName()}")
 
-    # Determine the target path based on item_path or default to the root folder
-    target_path = BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
+    # Determine the target path based on item_path or default to root folder
+    target_path = (
+        BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
+    )
     logger.info(f"Target folder: {target_path}")
 
     # Validate if the path exists
     if not os.path.exists(target_path):
-        return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
+        return HttpResponseBadRequest(
+            "Invalid folder ID or path does not exist."
+        )
 
     # Get the contents of the folder/file
     contents = []
@@ -125,7 +133,9 @@ def get_folder_contents(request, conn=None, **kwargs):
                 }
             )
         else:
-            return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
+            return HttpResponseBadRequest(
+                "Invalid folder ID or path does not exist."
+            )
 
     elif target_path.endswith(".zarr"):  # Handle .zarr folders as files
         contents.append(
@@ -147,7 +157,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                 special_items.append(item)
 
         if special_items:
-            # There can be only one key item, return error if there are multiple
+            # There can be only one key item; error if multiple
             if len(special_items) != 1:
                 ext_list = ", ".join(EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES)
                 return HttpResponseBadRequest(
@@ -155,7 +165,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                 )
             item_ext = os.path.splitext(special_items[0])[1]
             logger.info(
-                f"Special item found: {special_items[0]} with extension {item_ext}"
+                f"Special item found: {special_items[0]} ext {item_ext}"
             )
             contents.append(
                 {
@@ -195,7 +205,11 @@ def get_folder_contents(request, conn=None, **kwargs):
     # Sort the contents by name, folders first
     contents.sort(key=lambda x: (not x["is_folder"], x["name"].lower()))
 
-    return {"contents": contents, "item_id": item_id, "metadata": clicked_item_metadata}
+    return {
+        "contents": contents,
+        "item_id": item_id,
+        "metadata": clicked_item_metadata,
+    }
 
 
 @login_required()
@@ -211,7 +225,9 @@ def import_selected(request, conn=None, **kwargs):
         if not selected_items:
             return JsonResponse({"error": "No items selected"}, status=400)
         if not selected_destinations:
-            return JsonResponse({"error": "No destinations selected"}, status=400)
+            return JsonResponse(
+                {"error": "No destinations selected"}, status=400
+            )
         if not selected_group:
             return JsonResponse({"error": "No group specified"}, status=400)
 
@@ -234,7 +250,9 @@ def import_selected(request, conn=None, **kwargs):
         )
 
         # Call process_files with validated group
-        process_files(selected_items, selected_destinations, selected_group, username)
+        process_files(
+            selected_items, selected_destinations, selected_group, username
+        )
 
         return JsonResponse(
             {
@@ -286,7 +304,9 @@ def group_mappings(request, conn=None, **kwargs):
                 with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "w") as f:
                     json.dump(mappings, f, indent=2)
 
-                logger.info(f"Group mappings updated by {username} (ID: {user_id})")
+                logger.info(
+                    f"Group mappings updated by {username} (ID: {user_id})"
+                )
                 return JsonResponse({"message": "Mappings saved successfully"})
 
             except json.JSONDecodeError:
@@ -299,12 +319,14 @@ def group_mappings(request, conn=None, **kwargs):
 
 def process_files(selected_items, selected_destinations, group, username):
     """
-    Process the selected files and destinations to create upload orders with appropriate preprocessing.
+    Process selected files & destinations to create upload orders with
+    appropriate preprocessing.
     """
-    files_by_preprocessing = defaultdict(list)  # Group files by preprocessing config
+    # Group files by preprocessing config
+    files_by_preprocessing = defaultdict(list)
 
     for item in selected_items:
-        # Handle both old string format and new object format for backward compatibility
+        # Support old string & new object format (backward compatible)
         if isinstance(item, dict):
             # New format with localPath and uuid
             local_path = item.get("localPath")
@@ -317,37 +339,35 @@ def process_files(selected_items, selected_destinations, group, username):
         abs_path = os.path.abspath(os.path.join(BASE_DIR, local_path))
 
         logger.info(
-            f"Importing: {abs_path} to {selected_destinations} (UUID: {subfile_uuid})"
+            "Importing: %s to %s (UUID: %s)",
+            abs_path,
+            selected_destinations,
+            subfile_uuid,
         )
 
         for sample_parent_type, sample_parent_id in selected_destinations:
             if sample_parent_type in ("screens", "Screen"):
                 sample_parent_type = "Screen"
-                if local_path.endswith(".db"):
-                    preprocessing_key = "screen_db"
-                else:
-                    preprocessing_key = "screen_no_preprocessing"
             elif sample_parent_type in ("datasets", "Dataset"):
                 sample_parent_type = "Dataset"
-
-                # Check if this is a Leica file with UUID (sub-image selection)
-                if subfile_uuid and any(
-                    ext in local_path.lower()
-                    for ext in EXTENSIONS_REQUIRING_PREPROCESSING
-                ):
-                    preprocessing_key = "dataset_leica_uuid"
-                else:
-                    preprocessing_key = "dataset_no_preprocessing"
             else:
                 raise ValueError(
                     f"Unknown type {sample_parent_type} for id {sample_parent_id}"
                 )
 
-            # Group files by preprocessing key, including UUID info
-            file_info = {"path": abs_path, "uuid": subfile_uuid, "original_item": item}
-            files_by_preprocessing[
-                (sample_parent_type, sample_parent_id, preprocessing_key)
-            ].append(file_info)
+            file_ext = os.path.splitext(local_path)[1].lower()
+            preprocessing_key = PREPROCESSING_EXTENSION_MAP.get(file_ext)
+
+            file_info = {
+                "path": abs_path,
+                "uuid": subfile_uuid,
+                "original_item": item,
+            }
+            files_by_preprocessing[(
+                sample_parent_type,
+                sample_parent_id,
+                preprocessing_key,
+            )].append(file_info)
 
     # Now create orders for each group
     for (
@@ -368,60 +388,73 @@ def process_files(selected_items, selected_destinations, group, username):
             "Files": files,
         }
 
-        # Apply preprocessing based on key
-        if preprocessing_key == "screen_db":
-            order_info["preprocessing_container"] = (
-                "cellularimagingcf/cimagexpresstoometiff:v0.7"
-            )
-            order_info["preprocessing_inputfile"] = "{Files}"
-            order_info["preprocessing_outputfolder"] = "/data"
-            order_info["preprocessing_altoutputfolder"] = "/out"
-            order_info["extra_params"] = {"saveoption": "single"}
-
-        elif preprocessing_key == "dataset_leica_uuid":
-            # New Leica UUID preprocessing
-            order_info["preprocessing_container"] = (
-                "cellularimagingcf/convertleica-docker:v1.2.0"
-            )
+        cfg = (
+            PREPROCESSING_CONFIG.get(preprocessing_key)
+            if preprocessing_key
+            else None
+        )
+        if cfg:
+            order_info["preprocessing_container"] = cfg["container"]
             order_info["preprocessing_inputfile"] = "{Files}"
             order_info["preprocessing_outputfolder"] = "/data"
             order_info["preprocessing_altoutputfolder"] = "/out"
 
-            # Handle multiple files with UUIDs
-            if len(file_infos) == 1 and file_infos[0]["uuid"]:
-                # Single file with UUID
-                order_info["extra_params"] = {"image_uuid": file_infos[0]["uuid"]}
-            else:
-                # Multiple files or mixed UUID/non-UUID files
-                # Create separate orders for each UUID file
+            template_extra = cfg.get("extra_params") or {}
+            uses_uuid_placeholder = any(
+                isinstance(v, str) and "{UUID}" in v
+                for v in template_extra.values()
+            )
+
+            if uses_uuid_placeholder:
                 uuid_files = [f for f in file_infos if f["uuid"]]
-                if uuid_files:
-                    # Process UUID files separately
-                    for file_info in uuid_files:
-                        single_order_info = order_info.copy()
-                        single_order_info["Files"] = [file_info["path"]]
-                        single_order_info["UUID"] = str(uuid.uuid4())
-                        single_order_info["extra_params"] = {
-                            "image_uuid": file_info["uuid"]
-                        }
-                        create_upload_order(single_order_info)
+                non_uuid_files = [f for f in file_infos if not f["uuid"]]
 
-                    # Process non-UUID files together (if any)
-                    non_uuid_files = [f["path"] for f in file_infos if not f["uuid"]]
+                if not uuid_files:
+                    logger.warning(
+                        "Preprocessing key '%s' uses {UUID} but no UUIDs "
+                        "found in %d files.",
+                        preprocessing_key,
+                        len(file_infos),
+                    )
+                    extra_params = build_extra_params(template_extra, None)
+                    if extra_params:
+                        order_info["extra_params"] = extra_params
+                else:
+                    for f in uuid_files:
+                        per_order = order_info.copy()
+                        per_order["Files"] = [f["path"]]
+                        per_order["UUID"] = str(uuid.uuid4())
+                        extra_params = build_extra_params(
+                            template_extra, f["uuid"]
+                        )
+                        if extra_params:
+                            per_order["extra_params"] = extra_params
+                        create_upload_order(per_order)
+
                     if non_uuid_files:
-                        order_info["Files"] = non_uuid_files
-                        # order_info["extra_params"] = {"saveoption": ""}
-                        create_upload_order(order_info)
-                    return  # Skip the normal create_upload_order call below
+                        grouped = order_info.copy()
+                        grouped["Files"] = [f["path"] for f in non_uuid_files]
+                        grouped["UUID"] = str(uuid.uuid4())
+                        extra_params = build_extra_params(
+                            template_extra, None
+                        )
+                        if extra_params:
+                            grouped["extra_params"] = extra_params
+                        create_upload_order(grouped)
+                    continue
+            else:
+                if any(f["uuid"] for f in file_infos):
+                    logger.info(
+                        "Ignoring %d provided file UUID(s) for "
+                        "preprocessing key '%s' without {UUID} placeholder.",
+                        sum(1 for f in file_infos if f["uuid"]),
+                        preprocessing_key,
+                    )
+                extra_params = build_extra_params(template_extra, None)
+                if extra_params:
+                    order_info["extra_params"] = extra_params
 
-        # elif preprocessing_key == "dataset_custom_preprocessing":
-        #     order_info["preprocessing_container"] = "some-other-container"
-        #     order_info["preprocessing_inputfile"] = "{Files}"
-        #     order_info["preprocessing_outputfolder"] = "/custom-output-folder"
-        #     order_info["preprocessing_altoutputfolder"] = "/custom-alt-output"
-        #     order_info["extra_params"] = {"custom_param": "value"}
-
-        # No preprocessing for other cases
+        # Create order (either no preprocessing or already enriched)
         create_upload_order(order_info)
 
 

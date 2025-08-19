@@ -77,3 +77,33 @@ def check_directory_permissions(path):
         return True, "Directory is accessible"
     except Exception as e:
         return False, f"Error checking directory access: {str(e)}"
+
+
+def build_extra_params(template_extra, uuid_value):
+    """
+    Materialize extra preprocessing parameters from a template dict.
+
+    Behavior:
+        - For each key/value in template_extra:
+                * If value is a string containing the {UUID} placeholder and
+                    a uuid_value is provided, substitute it.
+                * If value contains {UUID} but no uuid_value is provided,
+                    skip that key.
+                * Otherwise copy the value as-is.
+    - Returns a new dict or None if no parameters remain after filtering.
+    """
+    if not template_extra:
+        return None
+
+    realized = {}
+    for key, value in template_extra.items():
+        if isinstance(value, str) and "{UUID}" in value:
+            if uuid_value:
+                realized[key] = value.replace("{UUID}", uuid_value)
+            else:
+                # Skip param requiring UUID when none available
+                continue
+        else:
+            realized[key] = value
+
+    return realized or None

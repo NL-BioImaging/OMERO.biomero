@@ -17,7 +17,7 @@ export const apiRequest = async (
     });
     return response.data;
   } catch (error) {
-    console.error("API Request Error:", error);
+    console.error("API Request Error in apiService:", error);
     throw error;
   }
 };
@@ -47,7 +47,7 @@ export const fetchProjectData = async (item) => {
   return apiRequest(urls.api_datasets, "GET", null, { params });
 };
 
-export const fetchFolderData = async (itemId = null, isFolder = true) => {
+export const fetchFolderData = (itemId = null, isFolder = true) => {
   const { urls, user } = getDjangoConstants();
   const params = {
     item_id: itemId,
@@ -84,7 +84,7 @@ export const fetchScriptData = async (scriptId, directory) => {
     directory: directory, // Include the directory as a query parameter
   };
 
-  return apiRequest(urls.get_script_menu, "GET", null, { params });
+  return apiRequest(urls.get_workflows, "GET", null, { params });
 };
 
 // Fetch available workflows
@@ -95,7 +95,7 @@ export const fetchWorkflows = async () => {
 
 export const fetchConfig = async () => {
   const { urls } = getDjangoConstants();
-  return apiRequest(urls.config, "GET");
+  return apiRequest(urls.api_config, "GET");
 };
 
 // Fetch metadata for a specific workflow
@@ -205,7 +205,7 @@ export const postConfig = async (config) => {
     // Prepare the payload with script_name and optional params
     const payload = { config };
 
-    const response = await apiRequest(urls.api_save_config, "POST", payload, {
+    const response = await apiRequest(urls.api_config, "POST", payload, {
       headers: {
         "X-CSRFToken": csrfToken, // Include CSRF token in request headers
       },
@@ -293,11 +293,16 @@ export const postGroupMappings = async (mappings) => {
   const { urls } = getDjangoConstants();
   try {
     const csrfToken = window.csrftoken;
-    const response = await apiRequest(urls.api_group_mappings, "POST", { mappings }, {
-      headers: {
-        "X-CSRFToken": csrfToken,
-      },
-    });
+    const response = await apiRequest(
+      urls.api_group_mappings,
+      "POST",
+      { mappings },
+      {
+        headers: {
+          "X-CSRFToken": csrfToken,
+        },
+      }
+    );
     return response;
   } catch (error) {
     console.error("Error saving group mappings:", error);
@@ -319,11 +324,11 @@ export const fetchPlatesData = async (item) => {
 
 export const fetchPlateImages = async (plateId) => {
   const { urls } = getDjangoConstants();
-  
+
   let allImages = [];
   let keepFetching = true;
   let offset = 0;
-  const limit = 200;  // Default API limit
+  const limit = 200; // Default API limit
 
   while (keepFetching) {
     // Get paginated wells
@@ -334,14 +339,14 @@ export const fetchPlateImages = async (plateId) => {
 
     // Extract images from wells
     const images = response.data
-      .flatMap(well => well.WellSamples || [])
-      .map(sample => ({
+      .flatMap((well) => well.WellSamples || [])
+      .map((sample) => ({
         id: sample.Image["@id"],
         name: sample.Image.Name,
         index: `image-${sample.Image["@id"]}`,
-        source: "omero"
+        source: "omero",
       }))
-      .filter(img => img.id != null);
+      .filter((img) => img.id != null);
 
     allImages.push(...images);
 

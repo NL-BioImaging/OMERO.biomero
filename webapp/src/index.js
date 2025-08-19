@@ -66,10 +66,10 @@ c-64 60 -112 93 -271 188 -375 222 -525 400 -604 719 -18 72 -22 117 -22 257
 const AppRouter = () => {
   const [searchParams] = useSearchParams();
   const WEBCLIENT = window.WEBCLIENT;
-  const { ADI_ENABLED, ANALYZE_ENABLED } = WEBCLIENT.UI;
+  const { IMPORTER_ENABLED, ANALYZER_ENABLED } = WEBCLIENT.UI;
   const navigate = useNavigate();
   const appName =
-    searchParams.get("tab") || (ADI_ENABLED ? "import" : "biomero");
+    searchParams.get("tab") || (IMPORTER_ENABLED ? "import" : "biomero");
 
   return (
     <AppProvider>
@@ -80,7 +80,7 @@ const AppRouter = () => {
             <BiomeroIcon />
             <NavbarHeading>Biomero</NavbarHeading>
             <NavbarDivider />
-            {ADI_ENABLED && (
+            {IMPORTER_ENABLED && (
               <Button
                 className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
                   appName === "import"
@@ -93,7 +93,7 @@ const AppRouter = () => {
                 outlined={appName === "import"}
               />
             )}
-            {ANALYZE_ENABLED && (
+            {ANALYZER_ENABLED && (
               <Button
                 className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
                   appName === "biomero"

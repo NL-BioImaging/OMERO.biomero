@@ -34,25 +34,24 @@ export const getDjangoConstants = () => {
     initially_open: WEBCLIENT.initially_open,
     tree_top_level: WEBCLIENT.URLS.tree_top_level,
     api_experimenter: WEBCLIENT.URLS.api_experimenter,
-    api_get_folder_contents: "/omero_biomero/get_folder_contents/",
     api_get_groups: "/webclient/group_user_content/",
     scripts: "/webclient/list_scripts/",
-    get_script_menu: "/omero_biomero/get_script_menu/",
-    workflows: "/omero_biomero/api/biomero/workflows/",
-    config: "/omero_biomero/api/biomero/admin/config/",
-    api_save_config: "/omero_biomero/api/biomero/admin/config/save/",
-    api_import_selected: "/omero_biomero/api/import_selected/",
-    api_run_workflow: "/omero_biomero/api/biomero/workflows/run/",
-    api_group_mappings: "/omero_biomero/api/group_mappings/",
     api_thumbnails: "/webclient/get_thumbnails/",
     api_addnewcontainer: "/webclient/action/addnewcontainer/",
     api_wells: "/api/v0/m/wells/",
     forms_viewer: "/omero_forms/",
+    api_get_folder_contents: "/omero_biomero/api/importer/get_folder_contents/",
+    api_group_mappings: "/omero_biomero/api/importer/group_mappings/",
+    api_import_selected: "/omero_biomero/api/importer/import_selected/",
+    workflows: "/omero_biomero/api/biomero/workflows/",
+    api_config: "/omero_biomero/api/biomero/admin/config/",
+    api_run_workflow: "/omero_biomero/api/biomero/workflows/run/",
+    get_workflows: "/omero_biomero/api/biomero/get_workflows/",
   };
 
   const ui = {
-    adi_enabled: WEBCLIENT.UI.ADI_ENABLED,
-    analyze_enabled: WEBCLIENT.UI.ANALYZE_ENABLED,
+    importer_enabled: WEBCLIENT.UI.IMPORTER_ENABLED,
+    analyzer_enabled: WEBCLIENT.UI.ANALYZER_ENABLED,
   };
 
   return { user, urls, ui };

@@ -33,21 +33,29 @@ const WorkflowOutput = ({ onSelectionChange }) => {
   }, [hasOutputSelection]);
 
   useEffect(() => {
-    // Auto-populate output datasets with input datasets when they change
+    const inputs = state.inputDatasets || [];
+    if (inputs.length === 0) return;
+    const hasPlate = inputs.some((d) => d?.category === "plates");
+    const allDatasets = inputs.every((d) => d?.category === "datasets");
+
+    // If any plate present (alone or mixed), don't auto-populate (and clear existing auto defaults)
+    if (hasPlate || !allDatasets) {
+      if (state.formData.selectedDatasets?.length) {
+        handleInputChange("selectedDatasets", []); // clear; requirement: empty when plates involved
+      }
+      return;
+    }
+
+    // Only auto-populate when all inputs are datasets and nothing chosen yet
     if (
-      state.inputDatasets?.length > 0 &&
+      allDatasets &&
       (!state.formData.selectedDatasets ||
         state.formData.selectedDatasets.length === 0)
     ) {
-      // Extract dataset names from input datasets
-      const inputDatasetNames = state.inputDatasets.map(
-        (dataset) => dataset.data
-      );
-
-      // Set them as the default output datasets
+      const inputDatasetNames = inputs.map((dataset) => dataset.data);
       handleInputChange("selectedDatasets", inputDatasetNames);
     }
-  }, [state.inputDatasets]); // Trigger when input datasets change
+  }, [state.inputDatasets]);
 
   const handleInputChange = (key, value) => {
     // Compute new state immediately
@@ -182,6 +190,7 @@ const WorkflowOutput = ({ onSelectionChange }) => {
           }}
           multiSelect={false}
           intent={hasOutputSelection ? "" : "danger"}
+          allowedCategories={["datasets"]}
         />
 
         {/* Optional Image File Renamer */}

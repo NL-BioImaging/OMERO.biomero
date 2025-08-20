@@ -79,10 +79,14 @@ const FileBrowser = ({ onSelectCallback, rootFolder = null }) => {
 
       return newNodes;
     } catch (error) {
+      const serverMsg = error?.response?.data;
+      const rawMessage = typeof serverMsg === "string" ? serverMsg : (serverMsg?.message || error.message || "Unknown error");
+      const MAX_LEN = 160;
+      const displayMessage = rawMessage.length > MAX_LEN ? rawMessage.slice(0, MAX_LEN - 3) + "..." : rawMessage;
       toaster?.show({
           intent: "danger",
           icon: "error",
-          message: `Failed to load folder data`,
+          message: `Failed to load folder data: ${displayMessage}`,
         });
     }
   };

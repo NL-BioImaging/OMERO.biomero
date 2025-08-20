@@ -18,10 +18,10 @@ from .settings import (
     EXTENSION_TO_FILE_BROWSER,
     EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES,
     PREPROCESSING_EXTENSION_MAP,
-    GROUP_TO_FOLDER_MAPPING_FILE_PATH,
     FOLDER_EXTENSIONS_NON_BROWSABLE,
     BASE_DIR,
     PREPROCESSING_CONFIG,
+    CONFIG_FILE_PATH,
 )
 from .utils import build_extra_params
 
@@ -149,54 +149,109 @@ def get_folder_contents(request, conn=None, **kwargs):
         )
     else:  # Folder case
         items = os.listdir(target_path)
-        # If there is a file with extension in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES, hide the accompanying files
-        special_items = []
-        for item in items:
-            item_ext = os.path.splitext(item)[1]
-            if item_ext in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES:
-                special_items.append(item)
+        # Simplified generic special handling (see settings.py docs):
+        # One (and only one) special pattern match -> show just that file.
+        # Conflicts / duplicates -> error. Otherwise show normal listing.
+        special_exact = [
+            p
+            for p in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES
+            if not p.startswith('.')
+        ]
+        special_exts = [
+            p
+            for p in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES
+            if p.startswith('.')
+        ]
 
-        if special_items:
-            # There can be only one key item; error if multiple
-            if len(special_items) != 1:
-                ext_list = ", ".join(EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES)
-                return HttpResponseBadRequest(
-                    f"There can be only one file with extension [{ext_list}] in the folder '{target_path}'"
+        matched_files = []  # list of (pattern, filename)
+        duplicate_errors = []
+
+        lower_items_map = {name.lower(): name for name in items}
+
+        # Exact filename patterns (case-insensitive)
+        for pat in special_exact:
+            matches = [
+                real
+                for low, real in lower_items_map.items()
+                if low == pat.lower()
+            ]
+            if len(matches) > 1:
+                duplicate_errors.append(f"Multiple occurrences of '{pat}'")
+            elif len(matches) == 1:
+                matched_files.append((pat, matches[0]))
+
+        # Extension patterns
+        for ext_pat in special_exts:
+            ext_matches = [
+                f
+                for f in items
+                if os.path.splitext(f)[1].lower() == ext_pat.lower()
+            ]
+            if len(ext_matches) > 1:
+                duplicate_errors.append(
+                    f"Multiple '{ext_pat}' files: {', '.join(ext_matches)}"
                 )
-            item_ext = os.path.splitext(special_items[0])[1]
-            logger.info(
-                f"Special item found: {special_items[0]} ext {item_ext}"
+            elif len(ext_matches) == 1:
+                matched_files.append((ext_pat, ext_matches[0]))
+
+        # Any duplicate errors -> bail early
+        if duplicate_errors:
+            return HttpResponseBadRequest(
+                " | ".join(
+                    [
+                        f"In folder '{target_path}': {msg}"
+                        for msg in duplicate_errors
+                    ]
+                )
             )
+
+        # Conflicting different patterns in same folder
+        unique_patterns = {pat for pat, _ in matched_files}
+        if len(unique_patterns) > 1:
+            return HttpResponseBadRequest(
+                f"Ambiguous special files in '{target_path}': "
+                + ", ".join(f"{pat}->{fname}" for pat, fname in matched_files)
+            )
+
+        if matched_files:
+            # Exactly one pattern matched one file -> hide everything else
+            _, special_filename = matched_files[0]
+            item_path_fs = os.path.join(target_path, special_filename)
+            ext = os.path.splitext(special_filename)[1].lower()
             contents.append(
                 {
-                    "name": special_items[0],
-                    "is_folder": item_ext in EXTENSION_TO_FILE_BROWSER,
-                    "id": os.path.relpath(special_items[0], BASE_DIR),
-                    "metadata": None,
+                    "name": special_filename,
+                    "is_folder": (
+                        os.path.isdir(item_path_fs)
+                        or ext in EXTENSION_TO_FILE_BROWSER
+                    )
+                    and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE,
+                    "id": os.path.relpath(item_path_fs, BASE_DIR),
+                    "metadata": (
+                        EXTENSION_TO_FILE_BROWSER[ext](item_path_fs)
+                        if ext in EXTENSION_TO_FILE_BROWSER
+                        else None
+                    ),
                     "source": "filesystem",
                 }
             )
-
         else:
+            # Normal directory listing (no specials)
             for item in items:
-                item_path = os.path.join(target_path, item)
-                # Get extension, if any
+                item_path_fs = os.path.join(target_path, item)
                 ext = os.path.splitext(item)[1]
-                info = f"Item: {item}, Path: {item_path}, Extension: {ext}"
                 is_folder = (
-                    os.path.isdir(item_path) or ext in EXTENSION_TO_FILE_BROWSER
+                    os.path.isdir(item_path_fs)
+                    or ext in EXTENSION_TO_FILE_BROWSER
                 ) and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE
-
                 metadata = None
                 if ext in EXTENSION_TO_FILE_BROWSER:
-                    metadata = EXTENSION_TO_FILE_BROWSER[ext](item_path)
-
+                    metadata = EXTENSION_TO_FILE_BROWSER[ext](item_path_fs)
                 contents.append(
                     {
                         "name": item,
                         "is_folder": is_folder,
-                        "id": os.path.relpath(item_path, BASE_DIR),
-                        "info": info,
+                        "id": os.path.relpath(item_path_fs, BASE_DIR),
                         "metadata": metadata,
                         "source": "filesystem",
                     }
@@ -246,7 +301,8 @@ def import_selected(request, conn=None, **kwargs):
 
         # Log the import attempt
         logger.info(
-            f"User {username} (ID: {user_id}, group: {selected_group}) attempting to import {len(selected_items)} items"
+            f"User {username} (ID: {user_id}, group: {selected_group}) "
+            f"attempting to import {len(selected_items)} items"
         )
 
         # Call process_files with validated group
@@ -257,7 +313,10 @@ def import_selected(request, conn=None, **kwargs):
         return JsonResponse(
             {
                 "status": "success",
-                "message": f"Successfully queued {len(selected_items)} items for import",
+                "message": (
+                    "Successfully queued "
+                    f"{len(selected_items)} items for import"
+                ),
             }
         )
     except json.JSONDecodeError:
@@ -270,50 +329,89 @@ def import_selected(request, conn=None, **kwargs):
 @login_required()
 @require_http_methods(["GET", "POST"])
 def group_mappings(request, conn=None, **kwargs):
-    """Handle group mappings GET and POST requests."""
+    """GET returns current group mappings; POST updates them (admin only)."""
     try:
         if request.method == "GET":
-            # Read mappings from file if it exists
-            if os.path.exists(GROUP_TO_FOLDER_MAPPING_FILE_PATH):
-                with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "r") as f:
-                    mappings = json.load(f)
-            else:
-                mappings = {}
-
+            mappings = {}
+            if os.path.exists(CONFIG_FILE_PATH):
+                try:
+                    with open(CONFIG_FILE_PATH, "r") as f:
+                        data = json.load(f) or {}
+                    if isinstance(data, dict):
+                        gm = data.get("group_mappings")
+                        if isinstance(gm, dict):
+                            mappings = gm
+                except Exception:
+                    logger.warning(
+                        "Failed reading group mappings from %s",
+                        CONFIG_FILE_PATH,
+                        exc_info=True,
+                    )
             return JsonResponse({"mappings": mappings})
 
-        elif request.method == "POST":
-            # Get the current user info
-            current_user = conn.getUser()
-            username = current_user.getName()
-            user_id = current_user.getId()
-            is_admin = conn.isAdmin()
+        # POST
+        current_user = conn.getUser()
+        username = current_user.getName()
+        user_id = current_user.getId()
+        if not conn.isAdmin():
+            return JsonResponse(
+                {"error": "Only administrators can update group mappings"},
+                status=403,
+            )
 
-            # Only allow admins to update mappings
-            if not is_admin:
-                return JsonResponse(
-                    {"error": "Only administrators can update group mappings"},
-                    status=403,
-                )
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON data"}, status=400)
 
+        mappings = data.get("mappings", {})
+        if not isinstance(mappings, dict):
+            return JsonResponse(
+                {"error": "'mappings' must be an object"}, status=400
+            )
+
+        existing = {}
+        if os.path.exists(CONFIG_FILE_PATH):
             try:
-                data = json.loads(request.body)
-                mappings = data.get("mappings", {})
+                with open(CONFIG_FILE_PATH, "r") as f:
+                    existing = json.load(f) or {}
+                if not isinstance(existing, dict):
+                    existing = {}
+            except Exception:
+                existing = {}
 
-                # Save mappings to file
-                with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "w") as f:
-                    json.dump(mappings, f, indent=2)
-
-                logger.info(
-                    f"Group mappings updated by {username} (ID: {user_id})"
+        existing["group_mappings"] = mappings
+        # Ensure parent directory exists (handle cases where path includes
+        # ~ which we expanded earlier).
+        config_dir = os.path.dirname(CONFIG_FILE_PATH)
+        if config_dir and not os.path.exists(config_dir):
+            try:
+                os.makedirs(config_dir, exist_ok=True)
+            except Exception as e:
+                logger.error(
+                    "Failed creating config directory %s: %s",
+                    config_dir,
+                    e,
                 )
-                return JsonResponse({"message": "Mappings saved successfully"})
+                return JsonResponse(
+                    {"error": "Failed to prepare config directory"},
+                    status=500,
+                )
+        try:
+            with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2)
+        except Exception as e:
+            logger.error("Failed writing group mappings: %s", e)
+            return JsonResponse(
+                {"error": "Failed to save mappings"}, status=500
+            )
 
-            except json.JSONDecodeError:
-                return JsonResponse({"error": "Invalid JSON data"}, status=400)
-
+        logger.info(
+            "Group mappings updated by %s (ID: %s)", username, user_id
+        )
+        return JsonResponse({"message": "Mappings saved successfully"})
     except Exception as e:
-        logger.error(f"Error handling group mappings: {str(e)}")
+        logger.error("Error handling group mappings: %s", e)
         return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -352,7 +450,8 @@ def process_files(selected_items, selected_destinations, group, username):
                 sample_parent_type = "Dataset"
             else:
                 raise ValueError(
-                    f"Unknown type {sample_parent_type} for id {sample_parent_id}"
+                    f"Unknown type {sample_parent_type} for id "
+                    f"{sample_parent_id}"
                 )
 
             file_ext = os.path.splitext(local_path)[1].lower()

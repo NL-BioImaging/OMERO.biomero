@@ -1,12 +1,30 @@
 import os
+import json
 from .leica_file_browser.ReadLeicaFile import read_leica_file
 
 EXTENSION_TO_FILE_BROWSER = {
     ".lif": read_leica_file,
     ".xlef": read_leica_file,
 }
+
+# EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES defines patterns that, when
+# present in a directory, cause ONLY that matching file to be shown while
+# every other sibling entry (files & folders) is hidden from the UI.
+# Simple rules (generic & minimal):
+#   * Entries starting with a dot are treated as file extensions (".xlef").
+#     - If exactly one file with that extension exists -> show only it.
+#     - If more than one -> error.
+#   * Entries without a leading dot are treated as exact filenames
+#     (case-insensitive) e.g. "experiment.db".
+#     - If exactly one such file exists -> show only it.
+#     - If more than one of the same name -> error.
+#   * If two or more DIFFERENT special patterns (e.g. an exact filename AND
+#     a special extension, or two different exact filenames) match in the
+#     same folder -> error (ambiguous which to display exclusively).
+#   * If none match -> normal directory listing.
+# Add new patterns sparingly; each must tolerate full-folder hiding semantics.
 EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES = [
-    # ".db", # TODO Przemek FIX to 'experiment.db' or something?? it comes with e.g. images.db
+    "experiment.db",
     ".xlef",
 ]
 # Map file extensions to preprocessing keys. Keys must exist in
@@ -22,11 +40,22 @@ FOLDER_EXTENSIONS_NON_BROWSABLE = [
     ".zarr",
 ]
 BASE_DIR = os.getenv("IMPORT_MOUNT_PATH", "/data")
-GROUP_TO_FOLDER_MAPPING_FILE_PATH = os.path.join(
-    os.path.dirname(__file__), "group_mappings.json"
+
+CONFIG_FILE_PATH = os.path.expanduser(
+    os.getenv("OMERO_BIOMERO_CONFIG_FILE", "~/.biomero/config.json")
 )
 
-# Generic preprocessing configuration for uploads.
+
+def _load_overrides_simple():
+    try:
+        with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+# Generic preprocessing configuration for uploads (may be overridden).
 # Keys correspond to preprocessing identifiers used in importer_views.
 # Each entry can define:
 #   container: OCI image (with tag) used for preprocessing
@@ -48,6 +77,16 @@ PREPROCESSING_CONFIG = {
     },
     # Add new keys here referencing PREPROCESSING_EXTENSION_MAP as needed.
 }
+
+# Apply JSON overrides (if file present) AFTER defaults defined.
+_ovr = _load_overrides_simple()
+for _k, _typ in {
+    "EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES": list,
+    "PREPROCESSING_EXTENSION_MAP": dict,
+    "PREPROCESSING_CONFIG": dict,
+}.items():
+    if isinstance(_ovr.get(_k), _typ):
+        globals()[_k] = _ovr[_k]
 
 # This is a list of file extensions that are supported by Bio-Formats.
 # Generated from:

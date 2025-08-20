@@ -45,8 +45,13 @@ const GroupSelect = () => {
   };
 
   const handleItemSelect = (item) => {
-    // Change the active group and navigate
-    window.location.href = `/webclient/active_group/?active_group=${item.id}&url=/biomero/?tab=upload`;
+    // Change the active group and navigate back to the current page (preserve base path + tab)
+    const currentPath = `${window.location.pathname}${window.location.search}` || "/";
+    // Fallback: if no tab param present, keep existing behavior (default to import)
+    const hasTab = /[?&]tab=/.test(currentPath);
+    const targetPath = hasTab ? currentPath : `${currentPath}${currentPath.includes("?") ? "&" : "?"}tab=import`;
+    const redirect = `/webclient/active_group/?active_group=${item.id}&url=${encodeURIComponent(targetPath)}`;
+    window.location.href = redirect;
     if (onSelect) {
       onSelect(item);
       setSelectedOption(item);

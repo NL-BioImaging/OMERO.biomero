@@ -417,12 +417,24 @@ export const AppProvider = ({ children }) => {
         },
       });
     } catch (err) {
-      setError(err.message);
-      console.error("Failed to load folder data:", err);
+      // Attempt to surface backend-provided error message (e.g. ambiguous special files) to the user
+      const serverMsg = err?.response?.data; // axios error shape
+      // serverMsg may be string or object; prefer string, else fallback to err.message
+      const rawMessage = typeof serverMsg === "string"
+        ? serverMsg
+        : (serverMsg?.message || err.message || "Unknown error");
+      // Keep original setError for any components relying on it
+      setError(rawMessage);
+      console.error("Failed to load folder data:", rawMessage, err);
+      // Shorten excessively long messages for toast, but keep essential content
+      const MAX_LEN = 240;
+      const displayMessage = rawMessage.length > MAX_LEN
+        ? rawMessage.slice(0, MAX_LEN - 3) + "..."
+        : rawMessage;
       toaster?.show({
         intent: "danger",
         icon: "error",
-        message: `Failed to load folder data`,
+        message: `Failed to load folder data: ${displayMessage}`,
       });
     } finally {
       setLoading(false);

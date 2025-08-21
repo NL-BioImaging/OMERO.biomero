@@ -4,7 +4,7 @@
 set -eu
 
 export PATH="/opt/omero/web/venv3/bin:$PATH"
-python=/opt/omero/web/venv3/bin/python3.9
+python=/opt/omero/web/venv3/bin/python
 omero=/opt/omero/web/venv3/bin/omero
 
 $python /startup/44-create_forms_user.py

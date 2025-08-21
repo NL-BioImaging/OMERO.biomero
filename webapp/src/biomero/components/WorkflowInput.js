@@ -168,6 +168,7 @@ const WorkflowInput = () => {
             }
           }}
           multiSelect={true}
+          allowedCategories={["datasets", "plates"]}
         />
         {state.inputDatasets?.length > 0 && (
           <>

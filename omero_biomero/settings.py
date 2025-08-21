@@ -1,27 +1,96 @@
 import os
+import json
 from .leica_file_browser.ReadLeicaFile import read_leica_file
 
 EXTENSION_TO_FILE_BROWSER = {
     ".lif": read_leica_file,
     ".xlef": read_leica_file,
 }
-EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES = [
-    ".db",
+
+# FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE defines patterns that, when
+# present in a directory, cause ONLY that matching file to be shown while
+# every other sibling entry (files & folders) is hidden from the UI.
+# Simple rules (generic & minimal):
+#   * Entries starting with a dot are treated as file extensions (".xlef").
+#     - If exactly one file with that extension exists -> show only it.
+#     - If more than one -> error.
+#   * Entries without a leading dot are treated as exact filenames
+#     (case-insensitive) e.g. "experiment.db".
+#     - If exactly one such file exists -> show only it.
+#     - If more than one of the same name -> error.
+#   * If two or more DIFFERENT special patterns (e.g. an exact filename AND
+#     a special extension, or two different exact filenames) match in the
+#     same folder -> error (ambiguous which to display exclusively).
+#   * If none match -> normal directory listing.
+# Add new patterns sparingly; each must tolerate full-folder hiding semantics.
+FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE = [
+    "experiment.db",
     ".xlef",
 ]
-EXTENSIONS_REQUIRING_PREPROCESSING = [
-    ".lif",
-    ".xlef",
-    ".lof",
-]
+# Map file extensions to preprocessing keys. Keys must exist in
+# PREPROCESSING_CONFIG. This replaces the earlier generic list and makes
+# behavior explicit and extensible. Extensions should be lowercase.
+PREPROCESSING_EXTENSION_MAP = {
+    ".lif": "dataset_leica_uuid",
+    ".xlef": "dataset_leica_uuid",
+    ".lof": "dataset_leica_uuid",
+    ".db": "screen_db",  # OMERO screen (.db) container conversion
+}
 FOLDER_EXTENSIONS_NON_BROWSABLE = [
     ".zarr",
 ]
 BASE_DIR = os.getenv("IMPORT_MOUNT_PATH", "/data")
-GROUP_TO_FOLDER_MAPPING_FILE_PATH = os.path.join(os.path.dirname(__file__), "group_mappings.json")
+
+CONFIG_FILE_PATH = os.path.expanduser(
+    os.getenv("OMERO_BIOMERO_CONFIG_FILE", "~/.biomero/config.json")
+)
+
+
+def _load_overrides_simple():
+    try:
+        with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+# Generic preprocessing configuration for uploads (may be overridden).
+# Keys correspond to preprocessing identifiers used in importer_views.
+# Each entry can define:
+#   container: OCI image (with tag) used for preprocessing
+#   extra_params: dict of additional parameters.
+#       Special placeholder {UUID}: if present in any value AND at least one
+#       file has a subfile UUID, separate orders are created per UUID file.
+#       For non-UUID files the placeholder is removed (key omitted) and they
+#       are optionally batched in one additional order.
+# NOTE: I/O paths (inputfile/outputfolder/alt_outputfolder) are fixed in
+#       code for now, to keep configuration minimal.
+PREPROCESSING_CONFIG = {
+    "screen_db": {
+        "container": "cellularimagingcf/cimagexpresstoometiff:v0.7",
+        "extra_params": {"saveoption": "single"},
+    },
+    "dataset_leica_uuid": {
+        "container": "cellularimagingcf/convertleica-docker:v1.2.0",
+        "extra_params": {"image_uuid": "{UUID}"},
+    },
+    # Add new keys here referencing PREPROCESSING_EXTENSION_MAP as needed.
+}
+
+# Apply JSON overrides (if file present) AFTER defaults defined.
+_ovr = _load_overrides_simple()
+for _k, _typ in {
+    "FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE": list,
+    "PREPROCESSING_EXTENSION_MAP": dict,
+    "PREPROCESSING_CONFIG": dict,
+}.items():
+    if isinstance(_ovr.get(_k), _typ):
+        globals()[_k] = _ovr[_k]
 
 # This is a list of file extensions that are supported by Bio-Formats.
-# Generated from https://bio-formats.readthedocs.io/en/latest/_sources/supported-formats.rst.txt
+# Generated from:
+# https://bio-formats.readthedocs.io/en/latest/_sources/supported-formats.rst.txt
 SUPPORTED_FILE_EXTENSIONS = [
     ".1sc",
     ".2",

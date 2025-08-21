@@ -16,12 +16,14 @@ from omero_adi.utils.ingest_tracker import (
 from .settings import (
     SUPPORTED_FILE_EXTENSIONS,
     EXTENSION_TO_FILE_BROWSER,
-    EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES,
-    EXTENSIONS_REQUIRING_PREPROCESSING,
-    GROUP_TO_FOLDER_MAPPING_FILE_PATH,
+    FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE,
+    PREPROCESSING_EXTENSION_MAP,
     FOLDER_EXTENSIONS_NON_BROWSABLE,
     BASE_DIR,
+    PREPROCESSING_CONFIG,
+    CONFIG_FILE_PATH,
 )
+from .utils import build_extra_params
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +31,8 @@ logger = logging.getLogger(__name__)
 # TODO move this into the view function that needs it
 def initialize_adi():
     """
-    Called when the app is ready. We initialize the IngestTracker from ADI using an environment variable.
+    Called when the app is ready. We initialize the IngestTracker from ADI
+    using an environment variable.
     """
     db_url = os.getenv("INGEST_TRACKING_DB_URL")
     if not db_url:
@@ -45,7 +48,8 @@ def initialize_adi():
             logger.error("Failed to initialize IngestTracker")
     except Exception as e:
         logger.error(
-            f"Unexpected error during IngestTracker initialization: {e}", exc__info=True
+            f"Unexpected error during IngestTracker initialization: {e}",
+            exc__info=True,
         )
 
 
@@ -73,13 +77,17 @@ def get_folder_contents(request, conn=None, **kwargs):
 
     logger.info(f"Connection: {conn.getUser().getName()}")
 
-    # Determine the target path based on item_path or default to the root folder
-    target_path = BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
+    # Determine the target path based on item_path or default to root folder
+    target_path = (
+        BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
+    )
     logger.info(f"Target folder: {target_path}")
 
     # Validate if the path exists
     if not os.path.exists(target_path):
-        return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
+        return HttpResponseBadRequest(
+            "Invalid folder ID or path does not exist."
+        )
 
     # Get the contents of the folder/file
     contents = []
@@ -125,7 +133,9 @@ def get_folder_contents(request, conn=None, **kwargs):
                 }
             )
         else:
-            return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
+            return HttpResponseBadRequest(
+                "Invalid folder ID or path does not exist."
+            )
 
     elif target_path.endswith(".zarr"):  # Handle .zarr folders as files
         contents.append(
@@ -139,54 +149,109 @@ def get_folder_contents(request, conn=None, **kwargs):
         )
     else:  # Folder case
         items = os.listdir(target_path)
-        # If there is a file with extension in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES, hide the accompanying files
-        special_items = []
-        for item in items:
-            item_ext = os.path.splitext(item)[1]
-            if item_ext in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES:
-                special_items.append(item)
+        # Simplified generic special handling (see settings.py docs):
+        # One (and only one) special pattern match -> show just that file.
+        # Conflicts / duplicates -> error. Otherwise show normal listing.
+        special_exact = [
+            p
+            for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE
+            if not p.startswith('.')
+        ]
+        special_exts = [
+            p
+            for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE
+            if p.startswith('.')
+        ]
 
-        if special_items:
-            # There can be only one key item, return error if there are multiple
-            if len(special_items) != 1:
-                ext_list = ", ".join(EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES)
-                return HttpResponseBadRequest(
-                    f"There can be only one file with extension [{ext_list}] in the folder '{target_path}'"
+        matched_files = []  # list of (pattern, filename)
+        duplicate_errors = []
+
+        lower_items_map = {name.lower(): name for name in items}
+
+        # Exact filename patterns (case-insensitive)
+        for pat in special_exact:
+            matches = [
+                real
+                for low, real in lower_items_map.items()
+                if low == pat.lower()
+            ]
+            if len(matches) > 1:
+                duplicate_errors.append(f"Multiple occurrences of '{pat}'")
+            elif len(matches) == 1:
+                matched_files.append((pat, matches[0]))
+
+        # Extension patterns
+        for ext_pat in special_exts:
+            ext_matches = [
+                f
+                for f in items
+                if os.path.splitext(f)[1].lower() == ext_pat.lower()
+            ]
+            if len(ext_matches) > 1:
+                duplicate_errors.append(
+                    f"Multiple '{ext_pat}' files: {', '.join(ext_matches)}"
                 )
-            item_ext = os.path.splitext(special_items[0])[1]
-            logger.info(
-                f"Special item found: {special_items[0]} with extension {item_ext}"
+            elif len(ext_matches) == 1:
+                matched_files.append((ext_pat, ext_matches[0]))
+
+        # Any duplicate errors -> bail early
+        if duplicate_errors:
+            return HttpResponseBadRequest(
+                " | ".join(
+                    [
+                        f"In folder '{target_path}': {msg}"
+                        for msg in duplicate_errors
+                    ]
+                )
             )
+
+        # Conflicting different patterns in same folder
+        unique_patterns = {pat for pat, _ in matched_files}
+        if len(unique_patterns) > 1:
+            return HttpResponseBadRequest(
+                f"Ambiguous special files in '{target_path}': "
+                + ", ".join(f"{pat}->{fname}" for pat, fname in matched_files)
+            )
+
+        if matched_files:
+            # Exactly one pattern matched one file -> hide everything else
+            _, special_filename = matched_files[0]
+            item_path_fs = os.path.join(target_path, special_filename)
+            ext = os.path.splitext(special_filename)[1].lower()
             contents.append(
                 {
-                    "name": special_items[0],
-                    "is_folder": item_ext in EXTENSION_TO_FILE_BROWSER,
-                    "id": os.path.relpath(special_items[0], BASE_DIR),
-                    "metadata": None,
+                    "name": special_filename,
+                    "is_folder": (
+                        os.path.isdir(item_path_fs)
+                        or ext in EXTENSION_TO_FILE_BROWSER
+                    )
+                    and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE,
+                    "id": os.path.relpath(item_path_fs, BASE_DIR),
+                    "metadata": (
+                        EXTENSION_TO_FILE_BROWSER[ext](item_path_fs)
+                        if ext in EXTENSION_TO_FILE_BROWSER
+                        else None
+                    ),
                     "source": "filesystem",
                 }
             )
-
         else:
+            # Normal directory listing (no specials)
             for item in items:
-                item_path = os.path.join(target_path, item)
-                # Get extension, if any
+                item_path_fs = os.path.join(target_path, item)
                 ext = os.path.splitext(item)[1]
-                info = f"Item: {item}, Path: {item_path}, Extension: {ext}"
                 is_folder = (
-                    os.path.isdir(item_path) or ext in EXTENSION_TO_FILE_BROWSER
+                    os.path.isdir(item_path_fs)
+                    or ext in EXTENSION_TO_FILE_BROWSER
                 ) and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE
-
                 metadata = None
                 if ext in EXTENSION_TO_FILE_BROWSER:
-                    metadata = EXTENSION_TO_FILE_BROWSER[ext](item_path)
-
+                    metadata = EXTENSION_TO_FILE_BROWSER[ext](item_path_fs)
                 contents.append(
                     {
                         "name": item,
                         "is_folder": is_folder,
-                        "id": os.path.relpath(item_path, BASE_DIR),
-                        "info": info,
+                        "id": os.path.relpath(item_path_fs, BASE_DIR),
                         "metadata": metadata,
                         "source": "filesystem",
                     }
@@ -195,7 +260,11 @@ def get_folder_contents(request, conn=None, **kwargs):
     # Sort the contents by name, folders first
     contents.sort(key=lambda x: (not x["is_folder"], x["name"].lower()))
 
-    return {"contents": contents, "item_id": item_id, "metadata": clicked_item_metadata}
+    return {
+        "contents": contents,
+        "item_id": item_id,
+        "metadata": clicked_item_metadata,
+    }
 
 
 @login_required()
@@ -211,7 +280,9 @@ def import_selected(request, conn=None, **kwargs):
         if not selected_items:
             return JsonResponse({"error": "No items selected"}, status=400)
         if not selected_destinations:
-            return JsonResponse({"error": "No destinations selected"}, status=400)
+            return JsonResponse(
+                {"error": "No destinations selected"}, status=400
+            )
         if not selected_group:
             return JsonResponse({"error": "No group specified"}, status=400)
 
@@ -230,16 +301,22 @@ def import_selected(request, conn=None, **kwargs):
 
         # Log the import attempt
         logger.info(
-            f"User {username} (ID: {user_id}, group: {selected_group}) attempting to import {len(selected_items)} items"
+            f"User {username} (ID: {user_id}, group: {selected_group}) "
+            f"attempting to import {len(selected_items)} items"
         )
 
         # Call process_files with validated group
-        process_files(selected_items, selected_destinations, selected_group, username)
+        process_files(
+            selected_items, selected_destinations, selected_group, username
+        )
 
         return JsonResponse(
             {
                 "status": "success",
-                "message": f"Successfully queued {len(selected_items)} items for import",
+                "message": (
+                    "Successfully queued "
+                    f"{len(selected_items)} items for import"
+                ),
             }
         )
     except json.JSONDecodeError:
@@ -252,59 +329,102 @@ def import_selected(request, conn=None, **kwargs):
 @login_required()
 @require_http_methods(["GET", "POST"])
 def group_mappings(request, conn=None, **kwargs):
-    """Handle group mappings GET and POST requests."""
+    """GET returns current group mappings; POST updates them (admin only)."""
     try:
         if request.method == "GET":
-            # Read mappings from file if it exists
-            if os.path.exists(GROUP_TO_FOLDER_MAPPING_FILE_PATH):
-                with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "r") as f:
-                    mappings = json.load(f)
-            else:
-                mappings = {}
-
+            mappings = {}
+            if os.path.exists(CONFIG_FILE_PATH):
+                try:
+                    with open(CONFIG_FILE_PATH, "r") as f:
+                        data = json.load(f) or {}
+                    if isinstance(data, dict):
+                        gm = data.get("group_mappings")
+                        if isinstance(gm, dict):
+                            mappings = gm
+                except Exception:
+                    logger.warning(
+                        "Failed reading group mappings from %s",
+                        CONFIG_FILE_PATH,
+                        exc_info=True,
+                    )
             return JsonResponse({"mappings": mappings})
 
-        elif request.method == "POST":
-            # Get the current user info
-            current_user = conn.getUser()
-            username = current_user.getName()
-            user_id = current_user.getId()
-            is_admin = conn.isAdmin()
+        # POST
+        current_user = conn.getUser()
+        username = current_user.getName()
+        user_id = current_user.getId()
+        if not conn.isAdmin():
+            return JsonResponse(
+                {"error": "Only administrators can update group mappings"},
+                status=403,
+            )
 
-            # Only allow admins to update mappings
-            if not is_admin:
-                return JsonResponse(
-                    {"error": "Only administrators can update group mappings"},
-                    status=403,
-                )
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON data"}, status=400)
 
+        mappings = data.get("mappings", {})
+        if not isinstance(mappings, dict):
+            return JsonResponse(
+                {"error": "'mappings' must be an object"}, status=400
+            )
+
+        existing = {}
+        if os.path.exists(CONFIG_FILE_PATH):
             try:
-                data = json.loads(request.body)
-                mappings = data.get("mappings", {})
+                with open(CONFIG_FILE_PATH, "r") as f:
+                    existing = json.load(f) or {}
+                if not isinstance(existing, dict):
+                    existing = {}
+            except Exception:
+                existing = {}
 
-                # Save mappings to file
-                with open(GROUP_TO_FOLDER_MAPPING_FILE_PATH, "w") as f:
-                    json.dump(mappings, f, indent=2)
+        existing["group_mappings"] = mappings
+        # Ensure parent directory exists (handle cases where path includes
+        # ~ which we expanded earlier).
+        config_dir = os.path.dirname(CONFIG_FILE_PATH)
+        if config_dir and not os.path.exists(config_dir):
+            try:
+                os.makedirs(config_dir, exist_ok=True)
+            except Exception as e:
+                logger.error(
+                    "Failed creating config directory %s: %s",
+                    config_dir,
+                    e,
+                )
+                return JsonResponse(
+                    {"error": "Failed to prepare config directory"},
+                    status=500,
+                )
+        try:
+            with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2)
+        except Exception as e:
+            logger.error("Failed writing group mappings: %s", e)
+            return JsonResponse(
+                {"error": "Failed to save mappings"}, status=500
+            )
 
-                logger.info(f"Group mappings updated by {username} (ID: {user_id})")
-                return JsonResponse({"message": "Mappings saved successfully"})
-
-            except json.JSONDecodeError:
-                return JsonResponse({"error": "Invalid JSON data"}, status=400)
-
+        logger.info(
+            "Group mappings updated by %s (ID: %s)", username, user_id
+        )
+        return JsonResponse({"message": "Mappings saved successfully"})
     except Exception as e:
-        logger.error(f"Error handling group mappings: {str(e)}")
+        logger.error("Error handling group mappings: %s", e)
         return JsonResponse({"error": str(e)}, status=500)
 
 
 def process_files(selected_items, selected_destinations, group, username):
     """
-    Process the selected files and destinations to create upload orders with appropriate preprocessing.
+    Process selected files & destinations to create upload orders with
+    appropriate preprocessing.
     """
-    files_by_preprocessing = defaultdict(list)  # Group files by preprocessing config
+    # Group files by preprocessing config
+    files_by_preprocessing = defaultdict(list)
 
     for item in selected_items:
-        # Handle both old string format and new object format for backward compatibility
+        # Support old string & new object format (backward compatible)
         if isinstance(item, dict):
             # New format with localPath and uuid
             local_path = item.get("localPath")
@@ -317,37 +437,36 @@ def process_files(selected_items, selected_destinations, group, username):
         abs_path = os.path.abspath(os.path.join(BASE_DIR, local_path))
 
         logger.info(
-            f"Importing: {abs_path} to {selected_destinations} (UUID: {subfile_uuid})"
+            "Importing: %s to %s (UUID: %s)",
+            abs_path,
+            selected_destinations,
+            subfile_uuid,
         )
 
         for sample_parent_type, sample_parent_id in selected_destinations:
             if sample_parent_type in ("screens", "Screen"):
                 sample_parent_type = "Screen"
-                if local_path.endswith(".db"):
-                    preprocessing_key = "screen_db"
-                else:
-                    preprocessing_key = "screen_no_preprocessing"
             elif sample_parent_type in ("datasets", "Dataset"):
                 sample_parent_type = "Dataset"
-
-                # Check if this is a Leica file with UUID (sub-image selection)
-                if subfile_uuid and any(
-                    ext in local_path.lower()
-                    for ext in EXTENSIONS_REQUIRING_PREPROCESSING
-                ):
-                    preprocessing_key = "dataset_leica_uuid"
-                else:
-                    preprocessing_key = "dataset_no_preprocessing"
             else:
                 raise ValueError(
-                    f"Unknown type {sample_parent_type} for id {sample_parent_id}"
+                    f"Unknown type {sample_parent_type} for id "
+                    f"{sample_parent_id}"
                 )
 
-            # Group files by preprocessing key, including UUID info
-            file_info = {"path": abs_path, "uuid": subfile_uuid, "original_item": item}
-            files_by_preprocessing[
-                (sample_parent_type, sample_parent_id, preprocessing_key)
-            ].append(file_info)
+            file_ext = os.path.splitext(local_path)[1].lower()
+            preprocessing_key = PREPROCESSING_EXTENSION_MAP.get(file_ext)
+
+            file_info = {
+                "path": abs_path,
+                "uuid": subfile_uuid,
+                "original_item": item,
+            }
+            files_by_preprocessing[(
+                sample_parent_type,
+                sample_parent_id,
+                preprocessing_key,
+            )].append(file_info)
 
     # Now create orders for each group
     for (
@@ -368,60 +487,73 @@ def process_files(selected_items, selected_destinations, group, username):
             "Files": files,
         }
 
-        # Apply preprocessing based on key
-        if preprocessing_key == "screen_db":
-            order_info["preprocessing_container"] = (
-                "cellularimagingcf/cimagexpresstoometiff:v0.7"
-            )
-            order_info["preprocessing_inputfile"] = "{Files}"
-            order_info["preprocessing_outputfolder"] = "/data"
-            order_info["preprocessing_altoutputfolder"] = "/out"
-            order_info["extra_params"] = {"saveoption": "single"}
-
-        elif preprocessing_key == "dataset_leica_uuid":
-            # New Leica UUID preprocessing
-            order_info["preprocessing_container"] = (
-                "cellularimagingcf/convertleica-docker:v1.2.0"
-            )
+        cfg = (
+            PREPROCESSING_CONFIG.get(preprocessing_key)
+            if preprocessing_key
+            else None
+        )
+        if cfg:
+            order_info["preprocessing_container"] = cfg["container"]
             order_info["preprocessing_inputfile"] = "{Files}"
             order_info["preprocessing_outputfolder"] = "/data"
             order_info["preprocessing_altoutputfolder"] = "/out"
 
-            # Handle multiple files with UUIDs
-            if len(file_infos) == 1 and file_infos[0]["uuid"]:
-                # Single file with UUID
-                order_info["extra_params"] = {"image_uuid": file_infos[0]["uuid"]}
-            else:
-                # Multiple files or mixed UUID/non-UUID files
-                # Create separate orders for each UUID file
+            template_extra = cfg.get("extra_params") or {}
+            uses_uuid_placeholder = any(
+                isinstance(v, str) and "{UUID}" in v
+                for v in template_extra.values()
+            )
+
+            if uses_uuid_placeholder:
                 uuid_files = [f for f in file_infos if f["uuid"]]
-                if uuid_files:
-                    # Process UUID files separately
-                    for file_info in uuid_files:
-                        single_order_info = order_info.copy()
-                        single_order_info["Files"] = [file_info["path"]]
-                        single_order_info["UUID"] = str(uuid.uuid4())
-                        single_order_info["extra_params"] = {
-                            "image_uuid": file_info["uuid"]
-                        }
-                        create_upload_order(single_order_info)
+                non_uuid_files = [f for f in file_infos if not f["uuid"]]
 
-                    # Process non-UUID files together (if any)
-                    non_uuid_files = [f["path"] for f in file_infos if not f["uuid"]]
+                if not uuid_files:
+                    logger.warning(
+                        "Preprocessing key '%s' uses {UUID} but no UUIDs "
+                        "found in %d files.",
+                        preprocessing_key,
+                        len(file_infos),
+                    )
+                    extra_params = build_extra_params(template_extra, None)
+                    if extra_params:
+                        order_info["extra_params"] = extra_params
+                else:
+                    for f in uuid_files:
+                        per_order = order_info.copy()
+                        per_order["Files"] = [f["path"]]
+                        per_order["UUID"] = str(uuid.uuid4())
+                        extra_params = build_extra_params(
+                            template_extra, f["uuid"]
+                        )
+                        if extra_params:
+                            per_order["extra_params"] = extra_params
+                        create_upload_order(per_order)
+
                     if non_uuid_files:
-                        order_info["Files"] = non_uuid_files
-                        # order_info["extra_params"] = {"saveoption": ""}
-                        create_upload_order(order_info)
-                    return  # Skip the normal create_upload_order call below
+                        grouped = order_info.copy()
+                        grouped["Files"] = [f["path"] for f in non_uuid_files]
+                        grouped["UUID"] = str(uuid.uuid4())
+                        extra_params = build_extra_params(
+                            template_extra, None
+                        )
+                        if extra_params:
+                            grouped["extra_params"] = extra_params
+                        create_upload_order(grouped)
+                    continue
+            else:
+                if any(f["uuid"] for f in file_infos):
+                    logger.info(
+                        "Ignoring %d provided file UUID(s) for "
+                        "preprocessing key '%s' without {UUID} placeholder.",
+                        sum(1 for f in file_infos if f["uuid"]),
+                        preprocessing_key,
+                    )
+                extra_params = build_extra_params(template_extra, None)
+                if extra_params:
+                    order_info["extra_params"] = extra_params
 
-        # elif preprocessing_key == "dataset_custom_preprocessing":
-        #     order_info["preprocessing_container"] = "some-other-container"
-        #     order_info["preprocessing_inputfile"] = "{Files}"
-        #     order_info["preprocessing_outputfolder"] = "/custom-output-folder"
-        #     order_info["preprocessing_altoutputfolder"] = "/custom-alt-output"
-        #     order_info["extra_params"] = {"custom_param": "value"}
-
-        # No preprocessing for other cases
+        # Create order (either no preprocessing or already enriched)
         create_upload_order(order_info)
 
 

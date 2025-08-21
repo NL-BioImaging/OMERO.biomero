@@ -16,7 +16,7 @@ from omero_adi.utils.ingest_tracker import (
 from .settings import (
     SUPPORTED_FILE_EXTENSIONS,
     EXTENSION_TO_FILE_BROWSER,
-    EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES,
+    FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE,
     PREPROCESSING_EXTENSION_MAP,
     FOLDER_EXTENSIONS_NON_BROWSABLE,
     BASE_DIR,
@@ -154,12 +154,12 @@ def get_folder_contents(request, conn=None, **kwargs):
         # Conflicts / duplicates -> error. Otherwise show normal listing.
         special_exact = [
             p
-            for p in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES
+            for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE
             if not p.startswith('.')
         ]
         special_exts = [
             p
-            for p in EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES
+            for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE
             if p.startswith('.')
         ]
 

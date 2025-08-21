@@ -7,7 +7,7 @@ EXTENSION_TO_FILE_BROWSER = {
     ".xlef": read_leica_file,
 }
 
-# EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES defines patterns that, when
+# FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE defines patterns that, when
 # present in a directory, cause ONLY that matching file to be shown while
 # every other sibling entry (files & folders) is hidden from the UI.
 # Simple rules (generic & minimal):
@@ -23,7 +23,7 @@ EXTENSION_TO_FILE_BROWSER = {
 #     same folder -> error (ambiguous which to display exclusively).
 #   * If none match -> normal directory listing.
 # Add new patterns sparingly; each must tolerate full-folder hiding semantics.
-EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES = [
+FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE = [
     "experiment.db",
     ".xlef",
 ]
@@ -81,7 +81,7 @@ PREPROCESSING_CONFIG = {
 # Apply JSON overrides (if file present) AFTER defaults defined.
 _ovr = _load_overrides_simple()
 for _k, _typ in {
-    "EXTENSIONS_WITH_HIDDEN_ACCOMPANYING_FILES": list,
+    "FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE": list,
     "PREPROCESSING_EXTENSION_MAP": dict,
     "PREPROCESSING_CONFIG": dict,
 }.items():

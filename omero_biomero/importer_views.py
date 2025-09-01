@@ -78,16 +78,12 @@ def get_folder_contents(request, conn=None, **kwargs):
     logger.info(f"Connection: {conn.getUser().getName()}")
 
     # Determine the target path based on item_path or default to root folder
-    target_path = (
-        BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
-    )
+    target_path = BASE_DIR if item_path is None else os.path.join(BASE_DIR, item_path)
     logger.info(f"Target folder: {target_path}")
 
     # Validate if the path exists
     if not os.path.exists(target_path):
-        return HttpResponseBadRequest(
-            "Invalid folder ID or path does not exist."
-        )
+        return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
 
     # Get the contents of the folder/file
     contents = []
@@ -133,9 +129,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                 }
             )
         else:
-            return HttpResponseBadRequest(
-                "Invalid folder ID or path does not exist."
-            )
+            return HttpResponseBadRequest("Invalid folder ID or path does not exist.")
 
     elif target_path.endswith(".zarr"):  # Handle .zarr folders as files
         contents.append(
@@ -153,14 +147,10 @@ def get_folder_contents(request, conn=None, **kwargs):
         # One (and only one) special pattern match -> show just that file.
         # Conflicts / duplicates -> error. Otherwise show normal listing.
         special_exact = [
-            p
-            for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE
-            if not p.startswith('.')
+            p for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE if not p.startswith(".")
         ]
         special_exts = [
-            p
-            for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE
-            if p.startswith('.')
+            p for p in FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE if p.startswith(".")
         ]
 
         matched_files = []  # list of (pattern, filename)
@@ -171,9 +161,7 @@ def get_folder_contents(request, conn=None, **kwargs):
         # Exact filename patterns (case-insensitive)
         for pat in special_exact:
             matches = [
-                real
-                for low, real in lower_items_map.items()
-                if low == pat.lower()
+                real for low, real in lower_items_map.items() if low == pat.lower()
             ]
             if len(matches) > 1:
                 duplicate_errors.append(f"Multiple occurrences of '{pat}'")
@@ -183,9 +171,7 @@ def get_folder_contents(request, conn=None, **kwargs):
         # Extension patterns
         for ext_pat in special_exts:
             ext_matches = [
-                f
-                for f in items
-                if os.path.splitext(f)[1].lower() == ext_pat.lower()
+                f for f in items if os.path.splitext(f)[1].lower() == ext_pat.lower()
             ]
             if len(ext_matches) > 1:
                 duplicate_errors.append(
@@ -198,10 +184,7 @@ def get_folder_contents(request, conn=None, **kwargs):
         if duplicate_errors:
             return HttpResponseBadRequest(
                 " | ".join(
-                    [
-                        f"In folder '{target_path}': {msg}"
-                        for msg in duplicate_errors
-                    ]
+                    [f"In folder '{target_path}': {msg}" for msg in duplicate_errors]
                 )
             )
 
@@ -222,8 +205,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                 {
                     "name": special_filename,
                     "is_folder": (
-                        os.path.isdir(item_path_fs)
-                        or ext in EXTENSION_TO_FILE_BROWSER
+                        os.path.isdir(item_path_fs) or ext in EXTENSION_TO_FILE_BROWSER
                     )
                     and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE,
                     "id": os.path.relpath(item_path_fs, BASE_DIR),
@@ -241,8 +223,7 @@ def get_folder_contents(request, conn=None, **kwargs):
                 item_path_fs = os.path.join(target_path, item)
                 ext = os.path.splitext(item)[1]
                 is_folder = (
-                    os.path.isdir(item_path_fs)
-                    or ext in EXTENSION_TO_FILE_BROWSER
+                    os.path.isdir(item_path_fs) or ext in EXTENSION_TO_FILE_BROWSER
                 ) and ext not in FOLDER_EXTENSIONS_NON_BROWSABLE
                 metadata = None
                 if ext in EXTENSION_TO_FILE_BROWSER:
@@ -280,9 +261,7 @@ def import_selected(request, conn=None, **kwargs):
         if not selected_items:
             return JsonResponse({"error": "No items selected"}, status=400)
         if not selected_destinations:
-            return JsonResponse(
-                {"error": "No destinations selected"}, status=400
-            )
+            return JsonResponse({"error": "No destinations selected"}, status=400)
         if not selected_group:
             return JsonResponse({"error": "No group specified"}, status=400)
 
@@ -306,16 +285,13 @@ def import_selected(request, conn=None, **kwargs):
         )
 
         # Call process_files with validated group
-        process_files(
-            selected_items, selected_destinations, selected_group, username
-        )
+        process_files(selected_items, selected_destinations, selected_group, username)
 
         return JsonResponse(
             {
                 "status": "success",
                 "message": (
-                    "Successfully queued "
-                    f"{len(selected_items)} items for import"
+                    "Successfully queued " f"{len(selected_items)} items for import"
                 ),
             }
         )
@@ -366,9 +342,7 @@ def group_mappings(request, conn=None, **kwargs):
 
         mappings = data.get("mappings", {})
         if not isinstance(mappings, dict):
-            return JsonResponse(
-                {"error": "'mappings' must be an object"}, status=400
-            )
+            return JsonResponse({"error": "'mappings' must be an object"}, status=400)
 
         existing = {}
         if os.path.exists(CONFIG_FILE_PATH):
@@ -402,13 +376,9 @@ def group_mappings(request, conn=None, **kwargs):
                 json.dump(existing, f, indent=2)
         except Exception as e:
             logger.error("Failed writing group mappings: %s", e)
-            return JsonResponse(
-                {"error": "Failed to save mappings"}, status=500
-            )
+            return JsonResponse({"error": "Failed to save mappings"}, status=500)
 
-        logger.info(
-            "Group mappings updated by %s (ID: %s)", username, user_id
-        )
+        logger.info("Group mappings updated by %s (ID: %s)", username, user_id)
         return JsonResponse({"message": "Mappings saved successfully"})
     except Exception as e:
         logger.error("Error handling group mappings: %s", e)
@@ -450,8 +420,7 @@ def process_files(selected_items, selected_destinations, group, username):
                 sample_parent_type = "Dataset"
             else:
                 raise ValueError(
-                    f"Unknown type {sample_parent_type} for id "
-                    f"{sample_parent_id}"
+                    f"Unknown type {sample_parent_type} for id " f"{sample_parent_id}"
                 )
 
             file_ext = os.path.splitext(local_path)[1].lower()
@@ -462,11 +431,13 @@ def process_files(selected_items, selected_destinations, group, username):
                 "uuid": subfile_uuid,
                 "original_item": item,
             }
-            files_by_preprocessing[(
-                sample_parent_type,
-                sample_parent_id,
-                preprocessing_key,
-            )].append(file_info)
+            files_by_preprocessing[
+                (
+                    sample_parent_type,
+                    sample_parent_id,
+                    preprocessing_key,
+                )
+            ].append(file_info)
 
     # Now create orders for each group
     for (
@@ -487,11 +458,7 @@ def process_files(selected_items, selected_destinations, group, username):
             "Files": files,
         }
 
-        cfg = (
-            PREPROCESSING_CONFIG.get(preprocessing_key)
-            if preprocessing_key
-            else None
-        )
+        cfg = PREPROCESSING_CONFIG.get(preprocessing_key) if preprocessing_key else None
         if cfg:
             order_info["preprocessing_container"] = cfg["container"]
             order_info["preprocessing_inputfile"] = "{Files}"
@@ -500,8 +467,7 @@ def process_files(selected_items, selected_destinations, group, username):
 
             template_extra = cfg.get("extra_params") or {}
             uses_uuid_placeholder = any(
-                isinstance(v, str) and "{UUID}" in v
-                for v in template_extra.values()
+                isinstance(v, str) and "{UUID}" in v for v in template_extra.values()
             )
 
             if uses_uuid_placeholder:
@@ -523,9 +489,7 @@ def process_files(selected_items, selected_destinations, group, username):
                         per_order = order_info.copy()
                         per_order["Files"] = [f["path"]]
                         per_order["UUID"] = str(uuid.uuid4())
-                        extra_params = build_extra_params(
-                            template_extra, f["uuid"]
-                        )
+                        extra_params = build_extra_params(template_extra, f["uuid"])
                         if extra_params:
                             per_order["extra_params"] = extra_params
                         create_upload_order(per_order)
@@ -534,9 +498,7 @@ def process_files(selected_items, selected_destinations, group, username):
                         grouped = order_info.copy()
                         grouped["Files"] = [f["path"] for f in non_uuid_files]
                         grouped["UUID"] = str(uuid.uuid4())
-                        extra_params = build_extra_params(
-                            template_extra, None
-                        )
+                        extra_params = build_extra_params(template_extra, None)
                         if extra_params:
                             grouped["extra_params"] = extra_params
                         create_upload_order(grouped)

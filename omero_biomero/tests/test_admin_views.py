@@ -1,6 +1,8 @@
 import json
 import sys
 import types
+import shutil
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -66,6 +68,12 @@ class AdminConfigTests(TestCase):
         super().setUpClass()
         _ensure_stub_modules()
 
+    def setUp(self):  # per-test temp directory
+        self._tmpdir = Path(tempfile.mkdtemp(prefix="admin_cfg_test_"))
+
+    def tearDown(self):  # cleanup
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
     def test_get_unauthorized(self):
         view = _raw_admin_config()
         request = SimpleNamespace(method="GET")
@@ -78,13 +86,13 @@ class AdminConfigTests(TestCase):
     def test_get_success(self):
         SlurmClient = sys.modules["biomero"].SlurmClient  # stub or real
         cfg_path = Path(self._create_tempfile("[SEC]\nkey=value\n"))
-        with patch.object(
-            SlurmClient, "_DEFAULT_CONFIG_PATH_1", str(cfg_path)
-        ), patch.object(
-            SlurmClient, "_DEFAULT_CONFIG_PATH_2", str(cfg_path)
-        ), patch.object(
-            SlurmClient, "_DEFAULT_CONFIG_PATH_3", str(cfg_path)
-        ):
+
+        class StubSlurm:
+            _DEFAULT_CONFIG_PATH_1 = str(cfg_path)
+            _DEFAULT_CONFIG_PATH_2 = str(cfg_path)
+            _DEFAULT_CONFIG_PATH_3 = str(cfg_path)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm):
             view = _raw_admin_config()
             request = SimpleNamespace(method="GET")
             resp = view(request, conn=_fake_conn())
@@ -109,7 +117,13 @@ class AdminConfigTests(TestCase):
     def test_post_models_section_add(self):
         SlurmClient = sys.modules["biomero"].SlurmClient
         cfg_path = Path(self._create_tempfile("[MODELS]\n"))
-        with patch.object(SlurmClient, "_DEFAULT_CONFIG_PATH_3", str(cfg_path)):
+
+        class StubSlurm:
+            _DEFAULT_CONFIG_PATH_1 = "unused"
+            _DEFAULT_CONFIG_PATH_2 = "unused"
+            _DEFAULT_CONFIG_PATH_3 = str(cfg_path)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm):
             payload = {
                 "config": {
                     "MODELS": {
@@ -132,7 +146,13 @@ class AdminConfigTests(TestCase):
         SlurmClient = sys.modules["biomero"].SlurmClient
         existing = "[MODELS]\nold=/path/old.sif\nold_repo=repo\nold_job=job.sh\n"
         cfg_path = Path(self._create_tempfile(existing))
-        with patch.object(SlurmClient, "_DEFAULT_CONFIG_PATH_3", str(cfg_path)):
+
+        class StubSlurm:
+            _DEFAULT_CONFIG_PATH_1 = "unused"
+            _DEFAULT_CONFIG_PATH_2 = "unused"
+            _DEFAULT_CONFIG_PATH_3 = str(cfg_path)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm):
             payload = {"config": {"MODELS": {}}}
             request = SimpleNamespace(method="POST", body=json.dumps(payload).encode())
             view = _raw_admin_config()
@@ -144,7 +164,13 @@ class AdminConfigTests(TestCase):
     def test_post_converters_section(self):
         SlurmClient = sys.modules["biomero"].SlurmClient
         cfg_path = Path(self._create_tempfile("[CONVERTERS]\nold=1\n"))
-        with patch.object(SlurmClient, "_DEFAULT_CONFIG_PATH_3", str(cfg_path)):
+
+        class StubSlurm:
+            _DEFAULT_CONFIG_PATH_1 = "unused"
+            _DEFAULT_CONFIG_PATH_2 = "unused"
+            _DEFAULT_CONFIG_PATH_3 = str(cfg_path)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm):
             payload = {"config": {"CONVERTERS": {"new": "2"}}}
             request = SimpleNamespace(method="POST", body=json.dumps(payload).encode())
             view = _raw_admin_config()
@@ -157,7 +183,13 @@ class AdminConfigTests(TestCase):
     def test_post_invalid_section_type(self):
         SlurmClient = sys.modules["biomero"].SlurmClient
         cfg_path = Path(self._create_tempfile(""))
-        with patch.object(SlurmClient, "_DEFAULT_CONFIG_PATH_3", str(cfg_path)):
+
+        class StubSlurm:
+            _DEFAULT_CONFIG_PATH_1 = "unused"
+            _DEFAULT_CONFIG_PATH_2 = "unused"
+            _DEFAULT_CONFIG_PATH_3 = str(cfg_path)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm):
             payload = {"config": {"MODELS": "string-should-error"}}
             request = SimpleNamespace(method="POST", body=json.dumps(payload).encode())
             view = _raw_admin_config()
@@ -166,10 +198,8 @@ class AdminConfigTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Invalid configuration format", json.loads(resp.content)["error"])
 
-    # Helper to create temporary files in a per-test directory
+    # Helper to create temporary files in the per-test directory
     def _create_tempfile(self, content: str) -> str:
-        temp_dir = Path(self._testMethodName)
-        temp_dir.mkdir(exist_ok=True)
-        f = temp_dir / "temp.ini"
+        f = self._tmpdir / "temp.ini"
         f.write_text(content)
         return str(f)

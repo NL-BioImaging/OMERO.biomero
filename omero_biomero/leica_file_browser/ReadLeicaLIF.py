@@ -3,14 +3,46 @@ import json
 import struct
 import xml.etree.ElementTree as ET
 from .ParseLeicaImageXML import parse_image_xml
+from datetime import timezone  # Import timezone
+import datetime
+
+
+def filetime_to_datetime(filetime):
+    """
+    Converts a Windows FILETIME value (64-bit integer) to a Python datetime object (UTC).
+
+    Args:
+        filetime (int): Windows FILETIME value (number of 100-nanosecond intervals since January 1, 1601 UTC).
+
+    Returns:
+        datetime.datetime or None: Corresponding UTC datetime object, or None if conversion fails.
+    """
+    # FILETIME is the number of 100-nanosecond intervals since January 1, 1601 (UTC)
+    EPOCH_AS_FILETIME = 116444736000000000  # January 1, 1970 as FILETIME
+    HUNDREDS_OF_NANOSECONDS = 10000000
+
+    try:
+        # Combine high and low integers into a 64-bit integer
+        ft_int = int(filetime)
+        # Convert to seconds since the Unix epoch
+        timestamp = (ft_int - EPOCH_AS_FILETIME) / HUNDREDS_OF_NANOSECONDS
+        # Use timezone-aware datetime object
+        return datetime.datetime.fromtimestamp(timestamp, timezone.utc)
+    except (ValueError, TypeError):
+        return None
 
 
 def build_single_level_image_node(lifinfo, lif_base_name, parent_path):
     """
     Build a simple node (dictionary) for an image, including metadata.
 
-    The 'save_child_name' is constructed as:
-      {lif_base_name}_{parent_folder_path}_{image_name}
+    Args:
+        lifinfo (dict): Dictionary with image information and metadata.
+        lif_base_name (str): Base name of the LIF file.
+        parent_path (str): Path representing the parent folder hierarchy inside the LIF file.
+
+    Returns:
+        dict: Node dictionary representing the image and its metadata.
     """
     image_name = lifinfo.get("name", lifinfo.get("Name", ""))
 
@@ -48,7 +80,17 @@ def build_single_level_lif_folder_node(
     """
     Build a single-level dictionary node for a LIF folder (just immediate children).
 
-    The parent_path keeps track of the hierarchy inside the LIF file.
+    Args:
+        folder_element (xml.etree.ElementTree.Element): XML element for the folder.
+        folder_uuid (str): UUID of the folder.
+        image_map (dict): Mapping of image UUIDs to image info.
+        folder_map (dict): Mapping of folder UUIDs to folder info.
+        parent_map (dict): Mapping of child UUIDs to parent UUIDs.
+        lif_base_name (str): Base name of the LIF file.
+        parent_path (str, optional): Path representing the parent folder hierarchy. Defaults to "".
+
+    Returns:
+        dict: Node dictionary representing the folder and its immediate children.
     """
     name = folder_element.attrib.get("Name", "")
 
@@ -107,13 +149,6 @@ def build_single_level_lif_folder_node(
     return node
 
 
-import os
-import json
-import struct
-import xml.etree.ElementTree as ET
-from .ParseLeicaImageXML import parse_image_xml
-
-
 def read_leica_lif(
     file_path, include_xmlelement=False, image_uuid=None, folder_uuid=None
 ):
@@ -123,6 +158,16 @@ def read_leica_lif(
       - When no folder_uuid is provided: return the root and its first-level children.
       - When a folder_uuid is provided: return only that folder and its first-level children.
       - Correctly builds 'save_child_name' using the LIF base name and full folder path.
+      - Extracts Experiment name and datetime from the root XML and adds them to image metadata.
+
+    Args:
+        file_path (str): Path to the LIF file to be read.
+        include_xmlelement (bool, optional): Flag to include XML element data in the output. Defaults to False.
+        image_uuid (str, optional): UUID of a specific image to be extracted. If provided, only this image is returned. Defaults to None.
+        folder_uuid (str, optional): UUID of a specific folder to be extracted. If provided, only this folder and its children are returned. Defaults to None.
+
+    Returns:
+        str: JSON string representing the folder and image structure, or a specific image or folder if UUIDs are provided.
     """
     lif_base_name = os.path.splitext(os.path.basename(file_path))[
         0
@@ -142,6 +187,43 @@ def read_leica_lif(
         XMLObjDescription = XMLObjDescriptionUTF16.decode("utf-16")
 
         xml_root = ET.fromstring(XMLObjDescription)
+
+        # Extract Experiment Name and DateTime
+        experiment_name = None
+        experiment_datetime_str = None
+        try:
+            # Navigate through the expected structure
+            element_node = xml_root.find("Element")
+            if element_node is not None:
+                data_node = element_node.find("Data")
+                if data_node is not None:
+                    experiment_node = data_node.find("Experiment")
+                    if experiment_node is not None:
+                        exp_path = experiment_node.attrib.get("Path")
+                        if exp_path:
+                            experiment_name = os.path.basename(
+                                exp_path
+                            )  # Get filename part
+
+                        timestamp_node = experiment_node.find("TimeStamp")
+                        if timestamp_node is not None:
+                            high_int = timestamp_node.attrib.get("HighInteger")
+                            low_int = timestamp_node.attrib.get("LowInteger")
+                            if high_int is not None and low_int is not None:
+                                try:
+                                    # Combine high and low parts for the 64-bit FILETIME
+                                    filetime_val = (int(high_int) << 32) + int(low_int)
+                                    dt_obj = filetime_to_datetime(filetime_val)
+                                    if dt_obj:
+                                        # Format to YYYY-MM-DDTHH:MM:SS
+                                        experiment_datetime_str = dt_obj.strftime(
+                                            "%Y-%m-%dT%H:%M:%S"
+                                        )
+                                except (ValueError, TypeError):
+                                    pass  # Ignore conversion errors
+        except Exception:
+            # Ignore errors during extraction, proceed without this info
+            pass
 
         # Read memory blocks
         lifinfo_blocks = []
@@ -224,6 +306,9 @@ def read_leica_lif(
                 lif_block["uuid"] = unique_id
                 lif_block["filetype"] = ".lif"
                 lif_block["datatype"] = "Image"
+                # Add experiment info to image metadata
+                lif_block["experiment_name"] = experiment_name
+                lif_block["experiment_datetime"] = experiment_datetime_str
 
                 if include_xmlelement:
                     lif_block["xmlElement"] = ET.tostring(
@@ -293,6 +378,7 @@ def read_leica_lif(
                 child_uuid = child_el.attrib.get("UniqueID")
 
                 if child_uuid in image_map:
+                    # Return the full image metadata which now includes experiment info
                     node["children"].append(image_map[child_uuid])
                 elif child_uuid in folder_map:
                     node["children"].append(
@@ -309,7 +395,13 @@ def read_leica_lif(
     # --------------------------------------------------------------------------
     # Otherwise return root-level structure (only first-level children)
     # --------------------------------------------------------------------------
-    node = {"type": "File", "name": os.path.basename(file_path), "children": []}
+    node = {
+        "type": "File",
+        "name": os.path.basename(file_path),
+        "experiment_name": experiment_name,
+        "experiment_datetime": experiment_datetime_str,
+        "children": [],
+    }
 
     # Find only top-level folders and images (first level only)
     top_folders = [fid for fid in folder_map if parent_map[fid] is None]
@@ -327,6 +419,7 @@ def read_leica_lif(
         )
 
     for i_id in top_images:
+        # Return the full image metadata which now includes experiment info
         node["children"].append(image_map[i_id])
 
     return json.dumps(node, indent=2)

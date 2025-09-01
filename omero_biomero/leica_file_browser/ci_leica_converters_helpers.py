@@ -4,23 +4,34 @@ import tempfile
 import numpy as np
 import xml.etree.ElementTree as ET
 import urllib.request
-from ReadLeicaLIF import read_leica_lif
-from ReadLeicaLOF import read_leica_lof
-from ReadLeicaXLEF import read_leica_xlef
+from .ReadLeicaLIF import read_leica_lif
+from .ReadLeicaLOF import read_leica_lof
+from .ReadLeicaXLEF import read_leica_xlef
+
 
 def get_image_metadata_LOF(folder_metadata, image_uuid):
     folder_metadata_dict = json.loads(folder_metadata)
-    image_metadata_dict = next((img for img in folder_metadata_dict["children"] if img["uuid"] == image_uuid), None)
-    image_metadata = read_leica_file(image_metadata_dict['lof_file_path'])
+    image_metadata_dict = next(
+        (img for img in folder_metadata_dict["children"] if img["uuid"] == image_uuid),
+        None,
+    )
+    image_metadata = read_leica_file(image_metadata_dict["lof_file_path"])
     return image_metadata
+
 
 def get_image_metadata(folder_metadata, image_uuid):
     folder_metadata_dict = json.loads(folder_metadata)
-    image_metadata_dict = next((img for img in folder_metadata_dict["children"] if img["uuid"] == image_uuid), None)
+    image_metadata_dict = next(
+        (img for img in folder_metadata_dict["children"] if img["uuid"] == image_uuid),
+        None,
+    )
     image_metadata = json.dumps(image_metadata_dict, indent=2)
     return image_metadata
 
-def read_leica_file(file_path, include_xmlelement=False, image_uuid=None, folder_uuid=None):
+
+def read_leica_file(
+    file_path, include_xmlelement=False, image_uuid=None, folder_uuid=None
+):
     """
     Read Leica LIF, XLEF, or LOF file.
 
@@ -41,14 +52,15 @@ def read_leica_file(file_path, include_xmlelement=False, image_uuid=None, folder
     _, ext = os.path.splitext(file_path)
     ext = ext.lower()
 
-    if ext == '.lif':
+    if ext == ".lif":
         return read_leica_lif(file_path, include_xmlelement, image_uuid, folder_uuid)
-    elif ext == '.xlef':
+    elif ext == ".xlef":
         return read_leica_xlef(file_path, folder_uuid)
-    elif ext == '.lof':
+    elif ext == ".lof":
         return read_leica_lof(file_path, include_xmlelement)
     else:
-        raise ValueError('Unsupported file type: {}'.format(ext))
+        raise ValueError("Unsupported file type: {}".format(ext))
+
 
 # --------------------------------------------------------------------------
 # Public helper - numpy dtype → pyvips format string
@@ -66,12 +78,20 @@ dtype_to_format = {
     np.complex128: "dpcomplex",
 }
 
+
 # --------------------------------------------------------------------------
 # Simple CLI-style progress bar to keep long conversions chatty
 # --------------------------------------------------------------------------
-def print_progress_bar(progress: float, *, total: float = 100.0, prefix: str = "Progress:",
-                       suffix: str = "Complete", length: int = 50, fill: str = "█",
-                       final_call: bool = False) -> None:
+def print_progress_bar(
+    progress: float,
+    *,
+    total: float = 100.0,
+    prefix: str = "Progress:",
+    suffix: str = "Complete",
+    length: int = 50,
+    fill: str = "█",
+    final_call: bool = False,
+) -> None:
     """Draw an in-place ASCII progress bar."""
     global _max_suffix_len  # pylint: disable=global-statement
 
@@ -91,9 +111,11 @@ def print_progress_bar(progress: float, *, total: float = 100.0, prefix: str = "
         print()
         _max_suffix_len = 0
 
+
 # --------------------------------------------------------------------------
 # Metadata helpers - reading Leica JSON produced by ReadLeica* helpers
 # --------------------------------------------------------------------------
+
 
 def _read_xlef_image(xlef_path: str, image_uuid: str) -> dict:
     """Return metadata dict for *one* image UUID inside an XLEF experiment."""
@@ -130,16 +152,22 @@ def _read_xlef_image(xlef_path: str, image_uuid: str) -> dict:
             if "lof_file_path" in maybe and maybe["lof_file_path"]:
                 try:
                     # merge LOF metadata if present
-                    lof_meta = json.loads(read_leica_lof(maybe["lof_file_path"], include_xmlelement=True))
+                    lof_meta = json.loads(
+                        read_leica_lof(maybe["lof_file_path"], include_xmlelement=True)
+                    )
                     maybe.update(lof_meta)
                     # Restore original name if it was overwritten by LOF merge
                     if original_save_child_name is not None:
                         maybe["save_child_name"] = original_save_child_name
                 except Exception as e:
-                    print(f"Warning: Could not read/merge LOF metadata from '{maybe['lof_file_path']}': {e}")
+                    print(
+                        f"Warning: Could not read/merge LOF metadata from '{maybe['lof_file_path']}': {e}"
+                    )
             # Ensure essential fields exist after potential merge
             maybe.setdefault("filetype", ".xlef")
-            maybe.setdefault("LOFFilePath", maybe.get("lof_file_path", current))  # Best guess if LOF failed
+            maybe.setdefault(
+                "LOFFilePath", maybe.get("lof_file_path", current)
+            )  # Best guess if LOF failed
             return maybe
 
         for child in meta.get("children", []):
@@ -153,14 +181,21 @@ def _read_xlef_image(xlef_path: str, image_uuid: str) -> dict:
                 else:
                     print(f"Warning: Linked XLEF folder path not found: '{child_path}'")
 
-    raise ValueError(f"Image UUID {image_uuid} not found in {xlef_path} or linked XLEFs")
+    raise ValueError(
+        f"Image UUID {image_uuid} not found in {xlef_path} or linked XLEFs"
+    )
+
 
 def read_image_metadata(file_path: str, image_uuid: str) -> dict:
     """Front-end that works for .lif / .xlef / .lof."""
     if file_path.endswith(".lif"):
-        meta_str = read_leica_lif(file_path, include_xmlelement=True, image_uuid=image_uuid)
+        meta_str = read_leica_lif(
+            file_path, include_xmlelement=True, image_uuid=image_uuid
+        )
         if not meta_str:
-            raise ValueError(f"Image UUID {image_uuid} not found in LIF file {file_path}")
+            raise ValueError(
+                f"Image UUID {image_uuid} not found in LIF file {file_path}"
+            )
         meta = json.loads(meta_str)
         # Ensure essential fields exist
         meta.setdefault("filetype", ".lif")
@@ -178,11 +213,13 @@ def read_image_metadata(file_path: str, image_uuid: str) -> dict:
         return _read_xlef_image(file_path, image_uuid)
     raise ValueError(f"Unsupported file type: {file_path}")
 
+
 def decimal_to_rgb(value: int) -> tuple[int, int, int]:
-    r = (value >> 16) & 0xFF   # top byte
-    g = (value >> 8)  & 0xFF   # middle byte
-    b =  value        & 0xFF   # bottom byte
+    r = (value >> 16) & 0xFF  # top byte
+    g = (value >> 8) & 0xFF  # middle byte
+    b = value & 0xFF  # bottom byte
     return (r, g, b)
+
 
 def color_name_to_decimal(name: str) -> int:
     css_colors = {
@@ -196,19 +233,23 @@ def color_name_to_decimal(name: str) -> int:
         "cyan": (0, 255, 255),
         "darkblue": (0, 0, 139),
         "darkcyan": (0, 139, 139),
-        "darkgray": (169, 169, 169),  "darkgrey": (169, 169, 169),
+        "darkgray": (169, 169, 169),
+        "darkgrey": (169, 169, 169),
         "darkgreen": (0, 100, 0),
         "darkmagenta": (139, 0, 139),
         "darkorange": (255, 140, 0),
         "darkred": (139, 0, 0),
-        "dimgray": (105, 105, 105),   "dimgrey": (105, 105, 105),
-        "gray": (128, 128, 128),       "grey": (128, 128, 128),
+        "dimgray": (105, 105, 105),
+        "dimgrey": (105, 105, 105),
+        "gray": (128, 128, 128),
+        "grey": (128, 128, 128),
         "greenyellow": (173, 255, 47),
         "green": (0, 128, 0),
         "indigo": (75, 0, 130),
         "lightblue": (173, 216, 230),
         "lightcyan": (224, 255, 255),
-        "lightgray": (211, 211, 211),  "lightgrey": (211, 211, 211),
+        "lightgray": (211, 211, 211),
+        "lightgrey": (211, 211, 211),
         "lightgreen": (144, 238, 144),
         "lightyellow": (255, 255, 224),
         "lime": (0, 255, 0),
@@ -227,15 +268,16 @@ def color_name_to_decimal(name: str) -> int:
         "violet": (238, 130, 238),
         "white": (255, 255, 255),
         "yellow": (255, 255, 0),
-        "yellowgreen": (154, 205, 50)
+        "yellowgreen": (154, 205, 50),
     }
-    r, g, b = css_colors[name.lower()]       # KeyError if unknown
+    r, g, b = css_colors[name.lower()]  # KeyError if unknown
     return (r << 16) | (g << 8) | b
+
 
 def decimal_to_ome_color(rgb_int: int, alpha: int = 255) -> int:
     r = (rgb_int >> 16) & 0xFF
-    g = (rgb_int >> 8)  & 0xFF
-    b =  rgb_int        & 0xFF
+    g = (rgb_int >> 8) & 0xFF
+    b = rgb_int & 0xFF
     unsigned_rgba = (r << 24) | (g << 16) | (b << 8) | (alpha & 0xFF)
     if unsigned_rgba >= 0x80000000:
         signed_rgba = unsigned_rgba - 0x100000000  # Subtract 2**32
@@ -243,12 +285,15 @@ def decimal_to_ome_color(rgb_int: int, alpha: int = 255) -> int:
         signed_rgba = unsigned_rgba
     return signed_rgba
 
+
 XS_NS = {"xs": "http://www.w3.org/2001/XMLSchema"}
+
 
 def _download(url: str) -> str:
     tmp = tempfile.NamedTemporaryFile(delete=False)
     urllib.request.urlretrieve(url, tmp.name)
     return tmp.name
+
 
 def _load_schema_tree(url: str, seen: set[str]) -> list[ET.ElementTree]:
     if url in seen:
@@ -265,6 +310,7 @@ def _load_schema_tree(url: str, seen: set[str]) -> list[ET.ElementTree]:
         trees.extend(_load_schema_tree(full_url, seen))
     return trees
 
+
 def parse_ome_xsd(xsd_url: str) -> dict[str, dict]:
     trees = _load_schema_tree(xsd_url, seen=set())
     simple_type_enums: dict[str, list[str]] = {}
@@ -273,8 +319,7 @@ def parse_ome_xsd(xsd_url: str) -> dict[str, dict]:
         for s_type in tree.findall(".//xs:simpleType[@name]", XS_NS):
             name = s_type.get("name")
             enum_vals = [
-                e.get("value")
-                for e in s_type.findall(".//xs:enumeration", XS_NS)
+                e.get("value") for e in s_type.findall(".//xs:enumeration", XS_NS)
             ]
             if enum_vals:
                 simple_type_enums[name] = enum_vals
@@ -291,8 +336,7 @@ def parse_ome_xsd(xsd_url: str) -> dict[str, dict]:
                 }
                 continue
             inline_enum = [
-                e.get("value")
-                for e in attr.findall(".//xs:enumeration", XS_NS)
+                e.get("value") for e in attr.findall(".//xs:enumeration", XS_NS)
             ]
             if inline_enum:
                 metadata[attr_name] = {
@@ -310,6 +354,7 @@ def parse_ome_xsd(xsd_url: str) -> dict[str, dict]:
                 metadata[name] = {"type": "complex", "attributes": attrs}
     return metadata
 
+
 def validate_metadata(value: str, field: str, schema: dict) -> str:
     spec = schema.get(field)
     if not spec or "values" not in spec:
@@ -319,6 +364,7 @@ def validate_metadata(value: str, field: str, schema: dict) -> str:
         if cleaned == canonical.lower():
             return canonical
     return "Other"
+
 
 xsd_url = "http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd"
 metadata_schema = parse_ome_xsd(xsd_url)

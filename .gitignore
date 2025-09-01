@@ -2,3 +2,4 @@ __pycache__
 omero_biomero.egg-info
 node_modules
 omero_biomero/group_mappings.json
+/venv

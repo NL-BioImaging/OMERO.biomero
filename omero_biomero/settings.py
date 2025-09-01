@@ -1,6 +1,6 @@
 import os
 import json
-from .leica_file_browser2.ci_leica_converters_helpers import read_leica_file
+from .leica_file_browser.ci_leica_converters_helpers import read_leica_file
 
 EXTENSION_TO_FILE_BROWSER = {
     ".lif": read_leica_file,

@@ -2,10 +2,10 @@ import os
 import json
 import struct
 import xml.etree.ElementTree as ET
-from .ParseLeicaImageXML import parse_image_xml
 from datetime import timezone  # Import timezone
+from ParseLeicaImageXML import parse_image_xml
+from ParseLeicaImageXMLLite import parse_image_xml_lite
 import datetime
-
 
 def filetime_to_datetime(filetime):
     """
@@ -22,15 +22,11 @@ def filetime_to_datetime(filetime):
     HUNDREDS_OF_NANOSECONDS = 10000000
 
     try:
-        # Combine high and low integers into a 64-bit integer
         ft_int = int(filetime)
-        # Convert to seconds since the Unix epoch
         timestamp = (ft_int - EPOCH_AS_FILETIME) / HUNDREDS_OF_NANOSECONDS
-        # Use timezone-aware datetime object
         return datetime.datetime.fromtimestamp(timestamp, timezone.utc)
     except (ValueError, TypeError):
         return None
-
 
 def build_single_level_image_node(lifinfo, lif_base_name, parent_path):
     """
@@ -44,8 +40,8 @@ def build_single_level_image_node(lifinfo, lif_base_name, parent_path):
     Returns:
         dict: Node dictionary representing the image and its metadata.
     """
-    image_name = lifinfo.get("name", lifinfo.get("Name", ""))
-
+    image_name = lifinfo.get('name', lifinfo.get('Name', ''))
+    
     # Construct save_child_name
     save_child_name = lif_base_name
     if parent_path:
@@ -53,30 +49,21 @@ def build_single_level_image_node(lifinfo, lif_base_name, parent_path):
     save_child_name += "_" + image_name
 
     node = {
-        "type": "Image",
-        "name": image_name,
-        "uuid": lifinfo.get("uuid", ""),
-        "children": [],
-        "save_child_name": save_child_name,
+        'type': 'Image',
+        'name': image_name,
+        'uuid': lifinfo.get('uuid', ''),
+        'children': [],
+        'save_child_name': save_child_name
     }
-
-    dims = lifinfo.get("dimensions")
+    
+    dims = lifinfo.get('dimensions')
     if dims:
-        node["dimensions"] = dims
-        node["isrgb"] = str(dims.get("isrgb", False))
-
+        node['dimensions'] = dims
+        node['isrgb'] = str(dims.get('isrgb', False))
+    
     return node
 
-
-def build_single_level_lif_folder_node(
-    folder_element,
-    folder_uuid,
-    image_map,
-    folder_map,
-    parent_map,
-    lif_base_name,
-    parent_path="",
-):
+def build_single_level_lif_folder_node(folder_element, folder_uuid, image_map, folder_map, parent_map, lif_base_name, parent_path=""):
     """
     Build a single-level dictionary node for a LIF folder (just immediate children).
 
@@ -92,66 +79,48 @@ def build_single_level_lif_folder_node(
     Returns:
         dict: Node dictionary representing the folder and its immediate children.
     """
-    name = folder_element.attrib.get("Name", "")
-
+    name = folder_element.attrib.get('Name', '')
+    
     # Construct current path inside the LIF file
     current_path = parent_path + "_" + name if parent_path else name
 
-    node = {"type": "Folder", "name": name, "uuid": folder_uuid, "children": []}
+    node = {
+        'type': 'Folder',
+        'name': name,
+        'uuid': folder_uuid,
+        'children': []
+    }
 
-    children = folder_element.find("Children")
+    children = folder_element.find('Children')
     if children is not None:
-        for child_el in children.findall("Element"):
-            child_name = child_el.attrib.get("Name", "")
-            child_uuid = child_el.attrib.get("UniqueID")
+        for child_el in children.findall('Element'):
+            child_name = child_el.attrib.get('Name', '')
+            child_uuid = child_el.attrib.get('UniqueID')
 
-            mem = child_el.find("Memory")
+            mem = child_el.find('Memory')
             if mem is not None:
-                c_block_id = mem.attrib.get("MemoryBlockID")
-                c_size = int(mem.attrib.get("Size", "0"))
+                c_block_id = mem.attrib.get('MemoryBlockID')
+                c_size = int(mem.attrib.get('Size', '0'))
                 if c_block_id and c_size > 0:
                     # It's an image
                     if child_uuid and child_uuid in image_map:
-                        node["children"].append(
-                            build_single_level_image_node(
-                                image_map[child_uuid], lif_base_name, current_path
-                            )
-                        )
+                        node['children'].append(build_single_level_image_node(image_map[child_uuid], lif_base_name, current_path))
                 else:
                     # It's a folder
                     if child_uuid and child_uuid in folder_map:
-                        node["children"].append(
-                            build_single_level_lif_folder_node(
-                                folder_map[child_uuid],
-                                child_uuid,
-                                image_map,
-                                folder_map,
-                                parent_map,
-                                lif_base_name,
-                                current_path,
-                            )
+                        node['children'].append(
+                            build_single_level_lif_folder_node(folder_map[child_uuid], child_uuid, image_map, folder_map, parent_map, lif_base_name, current_path)
                         )
             else:
                 # It's a folder
                 if child_uuid and child_uuid in folder_map:
-                    node["children"].append(
-                        build_single_level_lif_folder_node(
-                            folder_map[child_uuid],
-                            child_uuid,
-                            image_map,
-                            folder_map,
-                            parent_map,
-                            lif_base_name,
-                            current_path,
-                        )
+                    node['children'].append(
+                        build_single_level_lif_folder_node(folder_map[child_uuid], child_uuid, image_map, folder_map, parent_map, lif_base_name, current_path)
                     )
 
     return node
 
-
-def read_leica_lif(
-    file_path, include_xmlelement=False, image_uuid=None, folder_uuid=None
-):
+def read_leica_lif(file_path, include_xmlelement=False, image_uuid=None, folder_uuid=None):
     """
     Read Leica LIF file, extracting folder and image structures.
     Ensures:
@@ -169,257 +138,231 @@ def read_leica_lif(
     Returns:
         str: JSON string representing the folder and image structure, or a specific image or folder if UUIDs are provided.
     """
-    lif_base_name = os.path.splitext(os.path.basename(file_path))[
-        0
-    ]  # Extract the LIF file base name
+    lif_base_name = os.path.splitext(os.path.basename(file_path))[0]  # Extract the LIF file base name
 
-    with open(file_path, "rb") as f:
+    with open(file_path, 'rb') as f:
         # Basic LIF validation
-        testvalue = struct.unpack("i", f.read(4))[0]
+        testvalue = struct.unpack('i', f.read(4))[0]
         if testvalue != 112:
-            raise ValueError(f"Error Opening LIF-File: {file_path}")
-        _ = struct.unpack("i", f.read(4))[0]  # XMLContentLength
-        testvalue = struct.unpack("B", f.read(1))[0]
+            raise ValueError(f'Error Opening LIF-File: {file_path}')
+        _ = struct.unpack('i', f.read(4))[0]  # XMLContentLength
+        testvalue = struct.unpack('B', f.read(1))[0]
         if testvalue != 42:
-            raise ValueError(f"Error Opening LIF-File: {file_path}")
-        testvalue = struct.unpack("i", f.read(4))[0]
+            raise ValueError(f'Error Opening LIF-File: {file_path}')
+        testvalue = struct.unpack('i', f.read(4))[0]
         XMLObjDescriptionUTF16 = f.read(testvalue * 2)
-        XMLObjDescription = XMLObjDescriptionUTF16.decode("utf-16")
+        XMLObjDescription = XMLObjDescriptionUTF16.decode('utf-16')
 
-        xml_root = ET.fromstring(XMLObjDescription)
+    xml_root = ET.fromstring(XMLObjDescription)
 
-        # Extract Experiment Name and DateTime
-        experiment_name = None
-        experiment_datetime_str = None
+    # Extract Experiment Name and DateTime
+    experiment_name = None
+    experiment_datetime_str = None
+    try:
+        # Navigate through the expected structure
+        element_node = xml_root.find('Element')
+        if element_node is not None:
+            data_node = element_node.find('Data')
+            if data_node is not None:
+                experiment_node = data_node.find('Experiment')
+                if experiment_node is not None:
+                    exp_path = experiment_node.attrib.get('Path')
+                    if exp_path:
+                        experiment_name = os.path.basename(exp_path) # Get filename part
+
+                    timestamp_node = experiment_node.find('TimeStamp')
+                    if timestamp_node is not None:
+                        high_int = timestamp_node.attrib.get('HighInteger')
+                        low_int = timestamp_node.attrib.get('LowInteger')
+                        if high_int is not None and low_int is not None:
+                            try:
+                                # Combine high and low parts for the 64-bit FILETIME
+                                filetime_val = (int(high_int) << 32) + int(low_int)
+                                dt_obj = filetime_to_datetime(filetime_val)
+                                if dt_obj:
+                                    # Format to YYYY-MM-DDTHH:MM:SS
+                                    experiment_datetime_str = dt_obj.strftime('%Y-%m-%dT%H:%M:%S')
+                            except (ValueError, TypeError):
+                                pass # Ignore conversion errors
+    except Exception:
+         # Ignore errors during extraction, proceed without this info
+         pass
+
+    # Do not scan memory blocks unless an image is requested
+    blockid_to_lifinfo = {}
+
+    # Lightweight helpers to avoid deep traversal work unless requested
+    def child_elements(el: ET.Element):
+        ch = el.find('Children')
+        return [] if ch is None else ch.findall('Element')
+
+    def is_image_element(el: ET.Element) -> bool:
+        mem = el.find('Memory')
+        if mem is None:
+            return False
         try:
-            # Navigate through the expected structure
-            element_node = xml_root.find("Element")
-            if element_node is not None:
-                data_node = element_node.find("Data")
-                if data_node is not None:
-                    experiment_node = data_node.find("Experiment")
-                    if experiment_node is not None:
-                        exp_path = experiment_node.attrib.get("Path")
-                        if exp_path:
-                            experiment_name = os.path.basename(
-                                exp_path
-                            )  # Get filename part
+            size_ok = int(mem.attrib.get('Size', '0')) > 0
+        except ValueError:
+            size_ok = False
+        has_id = bool(mem.attrib.get('MemoryBlockID'))
+        return has_id and size_ok
 
-                        timestamp_node = experiment_node.find("TimeStamp")
-                        if timestamp_node is not None:
-                            high_int = timestamp_node.attrib.get("HighInteger")
-                            low_int = timestamp_node.attrib.get("LowInteger")
-                            if high_int is not None and low_int is not None:
-                                try:
-                                    # Combine high and low parts for the 64-bit FILETIME
-                                    filetime_val = (int(high_int) << 32) + int(low_int)
-                                    dt_obj = filetime_to_datetime(filetime_val)
-                                    if dt_obj:
-                                        # Format to YYYY-MM-DDTHH:MM:SS
-                                        experiment_datetime_str = dt_obj.strftime(
-                                            "%Y-%m-%dT%H:%M:%S"
-                                        )
-                                except (ValueError, TypeError):
-                                    pass  # Ignore conversion errors
-        except Exception:
-            # Ignore errors during extraction, proceed without this info
-            pass
+    def make_image_meta(el: ET.Element, current_path: str, include_metadata: bool = False) -> dict:
+        name = el.attrib.get('Name', '')
+        unique_id = el.attrib.get('UniqueID')
+        mem = el.find('Memory')
+        mem_id = mem.attrib.get('MemoryBlockID') if mem is not None else None
+        lif_block = blockid_to_lifinfo.get(mem_id, {
+            'BlockID': mem_id,
+            'MemorySize': int(mem.attrib.get('Size', '0')) if mem is not None else 0,
+            'Position': None,
+            'LIFFile': file_path
+        })
 
-        # Read memory blocks
-        lifinfo_blocks = []
-        while True:
-            data = f.read(4)
-            if not data:
-                break
-            testvalue = struct.unpack("i", data)[0]
-            if testvalue != 112:
-                raise ValueError("Error Opening LIF-File: {}".format(file_path))
-            _ = struct.unpack("i", f.read(4))[0]  # BinContentLength
-            testvalue = struct.unpack("B", f.read(1))[0]
-            if testvalue != 42:
-                raise ValueError("Error Opening LIF-File: {}".format(file_path))
-            MemorySize = struct.unpack("q", f.read(8))[0]
-            testvalue = struct.unpack("B", f.read(1))[0]
-            if testvalue != 42:
-                raise ValueError("Error Opening LIF-File: {}".format(file_path))
-            testvalue = struct.unpack("i", f.read(4))[0]
-            BlockIDLength = testvalue
-            BlockIDData = f.read(BlockIDLength * 2)
-            BlockID = BlockIDData.decode("utf-16")
-            position = f.tell()
-            lifinfo_blocks.append(
-                {
-                    "BlockID": BlockID,
-                    "MemorySize": MemorySize,
-                    "Position": position,
-                    "LIFFile": file_path,
-                }
-            )
-            if MemorySize > 0:
-                f.seek(MemorySize, os.SEEK_CUR)
-
-    # Create a lookup for blocks by their BlockID
-    blockid_to_lifinfo = {block["BlockID"]: block for block in lifinfo_blocks}
-
-    # Initialize storage for images, folders, and parent relationships
-    image_map = {}
-    folder_map = {}
-    parent_map = {}
-
-    def dfs_collect(
-        element, parent_folder_uuid=None, parent_path="", skip_first_level=False
-    ):
-        """
-        Recursively collect folder and image data.
-        The 'parent_path' keeps track of the full folder structure inside the LIF file.
-        The first XML `<Element>` should be ignored, and its children treated as the root level.
-        """
-        name = element.attrib.get("Name", "")
-        unique_id = element.attrib.get("UniqueID")
-        Memory = element.find("Memory")
-
-        # If this is the first element, ignore it and process its children instead
-        if skip_first_level:
-            children = element.find("Children")
-            if children is not None:
-                for child_el in children.findall("Element"):
-                    dfs_collect(
-                        child_el,
-                        parent_folder_uuid=None,
-                        parent_path="",
-                        skip_first_level=False,
-                    )
-            return  # Do NOT process this element itself
-
-        # Correctly build the full folder path within the LIF file (ensuring first folder is included)
-        current_path = (
-            f"{parent_path}_{name}" if parent_path else name
-        )  # Ensures first folder level is captured
-
-        if Memory is not None:
-            MemoryBlockID = Memory.attrib.get("MemoryBlockID")
-            MemorySize = int(Memory.attrib.get("Size", "0"))
-            if MemoryBlockID and MemorySize > 0 and MemoryBlockID in blockid_to_lifinfo:
-                # It's an image
-                lif_block = blockid_to_lifinfo[MemoryBlockID]
-                lif_block["name"] = name
-                lif_block["uuid"] = unique_id
-                lif_block["filetype"] = ".lif"
-                lif_block["datatype"] = "Image"
-                # Add experiment info to image metadata
-                lif_block["experiment_name"] = experiment_name
-                lif_block["experiment_datetime"] = experiment_datetime_str
-
-                if include_xmlelement:
-                    lif_block["xmlElement"] = ET.tostring(
-                        element, encoding="utf-8"
-                    ).decode("utf-8")
-
-                metadata = parse_image_xml(element)
-                lif_block.update(metadata)
-
-                # Construct `save_child_name` correctly
-                save_child_name = f"{lif_base_name}_{current_path}"
-
-                lif_block["save_child_name"] = save_child_name
-                image_map[unique_id] = lif_block
-                parent_map[unique_id] = parent_folder_uuid
+        lif_block = dict(lif_block)  # copy
+        lif_block['name'] = name
+        lif_block['uuid'] = unique_id
+        lif_block['filetype'] = '.lif'
+        lif_block['datatype'] = 'Image'
+        lif_block['experiment_name'] = experiment_name
+        lif_block['experiment_datetime'] = experiment_datetime_str
+        lif_block['save_child_name'] = f"{lif_base_name}_{current_path}"
+        if include_xmlelement:
+            lif_block['xmlElement'] = ET.tostring(el, encoding='utf-8').decode('utf-8')
+        try:
+            if include_metadata:
+                # Full, slower parser for detailed image requests
+                metadata = parse_image_xml(el)
             else:
-                # Folder without valid memory reference
-                folder_map[unique_id] = element
-                parent_map[unique_id] = parent_folder_uuid
-        else:
-            # It's a folder
-            folder_map[unique_id] = element
-            parent_map[unique_id] = parent_folder_uuid
+                # Fast, lightweight parser for listings
+                metadata = parse_image_xml_lite(el)
+            lif_block.update(metadata)
+        except Exception:
+            pass
+        return lif_block
 
-        # Recurse only if this is a folder
-        children = element.find("Children")
-        if children is not None and unique_id in folder_map:
-            for child_el in children.findall("Element"):
-                dfs_collect(
-                    child_el, unique_id, current_path, skip_first_level=False
-                )  # Pass the full internal path
+    def find_element_and_path(el: ET.Element, target_uuid: str, parent_path: str = "", skip_self: bool = False):
+        if skip_self:
+            for ch in child_elements(el):
+                found = find_element_and_path(ch, target_uuid, parent_path="", skip_self=False)
+                if found:
+                    return found
+            return None
+        name = el.attrib.get('Name', '')
+        current_path = f"{parent_path}_{name}" if parent_path else name
+        if el.attrib.get('UniqueID') == target_uuid:
+            return el, current_path
+        for ch in child_elements(el):
+            found = find_element_and_path(ch, target_uuid, current_path, skip_self=False)
+            if found:
+                return found
+        return None
 
-    # Start recursive traversal from the root XML element, but skip the first-level wrapper `<Element>`
-    root_element = xml_root.find("Element")
-    if root_element is not None:
-        dfs_collect(root_element, skip_first_level=True)
-
-    # --------------------------------------------------------------------------
-    # If user requested an image by UUID
-    # --------------------------------------------------------------------------
+    # Image request: return only that image's metadata
     if image_uuid is not None:
-        if image_uuid in image_map:
-            return json.dumps(image_map[image_uuid], indent=2)
-        else:
-            raise ValueError(f"Image with UUID {image_uuid} not found")
+        # Lazily scan memory blocks only for image requests
+        try:
+            with open(file_path, 'rb') as f:
+                # Skip header and XML payload
+                _ = struct.unpack('i', f.read(4))[0]
+                _ = struct.unpack('i', f.read(4))[0]  # XMLContentLength
+                _ = struct.unpack('B', f.read(1))[0]
+                xml_len = struct.unpack('i', f.read(4))[0]
+                f.seek(xml_len * 2, os.SEEK_CUR)
 
-    # --------------------------------------------------------------------------
-    # If user requested a folder by UUID
-    # --------------------------------------------------------------------------
+                scanned_map = {}
+                while True:
+                    data = f.read(4)
+                    if not data:
+                        break
+                    marker = struct.unpack('i', data)[0]
+                    if marker != 112:
+                        raise ValueError('Error Opening LIF-File: {}'.format(file_path))
+                    _ = struct.unpack('i', f.read(4))[0]  # BinContentLength
+                    star = struct.unpack('B', f.read(1))[0]
+                    if star != 42:
+                        raise ValueError('Error Opening LIF-File: {}'.format(file_path))
+                    MemorySize = struct.unpack('q', f.read(8))[0]
+                    star = struct.unpack('B', f.read(1))[0]
+                    if star != 42:
+                        raise ValueError('Error Opening LIF-File: {}'.format(file_path))
+                    BlockIDLength = struct.unpack('i', f.read(4))[0]
+                    BlockIDData = f.read(BlockIDLength * 2)
+                    BlockID = BlockIDData.decode('utf-16')
+                    position = f.tell()
+                    scanned_map[BlockID] = {
+                        'BlockID': BlockID,
+                        'MemorySize': MemorySize,
+                        'Position': position,
+                        'LIFFile': file_path
+                    }
+                    if MemorySize > 0:
+                        f.seek(MemorySize, os.SEEK_CUR)
+            # Rebind the lookup so make_image_meta can use it
+            blockid_to_lifinfo = scanned_map
+        except Exception:
+            blockid_to_lifinfo = {}
+        root_el = xml_root.find('Element')
+        if root_el is None:
+            raise ValueError('Invalid LIF XML: missing root Element')
+        found = find_element_and_path(root_el, image_uuid, skip_self=True)
+        if not found:
+            raise ValueError(f'Image with UUID {image_uuid} not found')
+        el, current_path = found
+        if not is_image_element(el):
+            raise ValueError(f'UUID {image_uuid} is not an image element')
+        return json.dumps(make_image_meta(el, current_path, include_metadata=True), indent=2)
+
+    # Folder request: return folder with direct children only
     if folder_uuid is not None:
-        if folder_uuid not in folder_map:
-            raise ValueError(f"Folder with UUID {folder_uuid} not found")
-
-        folder_el = folder_map[folder_uuid]
+        root_el = xml_root.find('Element')
+        if root_el is None:
+            raise ValueError('Invalid LIF XML: missing root Element')
+        found = find_element_and_path(root_el, folder_uuid, skip_self=True)
+        if not found:
+            raise ValueError(f'Folder with UUID {folder_uuid} not found')
+        folder_el, folder_path = found
         node = {
-            "type": "Folder",
-            "name": folder_el.attrib.get("Name", ""),
-            "uuid": folder_uuid,
-            "children": [],
+            'type': 'Folder',
+            'name': folder_el.attrib.get('Name', ''),
+            'uuid': folder_uuid,
+            'children': []
         }
-
-        # Add only first-level children (folders and images)
-        children = folder_el.find("Children")
-        if children is not None:
-            for child_el in children.findall("Element"):
-                child_name = child_el.attrib.get("Name", "")
-                child_uuid = child_el.attrib.get("UniqueID")
-
-                if child_uuid in image_map:
-                    # Return the full image metadata which now includes experiment info
-                    node["children"].append(image_map[child_uuid])
-                elif child_uuid in folder_map:
-                    node["children"].append(
-                        {
-                            "type": "Folder",
-                            "name": child_name,
-                            "uuid": child_uuid,
-                            "children": [],
-                        }
-                    )
-
+        for ch in child_elements(folder_el):
+            ch_name = ch.attrib.get('Name', '')
+            ch_uuid = ch.attrib.get('UniqueID')
+            ch_path = f"{folder_path}_{ch_name}" if folder_path else ch_name
+            if is_image_element(ch):
+                node['children'].append(make_image_meta(ch, ch_path, include_metadata=False))
+            else:
+                node['children'].append({
+                    'type': 'Folder',
+                    'name': ch_name,
+                    'uuid': ch_uuid,
+                    'children': []
+                })
         return json.dumps(node, indent=2)
 
-    # --------------------------------------------------------------------------
-    # Otherwise return root-level structure (only first-level children)
-    # --------------------------------------------------------------------------
+    # Default: return top-level (first-level) children only
+    root_el = xml_root.find('Element')
     node = {
-        "type": "File",
-        "name": os.path.basename(file_path),
-        "experiment_name": experiment_name,
-        "experiment_datetime": experiment_datetime_str,
-        "children": [],
+        'type': 'File',
+        'name': os.path.basename(file_path),
+        'experiment_name': experiment_name,
+        'experiment_datetime': experiment_datetime_str,
+        'children': []
     }
-
-    # Find only top-level folders and images (first level only)
-    top_folders = [fid for fid in folder_map if parent_map[fid] is None]
-    top_images = [iid for iid in image_map if parent_map[iid] is None]
-
-    for f_id in top_folders:
-        f_el = folder_map[f_id]
-        node["children"].append(
-            {
-                "type": "Folder",
-                "name": f_el.attrib.get("Name", ""),
-                "uuid": f_id,
-                "children": [],
-            }
-        )
-
-    for i_id in top_images:
-        # Return the full image metadata which now includes experiment info
-        node["children"].append(image_map[i_id])
-
+    if root_el is not None:
+        for ch in child_elements(root_el):
+            ch_name = ch.attrib.get('Name', '')
+            ch_uuid = ch.attrib.get('UniqueID')
+            if is_image_element(ch):
+                node['children'].append(make_image_meta(ch, ch_name, include_metadata=False))
+            else:
+                node['children'].append({
+                    'type': 'Folder',
+                    'name': ch_name,
+                    'uuid': ch_uuid,
+                    'children': []
+                })
     return json.dumps(node, indent=2)

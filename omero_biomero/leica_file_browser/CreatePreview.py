@@ -7,6 +7,7 @@ import glob
 import json
 import base64
 import tempfile
+import uuid as _uuid
 
 def create_png_from_metadata(metadata, preview_height=256, use_memmap=True):
     """
@@ -20,8 +21,10 @@ def create_png_from_metadata(metadata, preview_height=256, use_memmap=True):
     # Determine fileName and basePos
     filetype = metadata["filetype"]
     if filetype == ".lif":
-        fileName = metadata["LIFFile"]
-        basePos = metadata["Position"]
+        fileName = metadata.get("LIFFile") or metadata.get("LOFFilePath")
+        basePos = metadata.get("Position")
+        if basePos is None:
+            basePos = 0
     elif filetype in [".xlef", ".lof"]:
         fileName = metadata["LOFFilePath"]
         basePos = 62
@@ -34,21 +37,26 @@ def create_png_from_metadata(metadata, preview_height=256, use_memmap=True):
     zs = metadata["zs"]
     channels = metadata.get("channels", 1)
     isrgb = metadata.get("isrgb", False)
-    channelResolution = metadata.get("channelResolution", [8] * channels)  # Assuming 8-bit as default
+    # channelResolution may be missing or scalar
+    res = metadata.get("channelResolution", 8)
+    if isinstance(res, list):
+        channelResolution = res if res else [8] * channels
+    else:
+        channelResolution = [int(res)] * channels
     channelbytesinc = metadata.get("channelbytesinc", [0] * channels)  # Default empty list
-    zbytesinc = metadata.get("zbytesinc", 0)
-    tbytesinc = metadata.get("tbytesinc", 0)
-    tilesbytesinc = metadata.get("tilesbytesinc", 0)
+    zbytesinc = metadata.get("zbytesinc") or 0
+    tbytesinc = metadata.get("tbytesinc") or 0
+    tilesbytesinc = metadata.get("tilesbytesinc") or 0
     ts = metadata.get("ts", 1)
     tiles = metadata.get("tiles", 1)
 
     # Center slice selection for t and s (tiles)
-    if ts > 1:
+    if ts and ts > 1:
         t = ts // 2
-        basePos += t * tbytesinc
-    if tiles > 1:
+        basePos += int(t) * int(tbytesinc)
+    if tiles and tiles > 1:
         tile = tiles // 2
-        basePos += tile * tilesbytesinc
+        basePos += int(tile) * int(tilesbytesinc)
 
     # Center slice selection for z
     z = zs // 2 if zs > 1 else 0
@@ -82,9 +90,17 @@ def create_png_from_metadata(metadata, preview_height=256, use_memmap=True):
                 mmap_array = np.memmap(fileName, dtype=dtype, mode="r", offset=data_offset, shape=slice_shape, order="C")
                 selected_rows = mmap_array[::skip_factor, :]
                 channel_data_resized = cv2.resize(selected_rows, (xsize, ysize), interpolation=cv2.INTER_AREA)
-
-                # Use direct indexing for lutname
-                lut_name = metadata["lutname"][cht]
+                # LUT name may be missing for lite listings; provide sane fallback
+                try:
+                    lut_list = metadata.get("lutname")
+                    if isinstance(lut_list, list) and cht < len(lut_list):
+                        lut_name = lut_list[cht]
+                    else:
+                        raise KeyError
+                except Exception:
+                    # derive a default sequence of colors
+                    default_cycle = ["green", "magenta", "cyan", "yellow", "red", "blue", "white"]
+                    lut_name = default_cycle[cht % len(default_cycle)]
                 color = convert_color_name_to_rgb(lut_name)
                 
                 for c in range(3):
@@ -120,8 +136,16 @@ def create_png_from_metadata(metadata, preview_height=256, use_memmap=True):
                         row_pixels = np.frombuffer(row_bytes, dtype=dtype).reshape((1, xs))
                         row_pixels_resized = cv2.resize(row_pixels, (xsize, 1), interpolation=cv2.INTER_AREA).flatten()
                         
-                        # Use direct indexing for lutname
-                        lut_name = metadata["lutname"][cht]
+                        # LUT name may be missing for lite listings; provide sane fallback
+                        try:
+                            lut_list = metadata.get("lutname")
+                            if isinstance(lut_list, list) and cht < len(lut_list):
+                                lut_name = lut_list[cht]
+                            else:
+                                raise KeyError
+                        except Exception:
+                            default_cycle = ["green", "magenta", "cyan", "yellow", "red", "blue", "white"]
+                            lut_name = default_cycle[cht % len(default_cycle)]
                         color = convert_color_name_to_rgb(lut_name)
 
                         for c in range(3):
@@ -150,10 +174,13 @@ def create_preview_image(metadata, cache_folder, preview_height=256, use_memmap=
         os.makedirs(cache_folder)
 
     # Generate a unique cache filename using uuid and preview_height
-    if "UniqueID" not in metadata:
-        raise ValueError("metadata does not contain a UniqueID")
+    uid = metadata.get("UniqueID") or metadata.get("uuid") or metadata.get("ImageUUID")
+    if not uid:
+        # Fallback to a derived stable-ish key using file and dims; final fallback random
+        base = f"{metadata.get('LOFFilePath') or metadata.get('LIFFile')}_{metadata.get('xs')}x{metadata.get('ys')}"
+        uid = metadata.get("hash") or base or str(_uuid.uuid4())
 
-    uuid = metadata["UniqueID"]
+    uuid = str(uid)
     cache_filename = f"{uuid}_h{preview_height}.png"
     cache_image_path = os.path.join(cache_folder, cache_filename)
 

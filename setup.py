@@ -60,7 +60,7 @@ setup(
             "OMERO-Automated-Data-Import.git@main"
         ),
     ],
-    python_requires=">=3",
+    python_requires=">=3.12",
     include_package_data=True,
     zip_safe=False,
     package_data={

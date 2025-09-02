@@ -41,4 +41,6 @@ jobs:
           pip install -e .
 
       - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/omero_biomero/leica_file_browser:${{ env.PYTHONPATH }}
         run: python manage.py test

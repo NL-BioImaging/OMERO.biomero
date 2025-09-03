@@ -3,8 +3,14 @@ import json
 import struct
 import xml.etree.ElementTree as ET
 from datetime import timezone  # Import timezone
-from ParseLeicaImageXML import parse_image_xml
-from ParseLeicaImageXMLLite import parse_image_xml_lite
+try:
+    from .ParseLeicaImageXML import parse_image_xml
+except ImportError:  # pragma: no cover - fallback for script usage
+    from ParseLeicaImageXML import parse_image_xml
+try:
+    from .ParseLeicaImageXMLLite import parse_image_xml_lite
+except ImportError:  # pragma: no cover - fallback for script usage
+    from ParseLeicaImageXMLLite import parse_image_xml_lite
 import datetime
 
 def filetime_to_datetime(filetime):

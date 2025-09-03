@@ -1,0 +1,5 @@
+# Include Python package files and non-Python assets
+recursive-include omero_biomero/static *
+recursive-include omero_biomero/templates *
+include omero_biomero/*.omero
+include README.md

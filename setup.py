@@ -12,9 +12,11 @@ def read(fname):
 
 setup(
     name="omero-biomero",
-    version="0.1.0",
+    use_scm_version=True,
     packages=find_packages(exclude=["ez_setup"]),
     description="A Python plugin for OMERO.web combining database pages, script menu, and web importer functionality",
+    long_description=read("README.md"),
+    long_description_content_type="text/markdown",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Environment :: Web Environment",
@@ -34,7 +36,10 @@ setup(
     author_email="cellularimaging@amsterdamumc.nl",
     license="AGPL-3.0",
     url="https://github.com/Cellular-Imaging-Amsterdam-UMC/OMERO.biomero",
-    download_url="https://github.com/Cellular-Imaging-Amsterdam-UMC/OMERO.biomero/archive/refs/heads/main.zip",
+    download_url=(
+        "https://github.com/Cellular-Imaging-Amsterdam-UMC/OMERO.biomero/"
+        "archive/refs/tags/v{version}.tar.gz"
+    ),
     keywords=[
         "OMERO.web",
         "plugin",
@@ -49,9 +54,9 @@ setup(
         "pyjwt",
         "biomero>=2.0.0-alpha.4",
         "configupdater>=3.2",
-        "omero_adi @ git+https://github.com/Cellular-Imaging-Amsterdam-UMC/OMERO-Automated-Data-Import.git@main",
+        "omero-adi==1.0.0b1",
     ],
-    python_requires=">=3",
+    python_requires=">=3.12",
     include_package_data=True,
     zip_safe=False,
     package_data={

@@ -4,7 +4,10 @@ import json
 import struct
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
-from ParseLeicaImageXML import parse_image_xml
+try:
+    from .ParseLeicaImageXML import parse_image_xml
+except ImportError:  # pragma: no cover - fallback for script usage
+    from ParseLeicaImageXML import parse_image_xml
 
 # Constants for Windows File Time conversion
 EPOCH_AS_FILETIME = 116444736000000000  # January 1, 1970 as MS file time

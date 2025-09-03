@@ -3,7 +3,10 @@ import json
 import xml.etree.ElementTree as ET
 from urllib.parse import unquote
 from collections import deque
-from ParseLeicaImageXML import parse_image_xml
+try:
+    from .ParseLeicaImageXML import parse_image_xml
+except ImportError:  # pragma: no cover - fallback for script usage
+    from ParseLeicaImageXML import parse_image_xml
 from datetime import timezone # Import timezone
 import datetime
 

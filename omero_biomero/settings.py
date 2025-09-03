@@ -68,6 +68,9 @@ def _load_overrides_simple():
 #       code for now, to keep configuration minimal.
 PREPROCESSING_CONFIG = {
     "screen_db": {
+        "container": "cellularimagingcf/image-db-to-ome:latest",
+    },
+    "screen_db_to_tiff": {
         "container": "cellularimagingcf/cimagexpresstoometiff:v0.7",
         "extra_params": {"saveoption": "single"},
     },

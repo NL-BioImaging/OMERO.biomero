@@ -4,9 +4,17 @@ import tempfile
 import numpy as np
 import xml.etree.ElementTree as ET
 import urllib.request
-from ReadLeicaLIF import read_leica_lif
-from ReadLeicaLOF import read_leica_lof
-from ReadLeicaXLEF import read_leica_xlef
+try:
+    # Package context (e.g., inside omero_biomero.leica_file_browser)
+    from .ReadLeicaLIF import read_leica_lif
+    from .ReadLeicaLOF import read_leica_lof
+    from .ReadLeicaXLEF import read_leica_xlef
+except ImportError:  # pragma: no cover - fallback for script usage
+    # Script context (running from a plain folder)
+    from ReadLeicaLIF import read_leica_lif
+    from ReadLeicaLOF import read_leica_lof
+    from ReadLeicaXLEF import read_leica_xlef
+
 
 def get_image_metadata_LOF(folder_metadata, image_uuid):
     folder_metadata_dict = json.loads(folder_metadata)
@@ -97,7 +105,7 @@ def print_progress_bar(progress: float, *, total: float = 100.0, prefix: str = "
 
 def _read_xlef_image(xlef_path: str, image_uuid: str) -> dict:
     """Return metadata dict for *one* image UUID inside an XLEF experiment."""
-    raw_meta = json.loads(read_leica_xlef(xlef_path))
+    # Load and search lazily across potentially linked XLEFs
 
     def walk(node: dict) -> dict | None:
         if node.get("uuid") == image_uuid and node.get("type", "").lower() == "image":

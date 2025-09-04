@@ -24,27 +24,26 @@ urlpatterns = [
         admin_views.admin_config,
         name="admin_config",
     ),
-    # Biomero/analyze URLs
+    # Analyzer API under /api/analyzer/
     path(
-        "api/biomero/workflows/", analyzer_views.list_workflows, name="list_workflows"
+        "api/analyzer/workflows/",
+        analyzer_views.list_workflows,  # GET
+        name="analyzer_workflows_list",
     ),
     path(
-        "api/biomero/workflows/<str:name>/metadata/",
-        analyzer_views.get_workflow_metadata,
-        name="get_workflow_metadata",
+        "api/analyzer/workflows/<str:name>/",
+        analyzer_views.get_workflow_metadata,  # GET (include repo info in response)
+        name="analyzer_workflow_detail",
     ),
     path(
-        "api/biomero/workflows/<str:name>/github/",
-        analyzer_views.get_workflow_github,
-        name="get_workflow_github",
+        "api/analyzer/workflows/<str:name>/jobs/",
+        analyzer_views.run_workflow_script,  # POST: create job for <name>
+        name="analyzer_jobs_create",
     ),
     path(
-        "api/biomero/workflows/run/",
-        analyzer_views.run_workflow_script,
-        name="run_workflow_script",
-    ),
-    path(
-        "api/biomero/get_workflows/", analyzer_views.get_workflows, name="get_workflows"
+        "api/analyzer/scripts/",
+        analyzer_views.get_workflows,  # GET: legacy script info for menu
+        name="analyzer_scripts_list",
     ),
     # Main Biomero URL
     path(

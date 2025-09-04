@@ -43,10 +43,10 @@ export const getDjangoConstants = () => {
     api_get_folder_contents: "/omero_biomero/api/importer/get_folder_contents/",
     api_group_mappings: "/omero_biomero/api/importer/group_mappings/",
     api_import_selected: "/omero_biomero/api/importer/import_selected/",
-    workflows: "/omero_biomero/api/biomero/workflows/",
+    workflows: "/omero_biomero/api/analyzer/workflows/",
     api_config: "/omero_biomero/api/biomero/admin/config/",
-    api_run_workflow: "/omero_biomero/api/biomero/workflows/run/",
-    get_workflows: "/omero_biomero/api/biomero/get_workflows/",
+    api_run_workflow: "/omero_biomero/api/analyzer/workflows/", // append <name>/jobs/
+    get_workflows: "/omero_biomero/api/analyzer/scripts/",
   };
 
   const ui = {

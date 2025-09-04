@@ -9,7 +9,6 @@ import {
   fetchWorkflows,
   fetchConfig,
   fetchWorkflowMetadata,
-  fetchWorkflowGithub,
   runWorkflow,
   postConfig,
   postUpload,
@@ -290,23 +289,17 @@ export const AppProvider = ({ children }) => {
       const response = await fetchWorkflows(); // Fetch workflows (list of names)
       const workflows = response?.workflows || [];
 
-      // Fetch metadata and GitHub URLs for each workflow
-      const metadataPromises = workflows.map((workflow) =>
-        fetchWorkflowMetadata(workflow)
-      );
-      const githubPromises = workflows.map((workflow) =>
-        fetchWorkflowGithub(workflow)
+      // Fetch metadata for each workflow (includes githubUrl)
+      const metadata = await Promise.all(
+        workflows.map((workflow) => fetchWorkflowMetadata(workflow))
       );
 
-      const metadata = await Promise.all(metadataPromises);
-      const githubUrls = await Promise.all(githubPromises);
-
-      // Prepare the metadata and GitHub URLs in the format that matches the workflow names
+      // Prepare the metadata including GitHub URL per workflow
       const workflowsWithMetadata = workflows.map((workflow, index) => ({
         name: workflow,
         description: metadata[index]?.description || "No description available",
         metadata: metadata[index],
-        githubUrl: githubUrls[index]?.url,
+        githubUrl: metadata[index]?.githubUrl || null,
       }));
 
       updateState({

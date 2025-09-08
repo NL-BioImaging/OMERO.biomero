@@ -228,6 +228,9 @@ def read_leica_lif(file_path, include_xmlelement=False, image_uuid=None, folder_
         lif_block = dict(lif_block)  # copy
         lif_block['name'] = name
         lif_block['uuid'] = unique_id
+        # Fallback: if XML UniqueID is missing but Memory BlockID exists, use BlockID as UUID
+        if not lif_block['uuid'] and lif_block.get('BlockID'):
+            lif_block['uuid'] = lif_block['BlockID']
         lif_block['filetype'] = '.lif'
         lif_block['datatype'] = 'Image'
         lif_block['experiment_name'] = experiment_name
@@ -256,8 +259,19 @@ def read_leica_lif(file_path, include_xmlelement=False, image_uuid=None, folder_
             return None
         name = el.attrib.get('Name', '')
         current_path = f"{parent_path}_{name}" if parent_path else name
+        # Match by XML UniqueID first
         if el.attrib.get('UniqueID') == target_uuid:
             return el, current_path
+        # Also allow matching by MemoryBlockID (BlockID) for images
+        mem = el.find('Memory')
+        if mem is not None:
+            try:
+                size_ok = int(mem.attrib.get('Size', '0')) > 0
+            except ValueError:
+                size_ok = False
+            block_id = mem.attrib.get('MemoryBlockID')
+            if size_ok and block_id and block_id == target_uuid:
+                return el, current_path
         for ch in child_elements(el):
             found = find_element_and_path(ch, target_uuid, current_path, skip_self=False)
             if found:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAppContext } from "../AppContext";
 import FileBrowser from "./components/FileBrowser";
 import OmeroDataBrowser from "../shared/components/OmeroDataBrowser";
@@ -25,47 +25,86 @@ const MonitorPanel = ({
   setMetabaseError,
   isAdmin,
   metabaseUrl,
-}) => (
-  <div className="h-full overflow-y-auto">
-    <H4>Monitor</H4>
-    <div className="bp5-form-group">
-      <div className="bp5-form-content">
-        <div className="bp5-form-helper-text">
-          View your active import progress, or browse some historical data, here
-          on this dashboard.
-        </div>
-        <div className="bp5-form-helper-text">
-          Tip: When an import is <b>Import Completed</b>, you can find your
-          result images by pasting the <b>UUID</b> in OMERO's search bar at the
-          top of your screen.
+}) => {
+  const iframeRef = useRef(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const onLoad = () => {
+      try {
+        const doc = iframe.contentWindow.document;
+
+        doc.addEventListener("click", (e) => {
+          const a = e.target.closest("a");
+          if (a && a.href) {
+            try {
+              const url = new URL(a.href);
+              // Only redirect top window for links within our domain
+              if (url.hostname === window.location.hostname) {
+                window.top.location.href = a.href;
+                e.preventDefault();
+              }
+            } catch (_) {
+              // ignore invalid URLs
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Could not attach click handler to iframe:", err);
+      }
+    };
+
+    iframe.addEventListener("load", onLoad);
+
+    return () => {
+      iframe.removeEventListener("load", onLoad);
+    };
+  }, [iframeUrl]);
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <H4>Monitor</H4>
+      <div className="bp5-form-group">
+        <div className="bp5-form-content">
+          <div className="bp5-form-helper-text">
+            View your active import progress, or browse some historical data,
+            here on this dashboard.
+          </div>
+          <div className="bp5-form-helper-text">
+            Tip: When an import is <b>Import Completed</b>, you can find your
+            result images by pasting the <b>UUID</b> in OMERO's search bar at
+            the top of your screen.
+          </div>
         </div>
       </div>
+      <div className="p-4 h-full overflow-hidden">
+        {!metabaseError ? (
+          <iframe
+            title="Metabase dashboard"
+            src={iframeUrl}
+            className="w-full h-[800px]"
+            frameBorder="0"
+            ref={iframeRef}
+            onError={() => setMetabaseError(true)}
+          />
+        ) : (
+          <div className="error">
+            Error loading Metabase dashboard. Please try refreshing the page.
+          </div>
+        )}
+        {isAdmin && (
+          <div className="bottom-message">
+            <a href={metabaseUrl} target="_blank" rel="noopener noreferrer">
+              Click here to access the Metabase interface
+            </a>
+          </div>
+        )}
+      </div>
     </div>
-    <div className="p-4 h-full overflow-hidden">
-      {!metabaseError ? (
-        <iframe
-          title="Metabase dashboard"
-          src={iframeUrl}
-          className="w-full h-[800px]"
-          frameBorder="0"
-          onError={() => setMetabaseError(true)}
-          onload="iFrameResize({}, this)"
-        />
-      ) : (
-        <div className="error">
-          Error loading Metabase dashboard. Please try refreshing the page.
-        </div>
-      )}
-      {isAdmin && (
-        <div className="bottom-message">
-          <a href={metabaseUrl} target="_blank" rel="noopener noreferrer">
-            Click here to access the Metabase interface
-          </a>
-        </div>
-      )}
-    </div>
-  </div>
-);
+  );
+};
 
 const ImporterApp = () => {
   const {

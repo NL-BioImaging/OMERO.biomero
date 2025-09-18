@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAppContext } from "../AppContext";
 import TabContainer from "./components/TabContainer";
 import RunPanel from "./components/RunPanel";
@@ -77,45 +77,84 @@ const StatusPanel = ({
   setMetabaseError,
   isAdmin,
   metabaseUrl,
-}) => (
-  <div className="h-full overflow-y-auto">
-    <H4>Status</H4>
-    <div className="bp5-form-group">
-      <div className="bp5-form-content">
-        <div className="bp5-form-helper-text">
-          View your active BIOMERO workflow progress, or browse some historical
-          data, here on this dashboard.
-        </div>
-        <div className="bp5-form-helper-text">
-          Tip: When a workflow is <b>DONE</b>, you can find your result images
-          (if any) by pasting the <b>Workflow ID</b> in OMERO's search bar at
-          the top of your screen.
+}) => {
+  const iframeRef = useRef(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const onLoad = () => {
+      try {
+        const doc = iframe.contentWindow.document;
+
+        doc.addEventListener("click", (e) => {
+          const a = e.target.closest("a");
+          if (a && a.href) {
+            try {
+              const url = new URL(a.href);
+              if (url.hostname === window.location.hostname) {
+                window.top.location.href = a.href;
+                e.preventDefault();
+              }
+            } catch (_) {
+              // ignore invalid URLs
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Could not attach click handler to iframe:", err);
+      }
+    };
+
+    iframe.addEventListener("load", onLoad);
+
+    return () => {
+      iframe.removeEventListener("load", onLoad);
+    };
+  }, [iframeUrl]);
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <H4>Status</H4>
+      <div className="bp5-form-group">
+        <div className="bp5-form-content">
+          <div className="bp5-form-helper-text">
+            View your active BIOMERO workflow progress, or browse some
+            historical data, here on this dashboard.
+          </div>
+          <div className="bp5-form-helper-text">
+            Tip: When a workflow is <b>DONE</b>, you can find your result images
+            (if any) by pasting the <b>Workflow ID</b> in OMERO's search bar at
+            the top of your screen.
+          </div>
         </div>
       </div>
+      <div className="p-4 h-full overflow-hidden">
+        {!metabaseError ? (
+          <iframe
+            title="Metabase dashboard"
+            src={iframeUrl}
+            className="w-full h-[800px]"
+            ref={iframeRef}
+            onError={() => setMetabaseError(true)}
+          />
+        ) : (
+          <div className="error">
+            Error loading Metabase dashboard. Please try refreshing the page.
+          </div>
+        )}
+        {isAdmin && (
+          <div className="bottom-message">
+            <a href={metabaseUrl} target="_blank" rel="noopener noreferrer">
+              Click here to access the Metabase interface
+            </a>
+          </div>
+        )}
+      </div>
     </div>
-    <div className="p-4 h-full overflow-hidden">
-      {!metabaseError ? (
-        <iframe
-          title="Metabase dashboard"
-          src={iframeUrl}
-          className="w-full h-[800px]"
-          onError={() => setMetabaseError(true)}
-        />
-      ) : (
-        <div className="error">
-          Error loading Metabase dashboard. Please try refreshing the page.
-        </div>
-      )}
-      {isAdmin && (
-        <div className="bottom-message">
-          <a href={metabaseUrl} target="_blank" rel="noopener noreferrer">
-            Click here to access the Metabase interface
-          </a>
-        </div>
-      )}
-    </div>
-  </div>
-);
+  );
+};
 
 const BiomeroApp = () => {
   const {

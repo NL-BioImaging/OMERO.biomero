@@ -101,16 +101,11 @@ export const fetchConfig = async () => {
 // Fetch metadata for a specific workflow
 export const fetchWorkflowMetadata = async (workflow) => {
   const { urls } = getDjangoConstants();
-  const workflowMetadataUrl = `${urls.workflows}${workflow}/metadata/`; // Dynamically build the URL
+  const workflowMetadataUrl = `${urls.workflows}${workflow}/`; // analyzer detail includes metadata
   return apiRequest(workflowMetadataUrl, "GET");
 };
 
-// Fetch GitHub URL for a specific workflow
-export const fetchWorkflowGithub = async (workflow) => {
-  const { urls } = getDjangoConstants();
-  const workflowGithubUrl = `${urls.workflows}${workflow}/github/`; // Dynamically build the URL
-  return apiRequest(workflowGithubUrl, "GET");
-};
+// GitHub URL is included in fetchWorkflowMetadata().githubUrl
 
 // Fetch thumbnails for imageids
 export const fetchThumbnails = async (imageIds) => {
@@ -180,9 +175,9 @@ export const runWorkflow = async (workflowName, params = {}) => {
     const csrfToken = window.csrftoken;
 
     // Prepare the payload with script_name and optional params
-    const payload = { workflow_name: workflowName, params };
-
-    const response = await apiRequest(urls.api_run_workflow, "POST", payload, {
+  const payload = { workflow_name: workflowName, params };
+  const endpoint = `${urls.api_run_workflow}${workflowName}/jobs/`;
+  const response = await apiRequest(endpoint, "POST", payload, {
       headers: {
         "X-CSRFToken": csrfToken, // Include CSRF token in request headers
       },

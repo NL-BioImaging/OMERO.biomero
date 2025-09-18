@@ -11,7 +11,7 @@ COMMAND0="chmod a+w /opt/omero/web/OMERO.web/var/static"
 COMMAND1="/opt/omero/web/venv3/bin/python -m pip install -e /opt/omero/web/OMERO.biomero"
 COMMAND2="/opt/omero/web/venv3/bin/omero-biomero-setup"
 
-COMMAND3="/opt/omero/web/venv3/bin/omero web stop"
+COMMAND3="/opt/omero/web/venv3/bin/omero web stop || true; rm -f /opt/omero/web/OMERO.web/var/django.pid"
 COMMAND4="/opt/omero/web/OMERO.biomero/startup.sh"
 
 docker exec --user root "$CONTAINER_NAME" sh -c "$COMMAND0"

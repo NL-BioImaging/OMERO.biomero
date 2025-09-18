@@ -192,35 +192,9 @@ class AnalyzerViewsTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertIn("inputs", data)
+        self.assertIn("githubUrl", data)
 
-    # --- get_workflow_github ---
-    def test_get_workflow_github_missing(self):
-        view = _raw("get_workflow_github")
-        request = SimpleNamespace(method="GET")
-        resp = view(request)
-        self.assertEqual(resp.status_code, 400)
-
-    def test_get_workflow_github_not_found(self):
-        class StubSlurm(self._StubSlurmBase):
-            slurm_model_repos = {"other": "url"}
-
-        with patch("omero_biomero.analyzer_views.SlurmClient", StubSlurm):
-            view = _raw("get_workflow_github")
-            request = SimpleNamespace(method="GET")
-            resp = view(request, name="wfA")
-        self.assertEqual(resp.status_code, 404)
-
-    def test_get_workflow_github_success(self):
-        class StubSlurm(self._StubSlurmBase):
-            slurm_model_repos = {"wfA": "https://github.com/org/wfA"}
-
-        with patch("omero_biomero.analyzer_views.SlurmClient", StubSlurm):
-            view = _raw("get_workflow_github")
-            request = SimpleNamespace(method="GET")
-            resp = view(request, name="wfA")
-        self.assertEqual(resp.status_code, 200)
-        data = json.loads(resp.content)
-        self.assertIn("url", data)
+    # GitHub URL is provided by get_workflow_metadata in field 'githubUrl'
 
     # --- get_workflows (script menu) ---
     def test_get_workflows_mixed(self):

@@ -144,6 +144,20 @@ const WorkflowForm = () => {
     <form>
       <h2>{workflowMetadata.workflow}</h2>
       {renderFormFields()}
+      
+      {/* Experimental ZARR Format Support */}
+      <FormGroup
+        label="Use ZARR Format (Experimental)"
+        labelFor="useZarrFormat"
+        helperText="⚠️ Experimental feature: Skip TIFF conversion and use ZARR format directly. Only use if your workflow supports ZARR input."
+      >
+        <Switch
+          id="useZarrFormat"
+          checked={state.formData?.useZarrFormat || false}
+          onChange={(e) => handleInputChange('useZarrFormat', e.target.checked)}
+          label="Enable ZARR Format"
+        />
+      </FormGroup>
     </form>
   );
 };

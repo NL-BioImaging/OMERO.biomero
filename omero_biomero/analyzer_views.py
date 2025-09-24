@@ -59,6 +59,8 @@ def run_workflow_script(
         output_ds = params.get("selectedDatasets", [])
         rename_pt = params.get("renamePattern")
         version = params.get("version")
+        # EXPERIMENTAL: ZARR format support
+        use_zarr = params.get("useZarrFormat", False)
 
         # Convert provided params to OMERO rtypes using wrap
         known_params = [
@@ -77,6 +79,7 @@ def run_workflow_script(
             "cytomine_private_key",
             "cytomine_public_key",
             "version",
+            "useZarrFormat",  # EXPERIMENTAL: ZARR format support
         ]
         inputs = {
             f"{workflow_name}_|_{key}": wrap(value)
@@ -90,6 +93,7 @@ def run_workflow_script(
                 "IDs": wrap([rlong(i) for i in input_ids]),
                 "Data_Type": wrap(data_type),
                 "E-mail": rbool(out_email),
+                "Use_ZARR_Format": rbool(use_zarr),  # EXPERIMENTAL
                 "Select how to import your results (one or more)": rbool(True),
                 "1) Zip attachment to parent": rbool(import_zp),
                 "2) Attach to original images": rbool(attach_og),

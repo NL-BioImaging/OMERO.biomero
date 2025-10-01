@@ -27,7 +27,7 @@ For development, we use [NL-BIOMERO](https://github.com/Cellular-Imaging-Amsterd
 
 1. Install Docker.
 2. Clone the [omero-biomero](https://github.com/Cellular-Imaging-Amsterdam-UMC/omero-biomero.git).
-3. Clone the [NL-BIOMERO](https://github.com/Cellular-Imaging-Amsterdam-UMC/NL-BIOMERO) repository and enter it. Switch to branch `BOOST`.
+3. Clone the [NL-BIOMERO](https://github.com/Cellular-Imaging-Amsterdam-UMC/NL-BIOMERO) repository and enter it.
 4. **Folders with both repositories must be in the same parent folder**.
 5. Enter `NL-BIOMERO` repository and start OMERO containers: `docker compose --file docker-compose-dev.yml up`. This compose file enables restarting OMERO Webclient server without causing the container to exit. It does **not** automatically start the Webclient server. It also mounts omero-biomero as a volume in the Webclient container. Changes to the plugin code are automatically reflected in the Webclient because pip installs the plugin in editable mode (see below).
 6. In new terminal, enter `omero-biomero` repository and execute `./omero-init.sh`. This will start the OMERO Webclient server **in background mode**. It also installs the plugin in editable mode, so changes to the plugin code are automatically reflected in the Webclient.

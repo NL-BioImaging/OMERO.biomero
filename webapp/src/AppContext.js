@@ -197,7 +197,13 @@ export const AppProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await runWorkflow(workflowName, params);
+      // Include the active group ID in the params to ensure workflows run in the correct group
+      const paramsWithGroup = {
+        ...params,
+        active_group_id: state.user.active_group_id,
+      };
+      
+      const response = await runWorkflow(workflowName, paramsWithGroup);
 
       const message = response?.message || "Workflow executed successfully.";
 

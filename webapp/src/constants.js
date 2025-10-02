@@ -9,6 +9,7 @@ export const getDjangoConstants = () => {
     current_admin_privileges: WEBCLIENT.current_admin_privileges,
     leader_of_groups: WEBCLIENT.leader_of_groups,
     active_group_id: WEBCLIENT.active_group_id,
+    groups: WEBCLIENT.groups || [], // Add groups array for group selection
   };
 
   const urls = {

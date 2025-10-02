@@ -28,9 +28,82 @@ def run_workflow_script(
         if not workflow_name:
             return JsonResponse({"error": "workflow_name is required"}, status=400)
         params = data.get("params", {})
+        
+        # Extract and use the active group ID if provided from the frontend
+        active_group_id = params.pop("active_group_id", None)
+        
+        # Get the current user's username and available groups for debugging
+        current_user = conn.getUser()
+        username = current_user.getName()
+        
+        # Use group switching approach similar to ADI importer
+        if active_group_id is not None:
+            logger.info(
+                f"Switching to group {active_group_id} for user {username} "
+                f"in workflow {workflow_name}"
+            )
+            
+            # Use the same approach as ADI: switch to specified group
+            # This ensures OMERO script runs with correct group permissions
+            try:
+                # First, try to set the group directly if the user has access
+                conn.setGroupForSession(active_group_id)
+                
+                # Verify the group switch was successful
+                current_group = conn.getEventContext().groupId
+                if current_group != active_group_id:
+                    logger.warning(
+                        f"Group switch may not have taken effect. "
+                        f"Expected: {active_group_id}, Current: {current_group}"
+                    )
+                else:
+                    logger.info(
+                        f"Successfully switched to group {active_group_id} "
+                        f"for workflow {workflow_name}"
+                    )
+                
+            except Exception as group_error:
+                logger.error(
+                    f"Failed to switch to group {active_group_id}: "
+                    f"{group_error}"
+                )
+                return JsonResponse({
+                    "error": f"Cannot access group {active_group_id}. "
+                             "Check group permissions."
+                }, status=403)
+        else:
+            # Log when no group is specified (uses default)
+            current_group = conn.getEventContext().groupId
+            logger.info(
+                f"No group specified for workflow {workflow_name}, "
+                f"using current group {current_group}"
+            )
 
         # Apply BIOMERO's type conversion logic
         params = prepare_workflow_parameters(workflow_name, params)
+
+        # Verify group context before running script
+        current_context = conn.getEventContext()
+        current_group_id = current_context.groupId
+        current_user_id = current_context.userId
+        
+        logger.info(
+            f"BIOMERO GROUP DEBUG: About to run script {script_name} "
+            f"for workflow {workflow_name} "
+            f"with user {current_user_id} in group {current_group_id}. "
+            f"Originally requested group: {active_group_id}"
+        )
+        
+        if active_group_id and current_group_id != active_group_id:
+            logger.error(
+                f"Group context mismatch! Expected: {active_group_id}, "
+                f"Actual: {current_group_id}"
+            )
+            return JsonResponse({
+                "error": f"Group context failed to switch to "
+                         f"{active_group_id}. "
+                         f"Currently in group {current_group_id}."
+            }, status=500)
 
         # Connect to OMERO Script Service
         svc = conn.getScriptService()

@@ -7,7 +7,7 @@ from collections import defaultdict
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.views.decorators.http import require_http_methods
 from omeroweb.webclient.decorators import login_required, render_response
-from omero_adi.utils.ingest_tracker import (
+from biomero_importer.utils.ingest_tracker import (
     initialize_ingest_tracker,
     log_ingestion_step,
     STAGE_NEW_ORDER,
@@ -28,15 +28,27 @@ from .utils import build_extra_params
 logger = logging.getLogger(__name__)
 
 
-# TODO move this into the view function that needs it
-def initialize_adi():
+_INGEST_INITIALIZED = False
+
+
+def initialize_biomero_importer():
     """
-    Called when the app is ready. We initialize the IngestTracker from ADI
-    using an environment variable.
+    Initialize the BIOMERO.importer IngestTracker.
+
+    This function is safe to call multiple times; the actual
+    initialization is performed only once per process and subsequent
+    calls are no-ops. Initialization is intentionally *not* performed at
+    module import time so tests can stub/mocks `biomero_importer` before
+    it is used.
     """
+    global _INGEST_INITIALIZED
+    if _INGEST_INITIALIZED:
+        return
+
     db_url = os.getenv("INGEST_TRACKING_DB_URL")
     if not db_url:
         logger.error("Environment variable 'INGEST_TRACKING_DB_URL' not set")
+        # do not set _INGEST_INITIALIZED so callers can try again later
         return
 
     config = {"ingest_tracking_db": db_url}
@@ -44,6 +56,7 @@ def initialize_adi():
     try:
         if initialize_ingest_tracker(config):
             logger.info("IngestTracker initialized successfully")
+            _INGEST_INITIALIZED = True
         else:
             logger.error("Failed to initialize IngestTracker")
     except Exception as e:
@@ -51,9 +64,6 @@ def initialize_adi():
             f"Unexpected error during IngestTracker initialization: {e}",
             exc__info=True,
         )
-
-
-initialize_adi()
 
 
 @login_required()
@@ -251,6 +261,11 @@ def get_folder_contents(request, conn=None, **kwargs):
 @login_required()
 @require_http_methods(["POST"])
 def import_selected(request, conn=None, **kwargs):
+    # Ensure the BIOMERO.importer ingest tracker is initialized once when
+    # we actually need it (calling this at module import time breaks tests
+    # that want to stub or replace the biomero_importer module).
+    initialize_biomero_importer()
+
     try:
         data = json.loads(request.body)
         upload = data.get("upload", {})

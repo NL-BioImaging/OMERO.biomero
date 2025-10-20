@@ -1,9 +1,5 @@
-configupdater==3.2
-Django
-numpy==1.21.5
-PyJWT==2.3.0
-setuptools==59.6.0
-omero-web
-biomero
+# Test dependencies - main dependencies are defined in setup.py
+# Install in editable mode with: pip install -e .
 
-# Run pip install -e ../NL-BIOMERO/omeroadi/ to install omero-adi as well (NL-BIOMERO repo must be cloned to the same directory)
+# Additional test-only dependencies
+pytest>=6.0.0

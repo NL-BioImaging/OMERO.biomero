@@ -4,3 +4,4 @@ node_modules
 omero_biomero/group_mappings.json
 /venv
 omero_biomero/_version.py
+file.db

@@ -25,9 +25,7 @@
 
 
 import logging
-import os
 from django.apps import AppConfig
-from omero_adi.utils.ingest_tracker import initialize_ingest_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -35,23 +33,3 @@ logger = logging.getLogger(__name__)
 class OmeroBiomeroAppConfig(AppConfig):
     name = "omero_biomero"
     label = "OMERO.biomero"
-
-    # TODO: Doesn't seem to be called here
-    # def ready(self):
-    #     """
-    #     Called when the app is ready. We initialize the IngestTracker using an environment variable.
-    #     """
-    #     db_url = os.getenv('INGEST_TRACKING_DB_URL')
-    #     if not db_url:
-    #         logger.error("Environment variable 'INGEST_TRACKING_DB_URL' not set")
-    #         return
-
-    #     config = {'ingest_tracking_db': db_url}
-
-    #     try:
-    #         if initialize_ingest_tracker(config):
-    #             logger.info("IngestTracker initialized successfully")
-    #         else:
-    #             logger.error("Failed to initialize IngestTracker")
-    #     except Exception as e:
-    #         logger.error(f"Unexpected error during IngestTracker initialization: {e}", exc__info=True)

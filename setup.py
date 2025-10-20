@@ -54,7 +54,7 @@ setup(
         "pyjwt",
         "biomero>=2.0.0-alpha.4",
         "configupdater>=3.2",
-        "omero-adi>=1.0.0b1",
+        "biomero-importer>=1.0.0b5",
     ],
     python_requires=">=3.12",
     include_package_data=True,

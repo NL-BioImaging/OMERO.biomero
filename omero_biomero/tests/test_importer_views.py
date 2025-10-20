@@ -37,10 +37,10 @@ def _ensure_stubs():
         dec.render_response = render_response  # type: ignore[attr-defined]
         sys.modules["omeroweb.webclient.decorators"] = dec
 
-    if "omero_adi.utils.ingest_tracker" not in sys.modules:
-        pkg = types.ModuleType("omero_adi")
-        utils_pkg = types.ModuleType("omero_adi.utils")
-        ing = types.ModuleType("omero_adi.utils.ingest_tracker")
+    if "biomero_importer.utils.ingest_tracker" not in sys.modules:
+        pkg = types.ModuleType("biomero_importer")
+        utils_pkg = types.ModuleType("biomero_importer.utils")
+        ing = types.ModuleType("biomero_importer.utils.ingest_tracker")
 
         def initialize_ingest_tracker(cfg):
             return True
@@ -51,9 +51,9 @@ def _ensure_stubs():
         ing.initialize_ingest_tracker = initialize_ingest_tracker  # type: ignore[attr-defined]
         ing.log_ingestion_step = log_ingestion_step  # type: ignore[attr-defined]
         ing.STAGE_NEW_ORDER = "NEW_ORDER"  # type: ignore[attr-defined]
-        sys.modules["omero_adi"] = pkg
-        sys.modules["omero_adi.utils"] = utils_pkg
-        sys.modules["omero_adi.utils.ingest_tracker"] = ing
+        sys.modules["biomero_importer"] = pkg
+        sys.modules["biomero_importer.utils"] = utils_pkg
+        sys.modules["biomero_importer.utils.ingest_tracker"] = ing
 
 
 def _import_module():
@@ -358,7 +358,7 @@ class ImporterViewsTests(TestCase):
         self.assertEqual(self._post_import(payload).status_code, 500)
         self.assertEqual(created, [])
 
-    def test_create_upload_order_and_initialize_adi(self):
+    def test_create_upload_order_and_initialize_biomero_importer(self):
         # Ensure logging ingestion step increments
         from omero_biomero import importer_views as iv
         # Replace log_ingestion_step used inside importer_views with capturing stub
@@ -376,12 +376,12 @@ class ImporterViewsTests(TestCase):
             "DestinationType": "Dataset",
         })
         self.assertEqual(len(calls), 1)
-        # initialize_adi with env
+        # initialize_biomero_importer with env
         os.environ["INGEST_TRACKING_DB_URL"] = "sqlite:///file.db"
-        iv.initialize_adi()
+        iv.initialize_biomero_importer()
         # remove env and call again to hit early-return branch
         del os.environ["INGEST_TRACKING_DB_URL"]
-        iv.initialize_adi()
+        iv.initialize_biomero_importer()
 
     # group_mappings
     def test_group_mappings_get_empty(self):

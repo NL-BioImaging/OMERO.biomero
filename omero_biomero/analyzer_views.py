@@ -36,14 +36,14 @@ def run_workflow_script(
         current_user = conn.getUser()
         username = current_user.getName()
         
-        # Use group switching approach similar to ADI importer
+        # Use group switching approach similar to BIOMERO.importer
         if active_group_id is not None:
             logger.info(
                 f"Switching to group {active_group_id} for user {username} "
                 f"in workflow {workflow_name}"
             )
             
-            # Use the same approach as ADI: switch to specified group
+            # Use the same approach as BIOMERO.importer: switch to group
             # This ensures OMERO script runs with correct group permissions
             try:
                 # First, try to set the group directly if the user has access

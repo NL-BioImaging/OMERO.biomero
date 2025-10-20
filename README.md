@@ -35,27 +35,21 @@ For development, we use [NL-BIOMERO](https://github.com/Cellular-Imaging-Amsterd
 
 ### Testing
 
-To run tests, create virtual environment, activate it and install dependencies:
+To run tests, create virtual environment, activate it and install the package in editable mode (this automatically pulls all dependencies from setup.py):
 
 ```
 python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e .
 ```
-
-Then you need to install omero-adi from the NL-BIOMERO repository:
-
-```
-pip install -e ../NL-BIOMERO/omeroadi/
-```
-
-(NL-BIOMERO repo must be cloned to the same directory)
 
 Then you can run the tests using:
 
 ```
-python3 manage.py test
+python manage.py test
 ```
+
+**Note**: All dependencies (including `biomero-importer>=1.0.0b5`) are automatically installed from setup.py when you install with `-e .`
 
 ### Setup and development of the plugin frontend
 

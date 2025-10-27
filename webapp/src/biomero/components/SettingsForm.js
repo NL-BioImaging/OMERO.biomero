@@ -440,11 +440,35 @@ const SettingsForm = () => {
         )}
 
         {renderEditableField(
+          "Slurm Converters Path",
+          "SLURM.slurm_converters_path",
+          settingsForm.SLURM.slurm_converters_path,
+          "/data/my-scratch/singularity_images/converters",
+          "The path on SLURM entrypoint for storing converter image files"
+        )}
+
+        {renderEditableField(
           "Slurm Script Path",
           "SLURM.slurm_script_path",
           settingsForm.SLURM.slurm_script_path,
           "/data/my-scratch/slurm-scripts",
           "The path on SLURM entrypoint for storing the slurm job scripts"
+        )}
+
+        {renderEditableField(
+          "Slurm Data Bind Path",
+          "SLURM.slurm_data_bind_path",
+          settingsForm.SLURM.slurm_data_bind_path,
+          "/data/my-scratch/data",
+          "Path to bind to containers via APPTAINER_BINDPATH environment variable. Required when default data folder is not bound to container. Configure this if your HPC administrator tells you to set APPTAINER_BINDPATH."
+        )}
+
+        {renderEditableField(
+          "Slurm Conversion Partition",
+          "SLURM.slurm_conversion_partition",
+          settingsForm.SLURM.slurm_conversion_partition,
+          "cpu-short",
+          "SLURM partition to use for conversion jobs when no default partition is configured on your HPC. Leave empty to use system default."
         )}
         <H6>Repositories</H6>
         <div className="bp5-form-group">
@@ -656,7 +680,7 @@ const SettingsForm = () => {
             "Settings for linking to external data format converters for running on Slurm.",
             "By default, BIOMERO exports images as ZARR to the HPC. But, the workflow you want to execute might require a different filetype. E.g. most of our example workflows require TIFF input files. This is the default for BIAFLOWS.",
             "If you provide nothing, BIOMERO will build a converter on Slurm for you. Instead, you can add converters here to pull those instead. These should be available on DockerHub as a container image. If you don't have singularity build rights on Slurm, you can also use this field instead to pull.",
-            "Please pin it to a specific version to reduce unforeseen errors. Key should be the types 'X_to_Y' and value should be the docker image, for example `zarr_to_tiff=cellularimagingcf/convert_zarr_to_tiff:1.14.0`",
+            "Please pin it to a specific version to reduce unforeseen errors. Key should be the types 'X_to_Y' and value should be the docker image, for example `zarr_to_tiff=cellularimagingcf/convert_zarr_to_tiff:2.0.0-alpha.9`",
           ]}
           errors={errors} // Pass errors to ConfigSection
           validateField={validateField} // Pass validation function to ConfigSection

@@ -263,14 +263,21 @@ const SettingsForm = () => {
   const submitConfig = async () => {
     setLoading(true);
     try {
-      // Ensure no errors before saving converters too
+      // Prepare the config with current converters for saving
+      const configToSave = {
+        ...settingsForm,
+        CONVERTERS: converters, // Use current converters state
+      };
+      
+      // Update the form state for UI consistency (async)
       if (Object.keys(errors).length === 0) {
         setSettingsForm((prev) => ({
           ...prev,
           CONVERTERS: converters,
         }));
       }
-      await saveConfigData(transformSettingsFormToPayload(settingsForm));
+      
+      await saveConfigData(transformSettingsFormToPayload(configToSave));
       setShowSaveTooltip(false); // Hide "Don't forget to save"
       setShowResetTooltip(true); // Show "Reload to apply changes"
     } finally {

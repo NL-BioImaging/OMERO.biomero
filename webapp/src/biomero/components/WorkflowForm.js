@@ -14,23 +14,49 @@ const WorkflowForm = () => {
     return <div>Loading workflow...</div>;
   }
 
+  // Check if workflow expects ZARR format
+  const hasZarrInput = workflowMetadata.inputs?.some(input => 
+    input.type === "image" && 
+    (input.format === "zarr" || input.format === "ome.zarr")
+  );
+
+  // Check if this is a BIAFLOWS workflow (legacy format) 
+  // After normalization, we can detect this from raw_metadata if present
+  const isBiaflowsWorkflow = workflowMetadata.raw_metadata?.inputs?.some(input => 
+    input.id?.startsWith("cytomine") || input.type === "Number"
+  ) || false;
+
+  // Check if workflow expects TIF format
+  const hasTifInput = workflowMetadata.inputs?.some(input => 
+    input.type === "image" && input.format === "tif"
+  );
+
   const defaultValues = workflowMetadata.inputs.reduce((acc, input) => {
     const defaultValue = input["default-value"];
 
-    if (input.type === "Number") {
+    // After normalization, types are consistent: integer, float, boolean, string, image, file
+    if (input.type === "float" || input.type === "integer") {
       acc[input.id] = defaultValue !== undefined ? Number(defaultValue) : 0;
-    } else if (input.type === "Boolean") {
+    } else if (input.type === "boolean") {
       acc[input.id] =
         defaultValue !== undefined ? Boolean(defaultValue) : false;
     } else {
+      // string, image, file all treated as strings
       acc[input.id] = defaultValue || "";
     }
     return acc;
   }, {});
 
   useEffect(() => {
-    updateState({ formData: { ...defaultValues, ...state.formData, version } });
-  }, [state.formData, version]);
+    const initialFormData = { ...defaultValues, ...state.formData, version };
+    
+    // Auto-enable ZARR format if workflow expects it
+    if (hasZarrInput && !state.formData?.useZarrFormat) {
+      initialFormData.useZarrFormat = true;
+    }
+    
+    updateState({ formData: initialFormData });
+  }, [state.formData, version, hasZarrInput]);
 
   const handleInputChange = (id, value) => {
     updateState({
@@ -49,7 +75,7 @@ const WorkflowForm = () => {
         const defaultValue = input["default-value"];
 
         switch (type) {
-          case "String":
+          case "string":
             return (
               <FormGroup
                 key={id}
@@ -65,7 +91,42 @@ const WorkflowForm = () => {
                 />
               </FormGroup>
             );
-          case "Number":
+          case "image":
+            return (
+              <FormGroup
+                key={id}
+                label={name}
+                labelFor={id}
+                helperText={description || ""}
+              >
+                <InputGroup
+                  id={id}
+                  value={state.formData[id] || ""}
+                  onChange={(e) => handleInputChange(id, e.target.value)}
+                  placeholder={defaultValue || `${name} path`}
+                  // TODO: Add image browser/selector component
+                />
+              </FormGroup>
+            );
+          case "file":
+            return (
+              <FormGroup
+                key={id}
+                label={name}
+                labelFor={id}
+                helperText={description || ""}
+              >
+                <InputGroup
+                  id={id}
+                  value={state.formData[id] || ""}
+                  onChange={(e) => handleInputChange(id, e.target.value)}
+                  placeholder={defaultValue || `${name} path`}
+                  // TODO: Add file browser/selector component
+                />
+              </FormGroup>
+            );
+          case "float":
+          case "integer":
             return (
               <FormGroup
                 key={id}
@@ -114,7 +175,7 @@ const WorkflowForm = () => {
                 />
               </FormGroup>
             );
-          case "Boolean":
+          case "boolean":
             return (
               <FormGroup
                 key={id}
@@ -149,13 +210,33 @@ const WorkflowForm = () => {
       <FormGroup
         label="Use ZARR Format (Experimental)"
         labelFor="useZarrFormat"
-        helperText="⚠️ Experimental feature: Skip TIFF conversion and use ZARR format directly. Only use if your workflow supports ZARR input."
+        helperText={
+          hasZarrInput 
+            ? "✅ This workflow expects ZARR format - automatically enabled."
+            : (state.formData?.useZarrFormat && (isBiaflowsWorkflow || hasTifInput))
+              ? "⚠️ WARNING: This workflow expects TIF format. ZARR may not work properly."
+              : "⚠️ Experimental feature: Skip TIFF conversion and use ZARR format directly. Only use if your workflow supports ZARR input."
+        }
+        intent={
+          (state.formData?.useZarrFormat && (isBiaflowsWorkflow || hasTifInput)) 
+            ? "danger" 
+            : hasZarrInput 
+              ? "success" 
+              : "none"
+        }
       >
         <Switch
           id="useZarrFormat"
           checked={state.formData?.useZarrFormat || false}
           onChange={(e) => handleInputChange('useZarrFormat', e.target.checked)}
-          label="Enable ZARR Format"
+          label={hasZarrInput ? "Enable ZARR Format (Auto-detected)" : "Enable ZARR Format"}
+          intent={
+            (state.formData?.useZarrFormat && (isBiaflowsWorkflow || hasTifInput)) 
+              ? "danger" 
+              : hasZarrInput 
+                ? "success" 
+                : "none"
+          }
         />
       </FormGroup>
     </form>

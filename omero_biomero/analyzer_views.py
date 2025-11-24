@@ -2,8 +2,10 @@ import datetime
 import json
 import logging
 
-
-from biomero import SlurmClient
+from biomero import SlurmClient, constants
+from biomero.schema_parsers import (
+    WorkflowDescriptorParser, convert_schema_type_to_omero
+)
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from omeroweb.webclient.decorators import login_required
@@ -137,8 +139,8 @@ def run_workflow_script(
 
         # Convert provided params to OMERO rtypes using wrap
         known_params = [
-            "Data_Type",
-            "IDs",
+            constants.transfer.DATA_TYPE,
+            constants.transfer.IDS,
             "receiveEmail",
             "importAsZip",
             "uploadCsv",
@@ -155,7 +157,7 @@ def run_workflow_script(
             "useZarrFormat",  # EXPERIMENTAL: ZARR format support
         ]
         inputs = {
-            f"{workflow_name}_|_{key}": wrap(value)
+            f"{workflow_name}_|_{key}": value
             for key, value in params.items()
             if key not in known_params
         }
@@ -163,21 +165,21 @@ def run_workflow_script(
             {
                 workflow_name: rbool(True),
                 f"{workflow_name}_Version": wrap(version),
-                "IDs": wrap([rlong(i) for i in input_ids]),
-                "Data_Type": wrap(data_type),
-                "E-mail": rbool(out_email),
+                constants.transfer.IDS: wrap([rlong(i) for i in input_ids]),
+                constants.transfer.DATA_TYPE: wrap(data_type),
+                constants.workflow.EMAIL: rbool(out_email),
                 "Use_ZARR_Format": rbool(use_zarr),  # EXPERIMENTAL
-                "Select how to import your results (one or more)": rbool(True),
-                "1) Zip attachment to parent": rbool(import_zp),
-                "2) Attach to original images": rbool(attach_og),
-                "3a) Import into NEW Dataset": (
-                    wrap(output_ds[0]) if output_ds else wrap("--NO THANK YOU--")
+                constants.workflow.SELECT_IMPORT: rbool(True),
+                constants.workflow.OUTPUT_PARENT: rbool(import_zp),
+                constants.workflow.OUTPUT_ATTACH: rbool(attach_og),
+                constants.workflow.OUTPUT_NEW_DATASET: (
+                    wrap(output_ds[0]) if output_ds else wrap(constants.workflow.NO)
                 ),
-                "3b) Allow duplicate dataset (name)?": rbool(False),
-                "3c) Rename the imported images": (
-                    wrap(rename_pt) if rename_pt else wrap("--NO THANK YOU--")
+                constants.workflow.OUTPUT_DUPLICATES: rbool(False),
+                constants.workflow.OUTPUT_RENAME: (
+                    wrap(rename_pt) if rename_pt else wrap(constants.workflow.NO)
                 ),
-                "4) Upload result CSVs as OMERO tables": rbool(uploadcsv),
+                constants.workflow.OUTPUT_CSV_TABLE: rbool(uploadcsv),
             }
         )
         logger.debug(inputs)
@@ -239,9 +241,8 @@ def list_workflows(request, conn=None, **kwargs):
 def get_workflow_metadata(request, conn=None, **kwargs):
     """
     Get metadata for a specific workflow.
-    Also includes the GitHub repository URL for the workflow.
+    Returns normalized biomero-schema format using WorkflowDescriptorParser.
     """
-    # workflow_name = request.GET.get("workflow", None)
     workflow_name = kwargs.get("name")
     if not workflow_name:
         return JsonResponse({"error": "Workflow name is required"}, status=400)
@@ -253,11 +254,36 @@ def get_workflow_metadata(request, conn=None, **kwargs):
                     {"error": "Workflow not found"}, status=404
                 )
 
-            metadata = sc.pull_descriptor_from_github(workflow_name)
+            # Get raw descriptor from GitHub
+            raw_metadata = sc.pull_descriptor_from_github(workflow_name)
             github_url = sc.slurm_model_repos.get(workflow_name)
-    # Keep description/inputs at top-level for backward compatibility
-        enriched = {**metadata, "name": workflow_name, "githubUrl": github_url}
-        return JsonResponse(enriched)
+            
+            # Parse and normalize using WorkflowDescriptorParser
+            try:
+                normalized_schema = WorkflowDescriptorParser.parse_descriptor(raw_metadata)
+                
+                # Convert Pydantic model to dict for JSON response
+                normalized_dict = normalized_schema.model_dump(by_alias=True)
+                
+                # Add OMERO.biomero specific metadata
+                enriched = {
+                    **normalized_dict,
+                    "name": workflow_name,
+                    "githubUrl": github_url,
+                    # Keep raw metadata for backward compatibility if needed
+                    "raw_metadata": raw_metadata
+                }
+                
+                return JsonResponse(enriched)
+                
+            except ValueError as parse_error:
+                logger.error(
+                    f"Failed to parse descriptor for workflow {workflow_name}: {parse_error}"
+                )
+                # Fallback to raw metadata if parsing fails
+                enriched = {**raw_metadata, "name": workflow_name, "githubUrl": github_url}
+                return JsonResponse(enriched)
+                
     except Exception as e:
         logger.error(
             f"Error fetching metadata for workflow {workflow_name}: {str(e)}"
@@ -327,9 +353,8 @@ def get_workflows(request, conn=None, **kwargs):
 
 def prepare_workflow_parameters(workflow_name, params):
     """
-    Apply BIOMERO's exact type conversion logic to ensure correct parameter
-    types.
-    This reuses the same logic that BIOMERO uses in convert_cytype_to_omtype.
+    Apply BIOMERO's schema-based type conversion logic using the shared
+    convert_schema_value_to_python function for consistency with OMERO scripts.
     """
     try:
         # Get the workflow descriptor using SlurmClient
@@ -340,26 +365,85 @@ def prepare_workflow_parameters(workflow_name, params):
                 )
                 return params
 
-            metadata = sc.pull_descriptor_from_github(workflow_name)
+            # Get raw descriptor and normalize it using WorkflowDescriptorParser
+            raw_metadata = sc.pull_descriptor_from_github(workflow_name)
+            try:
+                normalized_schema = WorkflowDescriptorParser.parse_descriptor(
+                    raw_metadata
+                )
+            except ValueError as parse_error:
+                logger.warning(
+                    f"Could not parse descriptor for {workflow_name}: {parse_error}"
+                )
+                # Fall back to old logic if parsing fails
+                return _prepare_workflow_parameters_legacy(
+                    workflow_name, params, raw_metadata
+                )
+                
     except Exception as e:
         logger.warning(
             f"Could not fetch workflow metadata for {workflow_name}: {e}"
         )
         return params
 
-    # Create a lookup for parameter types based on default values
-    # This replicates the exact logic from convert_cytype_to_omtype
-    param_type_map = {}
-    for input_param in metadata.get("inputs", []):
-        if input_param.get("type") == "Number":
-            param_id = input_param["id"]
-            default_val = input_param.get("default-value")
+    # Convert params using the same logic as OMERO scripts
+    converted_params = {}
+    for key, value in params.items():
+        # Find the parameter in the normalized schema
+        param_schema = None
+        for input_param in normalized_schema.inputs:
+            if input_param.id == key:
+                param_schema = input_param
+                break
+                
+        if param_schema:
+            try:
+                # Schema-aware conversion: use schema type, not string parsing
+                # This function handles both conversion AND wrapping
+                converted_params[key] = convert_schema_type_to_omero(
+                    param_schema.type,
+                    getattr(param_schema, 'default_value', None),
+                    value,
+                    rtype=True
+                )
+                        
+                logger.info(
+                    f"Schema-aware conversion {key}: '{value}' -> "
+                    f"wrapped {param_schema.type} rtype"
+                )
+            except (ValueError, TypeError) as convert_error:
+                logger.warning(
+                    f"Could not convert {key}={value}: {convert_error}, "
+                    "using string"
+                )
+                converted_params[key] = wrap(str(value))
+        else:
+            # No schema found, wrap as string
+            converted_params[key] = wrap(str(value))
 
+    return converted_params
+
+
+def _prepare_workflow_parameters_legacy(workflow_name, params, raw_metadata):
+    """
+    Legacy parameter conversion for backward compatibility.
+    Used when WorkflowDescriptorParser fails to parse the descriptor.
+    """
+    param_type_map = {}
+    for input_param in raw_metadata.get("inputs", []):
+        param_type = input_param.get("type")
+        param_id = input_param["id"]
+        
+        if param_type == "Number":
+            default_val = input_param.get("default-value")
             # BIOMERO rule: isinstance(default, float) determines the type
             if isinstance(default_val, float):
                 param_type_map[param_id] = "float"
             else:
                 param_type_map[param_id] = "int"
+        elif param_type in ["image", "file"]:
+            # Handle biomero-schema format types - map to string
+            param_type_map[param_id] = "str"
 
     # Convert params to correct types
     converted_params = {}

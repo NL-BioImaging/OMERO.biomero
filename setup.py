@@ -52,7 +52,7 @@ setup(
     install_requires=[
         "omero-web>=5.6.0",
         "pyjwt",
-        "biomero>=2.0.0-alpha.4",
+        "biomero @ git+https://github.com/NL-BioImaging/biomero@biomero_schema",
         "configupdater>=3.2",
         "biomero-importer>=1.0.0b5",
     ],

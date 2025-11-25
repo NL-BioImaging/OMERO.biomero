@@ -81,9 +81,6 @@ def run_workflow_script(
                 f"using current group {current_group}"
             )
 
-        # Apply BIOMERO's type conversion logic
-        params = prepare_workflow_parameters(workflow_name, params)
-
         # Verify group context before running script
         current_context = conn.getEventContext()
         current_group_id = current_context.groupId
@@ -137,7 +134,7 @@ def run_workflow_script(
         # EXPERIMENTAL: ZARR format support
         use_zarr = params.get("useZarrFormat", False)
 
-        # Convert provided params to OMERO rtypes using wrap
+        # Apply BIOMERO's type conversion logic to workflow-specific parameters only
         known_params = [
             constants.transfer.DATA_TYPE,
             constants.transfer.IDS,
@@ -156,10 +153,22 @@ def run_workflow_script(
             "version",
             "useZarrFormat",  # EXPERIMENTAL: ZARR format support
         ]
+        
+        # Extract workflow-specific parameters for conversion
+        workflow_params = {
+            key: value for key, value in params.items()
+            if key not in known_params
+        }
+        
+        # Convert workflow parameters using schema-aware conversion
+        converted_workflow_params = prepare_workflow_parameters(
+            workflow_name, workflow_params
+        )
+        
+        # Build inputs dictionary with converted workflow parameters
         inputs = {
             f"{workflow_name}_|_{key}": value
-            for key, value in params.items()
-            if key not in known_params
+            for key, value in converted_workflow_params.items()
         }
         inputs.update(
             {
@@ -349,6 +358,114 @@ def get_workflows(request, conn=None, **kwargs):
         "script_menu": script_menu_data,
         "error_logs": error_logs,
     })
+
+
+@login_required()
+@require_http_methods(["GET"])
+def get_file_attachments(request, conn=None, **kwargs):
+    """
+    Get accessible file attachments, filtered by format and permissions.
+    Supports search and format filtering for workflow file parameters.
+    """
+    try:
+        # Get query parameters
+        search_query = request.GET.get('search', '').strip().lower()
+        allowed_formats = request.GET.get('formats', '').split(',')
+        allowed_formats = [f.strip() for f in allowed_formats if f.strip()]
+        
+        # Get all accessible projects and datasets for the user
+        projects = conn.listProjects()
+        all_attachments = []
+        
+        # Helper function to check if file matches format filter
+        def matches_format(filename, formats):
+            if not formats:
+                return True
+            file_ext = filename.lower().split('.')[-1] if '.' in filename else ''
+            return any(fmt.lower() in [file_ext, filename.lower()] for fmt in formats)
+        
+        # Helper function to check if file matches search query
+        def matches_search(filename, query):
+            if not query:
+                return True
+            return query in filename.lower()
+        
+        # Collect file attachments from projects
+        for project in projects:
+            project_data = {
+                'id': project.getId(),
+                'name': project.getName(),
+                'type': 'project',
+                'children': []
+            }
+            
+            # Get project-level file annotations
+            project_files = []
+            for ann in project.listAnnotations():
+                if hasattr(ann, 'getFile') and ann.getFile():
+                    file_obj = ann.getFile()
+                    filename = file_obj.getName()
+                    
+                    if matches_format(filename, allowed_formats) and matches_search(filename, search_query):
+                        project_files.append({
+                            'id': f"project-{project.getId()}-file-{file_obj.getId()}",
+                            'name': filename,
+                            'type': 'file',
+                            'file_id': file_obj.getId(),
+                            'size': file_obj.getSize(),
+                            'mimetype': file_obj.getMimetype() or 'application/octet-stream',
+                            'path': f"/omero/file/{file_obj.getId()}/{filename}",
+                            'parent': f"Project: {project.getName()}",
+                            'annotation_id': ann.getId()
+                        })
+            
+            # Get datasets and their files
+            for dataset in project.listChildren():
+                dataset_files = []
+                for ann in dataset.listAnnotations():
+                    if hasattr(ann, 'getFile') and ann.getFile():
+                        file_obj = ann.getFile()
+                        filename = file_obj.getName()
+                        
+                        if matches_format(filename, allowed_formats) and matches_search(filename, search_query):
+                            dataset_files.append({
+                                'id': f"dataset-{dataset.getId()}-file-{file_obj.getId()}",
+                                'name': filename,
+                                'type': 'file',
+                                'file_id': file_obj.getId(),
+                                'size': file_obj.getSize(),
+                                'mimetype': file_obj.getMimetype() or 'application/octet-stream',
+                                'path': f"/omero/file/{file_obj.getId()}/{filename}",
+                                'parent': f"Dataset: {dataset.getName()}",
+                                'annotation_id': ann.getId()
+                            })
+                
+                if dataset_files:
+                    project_data['children'].append({
+                        'id': dataset.getId(),
+                        'name': dataset.getName(),
+                        'type': 'dataset',
+                        'children': dataset_files
+                    })
+            
+            # Add project files to project data
+            if project_files:
+                project_data['children'].extend(project_files)
+            
+            # Only include project if it has matching files
+            if project_data['children']:
+                all_attachments.append(project_data)
+        
+        return JsonResponse({
+            'file_tree': all_attachments,
+            'total_files': sum(len(p.get('children', [])) for p in all_attachments),
+            'search_query': search_query,
+            'allowed_formats': allowed_formats
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching file attachments: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 def prepare_workflow_parameters(workflow_name, params):

@@ -18,6 +18,7 @@ import {
   createContainer,
   fetchGroupMappings,
   postGroupMappings,
+  fetchFileAttachments,
 } from "./apiService";
 import { getDjangoConstants } from "./constants";
 import { transformStructure, extractGroups } from "./utils";
@@ -41,6 +42,8 @@ export const AppProvider = ({ children }) => {
     localFileTreeData: null,
     omeroFileTreeSelection: [],
     localFileTreeSelection: [],
+    fileAttachmentTreeData: null,
+    fileAttachmentTreeSelection: [],
     groupFolderMappings: {},
   });
   const [apiLoading, setLoading] = useState(false);
@@ -382,6 +385,48 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const loadFileAttachmentTreeData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetchFileAttachments({});
+      const fileTree = response.file_tree || [];
+      
+      // Transform to FileTree format like omero data
+      const transformedData = {};
+      
+      // Create root node
+      transformedData["root"] = {
+        index: "root",
+        isFolder: true,
+        children: fileTree.map(project => `project-${project.id}`),
+        data: "File Attachments",
+        childCount: fileTree.length,
+        source: "file_attachment",
+      };
+      
+      // Create project nodes
+      fileTree.forEach(project => {
+        transformedData[`project-${project.id}`] = {
+          id: project.id,
+          index: `project-${project.id}`,
+          category: "projects",
+          isFolder: true,
+          children: [], // Will be loaded on expansion
+          data: project.name,
+          childCount: project.children?.length || 0,
+          source: "file_attachment",
+        };
+      });
+
+      updateState({ fileAttachmentTreeData: transformedData });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadFolderData = async (item = null) => {
     setLoading(true);
     setError(null);
@@ -616,6 +661,7 @@ export const AppProvider = ({ children }) => {
         state,
         updateState,
         loadOmeroTreeData,
+        loadFileAttachmentTreeData,
         loadFolderData,
         loadGroups,
         loadScripts,

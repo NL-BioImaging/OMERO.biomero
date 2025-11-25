@@ -355,3 +355,19 @@ export const fetchPlateImages = async (plateId) => {
 
   return allImages;
 };
+
+// File attachment API calls
+export const fetchFileAttachments = async (options = {}) => {
+  const params = {
+    search: options.search || '',
+    formats: options.allowedFormats?.join(',') || '',
+    _: new Date().getTime(),
+  };
+  
+  return apiRequest(
+    '/omero_biomero/api/analyzer/file-attachments/', 
+    'GET', 
+    null, 
+    { params }
+  );
+};

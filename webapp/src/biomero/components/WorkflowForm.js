@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { FormGroup, InputGroup, NumericInput, Switch } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
+import FilePicker from "./FilePicker";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
@@ -48,15 +49,20 @@ const WorkflowForm = () => {
   }, {});
 
   useEffect(() => {
-    const initialFormData = { ...defaultValues, ...state.formData, version };
-    
-    // Auto-enable ZARR format if workflow expects it
-    if (hasZarrInput && !state.formData?.useZarrFormat) {
-      initialFormData.useZarrFormat = true;
+    // Only initialize form data when workflow changes, not on every formData update
+    if (!state.formData || Object.keys(state.formData).length === 0 || 
+        !state.formData.version || state.formData.version !== version) {
+      
+      const initialFormData = { ...defaultValues, version };
+      
+      // Auto-enable ZARR format if workflow expects it
+      if (hasZarrInput) {
+        initialFormData.useZarrFormat = true;
+      }
+      
+      updateState({ formData: initialFormData });
     }
-    
-    updateState({ formData: initialFormData });
-  }, [state.formData, version, hasZarrInput]);
+  }, [workflowMetadata?.workflow, version]); // Only re-run when workflow or version changes
 
   const handleInputChange = (id, value) => {
     updateState({
@@ -110,20 +116,16 @@ const WorkflowForm = () => {
             );
           case "file":
             return (
-              <FormGroup
+              <FilePicker
                 key={id}
+                id={id}
                 label={name}
-                labelFor={id}
+                value={state.formData[id] || ""}
+                onChange={(value) => handleInputChange(id, value)}
+                allowedFormats={input.format ? [input.format] : []}
+                placeholder={defaultValue || `${name} path`}
                 helperText={description || ""}
-              >
-                <InputGroup
-                  id={id}
-                  value={state.formData[id] || ""}
-                  onChange={(e) => handleInputChange(id, e.target.value)}
-                  placeholder={defaultValue || `${name} path`}
-                  // TODO: Add file browser/selector component
-                />
-              </FormGroup>
+              />
             );
           case "float":
           case "integer":

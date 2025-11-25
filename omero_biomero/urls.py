@@ -45,6 +45,11 @@ urlpatterns = [
         analyzer_views.get_workflows,  # GET: legacy script info for menu
         name="analyzer_scripts_list",
     ),
+    path(
+        "api/analyzer/file-attachments/",
+        analyzer_views.get_file_attachments,  # GET: file attachments for workflow params
+        name="analyzer_file_attachments",
+    ),
     # Main Biomero URL
     path(
         "biomero/",

@@ -332,7 +332,7 @@ const ImporterApp = () => {
     if (!isScreen && activeTab === "ImportScreens") {
       // Show toast if the user tries to select something else
       toaster.show({
-        message: "You can only select a screen as upload destination",
+        message: "You can only select a screen as import destination",
         intent: "warning",
       });
       return;
@@ -341,7 +341,7 @@ const ImporterApp = () => {
       if (!isDataset && activeTab === "ImportImages") {
         // Show toast if the user tries to select something else
         toaster.show({
-          message: "You can only select a dataset as upload destination",
+          message: "You can only select a dataset as import destination",
           intent: "warning",
         });
         return;
@@ -622,7 +622,7 @@ const ImporterApp = () => {
                 {localFileTreeTitle}
               </h1>
               <Tooltip
-                content={disableAddFilesButton ? "Select destination in omero and files first" : "Add selected files to upload list"}
+                content={disableAddFilesButton ? "Select destination in omero and files first" : "Add selected files to import list"}
                 placement="bottom"
                 usePortal={false}
                 className="text-md"
@@ -634,7 +634,7 @@ const ImporterApp = () => {
                   intent="success"
                   loading={uploading}
                 >
-                  Add to upload list
+                  Add to import list
                 </Button>
               </Tooltip>
             </div>
@@ -704,7 +704,7 @@ const ImporterApp = () => {
           <Card className="ml-12">
             <span className="text-base">{`${uploadList.length} file${
               uploadList.length > 1 || uploadList.length === 0 ? "s" : ""
-            } selected for upload`}</span>
+            } selected for import`}</span>
           </Card>
           <Icon icon="circle-arrow-right" size={24} color="grey" />
           <Card>
@@ -724,7 +724,7 @@ const ImporterApp = () => {
             large={true}
             className="mr-12"
           >
-            Add to upload queue
+            Add to import queue
           </Button>
         </div>
       </div>

@@ -391,7 +391,7 @@ def group_mappings(request, conn=None, **kwargs):
                 json.dump(existing, f, indent=2)
         except Exception as e:
             logger.error("Failed writing group mappings: %s", e)
-            return JsonResponse({"error": "Failed to save mappings"}, status=500)
+            return JsonResponse({"error": f"Failed to save mappings, {e}"}, status=500)
 
         logger.info("Group mappings updated by %s (ID: %s)", username, user_id)
         return JsonResponse({"message": "Mappings saved successfully"})

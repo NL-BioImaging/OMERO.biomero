@@ -9,10 +9,18 @@ export const apiRequest = async (
   options = {}
 ) => {
   try {
+    // Include CSRF token for methods that modify data
+    const csrfToken = window.csrftoken;
+    const headers = options.headers || {};
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) && csrfToken) {
+      headers["X-CSRFToken"] = csrfToken;
+    }
+
     const response = await axios({
       url: `${window.location.origin}${endpoint}`,
       method,
       data,
+      headers,
       ...options,
     });
     return response.data;
@@ -354,4 +362,19 @@ export const fetchPlateImages = async (plateId) => {
   }
 
   return allImages;
+};
+
+export const importUploadedFile = async (
+  filename,
+  datasetId,
+  datasetType,
+  group
+) => {
+  const { urls } = getDjangoConstants();
+  return apiRequest(urls.api_import_uploaded_file, "POST", {
+    filename,
+    datasetId,
+    datasetType,
+    group,
+  });
 };

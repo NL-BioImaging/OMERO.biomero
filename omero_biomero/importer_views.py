@@ -22,6 +22,7 @@ from .settings import (
     BASE_DIR,
     PREPROCESSING_CONFIG,
     CONFIG_FILE_PATH,
+    TUS_DESTINATION_DIR,
 )
 from .utils import build_extra_params
 
@@ -537,3 +538,72 @@ def process_files(selected_items, selected_destinations, group, username):
 def create_upload_order(order_dict):
     # Log the new order using the original attributes.
     log_ingestion_step(order_dict, STAGE_NEW_ORDER)
+
+
+@login_required()
+@require_http_methods(["POST"])
+def import_uploaded_file(request, conn=None, **kwargs):
+    """
+    Trigger import for a file uploaded via TUS.
+    """
+    initialize_biomero_importer()
+
+    try:
+        data = json.loads(request.body)
+        filename = data.get("filename")
+        dataset_id = data.get("datasetId")
+        dataset_type = data.get("datasetType", "Dataset")
+        selected_group = data.get("group")
+
+        if not filename:
+            return JsonResponse({"error": "No filename provided"}, status=400)
+        if not dataset_id:
+            return JsonResponse({"error": "No dataset ID provided"}, status=400)
+
+        # Construct full path to the uploaded file
+        file_path = os.path.join(TUS_DESTINATION_DIR, filename)
+
+        if not os.path.exists(file_path):
+            return JsonResponse({"error": f"File not found: {filename}"}, status=404)
+
+        # Get user info
+        current_user = conn.getUser()
+        username = current_user.getName()
+
+        # Validate group if provided, else use current context
+        if selected_group:
+            available_groups = [g.getName() for g in conn.getGroupsMemberOf()]
+            if selected_group not in available_groups:
+                return JsonResponse(
+                    {"error": f"User is not a member of group: {selected_group}"},
+                    status=403,
+                )
+        else:
+            selected_group = conn.getGroupFromContext().getName()
+
+        # Log the import attempt
+        logger.info(
+            f"User {username} (ID: {current_user.getId()}, group: {selected_group}) "
+            f"attempting to import uploaded file {filename}"
+        )
+
+        # Prepare arguments for process_files
+        # We pass the absolute path. process_files uses os.path.join(BASE_DIR, path),
+        # but os.path.join handles absolute paths correctly (ignoring BASE_DIR).
+        selected_items = [file_path]
+        selected_destinations = [[dataset_type, dataset_id]]
+
+        process_files(selected_items, selected_destinations, selected_group, username)
+
+        return JsonResponse(
+            {
+                "status": "success",
+                "message": f"Successfully queued {filename} for import",
+            }
+        )
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+    except Exception as e:
+        logger.error(f"Import uploaded file error: {str(e)}")
+        return JsonResponse({"error": str(e)}, status=500)

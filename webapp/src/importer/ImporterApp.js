@@ -4,6 +4,8 @@ import FileBrowser from "./components/FileBrowser";
 import OmeroDataBrowser from "../shared/components/OmeroDataBrowser";
 import GroupSelect from "../shared/components/GroupSelect";
 import AdminPanel from "./components/AdminPanel";
+import ResumableUploader from "./components/ResumableUploader";
+import { fetchConfig } from "../apiService";
 import {
   Tabs,
   Tab,
@@ -130,6 +132,23 @@ const ImporterApp = () => {
   });
   const [uploadList, setUploadList] = useState([]);
   const [areUploadItemsSelected, setAreUploadItemsSelected] = useState(false);
+  const [useUploader, setUseUploader] = useState(true);
+
+  useEffect(() => {
+    fetchConfig()
+      .then((data) => {
+        if (
+          data &&
+          data.config &&
+          data.config.UPLOADER &&
+          (data.config.UPLOADER.enabled === "True" ||
+            data.config.UPLOADER.enabled === true)
+        ) {
+          setUseUploader(true);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch config", err));
+  }, []);
 
   const getCurrentGroupFolder = () => {
     const activeGroupId = state.user.active_group_id;
@@ -538,6 +557,118 @@ const ImporterApp = () => {
     const localFileTreeTitle = `2. Select ${mode}s to import`;
 
     const disableAddFilesButton = state.localFileTreeSelection.length === 0 || state.omeroFileTreeSelection.length === 0
+
+    if (useUploader) {
+      let datasetId = null;
+      let datasetType = null;
+      if (state.omeroFileTreeSelection.length > 0) {
+        const selectedNode = state.omeroFileTreeSelection[0];
+        const parts = selectedNode.split("-");
+        if (parts.length === 2) {
+          datasetType = parts[0];
+          datasetId = parts[1];
+        }
+      }
+
+      if (datasetType) {
+        datasetType =
+          datasetType.charAt(0).toUpperCase() + datasetType.slice(1);
+      }
+
+      const groupName = state.user.groups.find(
+        (g) => g.id === state.user.active_group_id
+      )?.name;
+
+      return (
+        <div className="h-full flex space-x-4">
+          <div className="w-1/4 overflow-auto pt-2">
+            <div className="flex items-center">
+              <h1 className="text-base font-bold p-0 m-0">
+                {omeroFileTreeTitle}
+              </h1>
+              <Tooltip
+                content="Create new dataset"
+                placement="bottom"
+                usePortal={false}
+                className="text-md"
+              >
+                <Icon
+                  icon="folder-new"
+                  onClick={() => {
+                    openCreateContainerOverlay(true, "dataset");
+                  }}
+                  disabled={false}
+                  tooltip="Create new dataset"
+                  color="#99b882"
+                  className="cursor-pointer ml-3"
+                  size={20}
+                />
+              </Tooltip>
+              <Tooltip
+                content="Create new project"
+                placement="bottom"
+                usePortal={false}
+                className="text-md"
+              >
+                <Icon
+                  icon="folder-new"
+                  onClick={() => {
+                    openCreateContainerOverlay(true, "project");
+                  }}
+                  disabled={false}
+                  color="#76899e"
+                  className="cursor-pointer ml-3"
+                  size={20}
+                />
+              </Tooltip>
+              <Tooltip
+                content="Create new screen"
+                placement="bottom"
+                usePortal={false}
+                className="text-md"
+              >
+                <Icon
+                  icon="folder-new"
+                  onClick={() => {
+                    openCreateContainerOverlay(true, "screen");
+                  }}
+                  disabled={false}
+                  color="#393939"
+                  className="cursor-pointer ml-3"
+                  size={20}
+                />
+              </Tooltip>
+            </div>
+            {state.omeroFileTreeData && (
+              <div className="mt-4 max-h-[calc(100vh-450px)] overflow-auto">
+                <OmeroDataBrowser
+                  onSelectCallback={(nodeData, coords, e, deselect = false) =>
+                    handleFileTreeSelection(
+                      nodeData,
+                      coords,
+                      e,
+                      "omero",
+                      deselect
+                    )
+                  }
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="w-3/4 pt-2">
+            <h1 className="text-base font-bold p-0 m-0 mb-4">
+              2. Upload Files
+            </h1>
+            <ResumableUploader
+              datasetId={datasetId}
+              datasetType={datasetType}
+              group={groupName}
+            />
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="h-full">

@@ -1,5 +1,6 @@
 from django.urls import path
 from . import biomero_views, importer_views, admin_views, analyzer_views
+from .tus_views import TusUploadView
 
 urlpatterns = [
     # Importer URLs
@@ -7,6 +8,11 @@ urlpatterns = [
         "api/importer/import_selected/",
         importer_views.import_selected,
         name="import_selected",
+    ),
+    path(
+        "api/importer/import_uploaded_file/",
+        importer_views.import_uploaded_file,
+        name="import_uploaded_file",
     ),
     path(
         "api/importer/group_mappings/",
@@ -18,6 +24,9 @@ urlpatterns = [
         importer_views.get_folder_contents,
         name="get_folder_contents",
     ),
+    # TUS Upload URLs (custom implementation)
+    path("upload/", TusUploadView.as_view(), name="tus_upload"),
+    path("upload/<uuid:resource_id>", TusUploadView.as_view(), name="tus_upload_chunks"),
     # Admin URLs
     path(
         "api/biomero/admin/config/",

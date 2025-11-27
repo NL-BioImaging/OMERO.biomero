@@ -22,12 +22,11 @@ const ResumableUploader = ({ datasetId, datasetType, group }) => {
         maxNumberOfFiles: null,
         minNumberOfFiles: 1,
       },
-    })
-      .use(Tus, {
-        endpoint: "/omero_biomero/upload/",
-        chunkSize: 5 * 1024 * 1024, // 5MB
-        retryDelays: [0, 1000, 3000, 5000],
-      });
+    }).use(Tus, {
+      endpoint: "/omero_biomero/upload/",
+      chunkSize: 2 * 1024 * 1024, // 2MB - smaller to avoid Django request size limits
+      retryDelays: [0, 1000, 3000, 5000],
+    });
 
     uppyRef.current = uppyInstance;
     setIsReady(true);

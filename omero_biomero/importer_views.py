@@ -545,6 +545,9 @@ def create_upload_order(order_dict):
 def import_uploaded_file(request, conn=None, **kwargs):
     """
     Trigger import for a file uploaded via TUS.
+
+    Files are stored in per-user subdirectories under TUS_DESTINATION_DIR:
+    TUS_DESTINATION_DIR/user_{user_id}/{filename}
     """
     initialize_biomero_importer()
 
@@ -560,15 +563,28 @@ def import_uploaded_file(request, conn=None, **kwargs):
         if not dataset_id:
             return JsonResponse({"error": "No dataset ID provided"}, status=400)
 
-        # Construct full path to the uploaded file
-        file_path = os.path.join(TUS_DESTINATION_DIR, filename)
-
-        if not os.path.exists(file_path):
-            return JsonResponse({"error": f"File not found: {filename}"}, status=404)
-
         # Get user info
         current_user = conn.getUser()
+        user_id = current_user.getId()
         username = current_user.getName()
+
+        # Construct full path to the uploaded file (in user-specific subdirectory)
+        user_dest_dir = os.path.join(TUS_DESTINATION_DIR, f"user_{user_id}")
+        file_path = os.path.join(user_dest_dir, filename)
+
+        if not os.path.exists(file_path):
+            # Try legacy path (without user subdirectory) for backwards compatibility
+            legacy_path = os.path.join(TUS_DESTINATION_DIR, filename)
+            if os.path.exists(legacy_path):
+                file_path = legacy_path
+                logger.warning(
+                    f"Using legacy path for {filename}. "
+                    "Consider migrating to per-user directories."
+                )
+            else:
+                return JsonResponse(
+                    {"error": f"File not found: {filename}"}, status=404
+                )
 
         # Validate group if provided, else use current context
         if selected_group:
@@ -578,8 +594,48 @@ def import_uploaded_file(request, conn=None, **kwargs):
                     {"error": f"User is not a member of group: {selected_group}"},
                     status=403,
                 )
+            # Switch to the selected group context
+            group_id = None
+            for g in conn.getGroupsMemberOf():
+                if g.getName() == selected_group:
+                    group_id = g.getId()
+                    break
+            if group_id:
+                conn.setGroupForSession(group_id)
         else:
             selected_group = conn.getGroupFromContext().getName()
+
+        # Verify user has write access to the target dataset
+        if dataset_type == "Dataset":
+            dataset = conn.getObject("Dataset", dataset_id)
+            if dataset is None:
+                return JsonResponse(
+                    {"error": f"Dataset {dataset_id} not found or not accessible"},
+                    status=404,
+                )
+            # Check if user can link (add images) to this dataset
+            if not dataset.canLink():
+                return JsonResponse(
+                    {
+                        "error": f"You do not have permission to import to dataset {dataset_id}"
+                    },
+                    status=403,
+                )
+        elif dataset_type == "Project":
+            project = conn.getObject("Project", dataset_id)
+            if project is None:
+                return JsonResponse(
+                    {"error": f"Project {dataset_id} not found or not accessible"},
+                    status=404,
+                )
+            # Check if user can link (add datasets) to this project
+            if not project.canLink():
+                return JsonResponse(
+                    {
+                        "error": f"You do not have permission to import to project {dataset_id}"
+                    },
+                    status=403,
+                )
 
         # Log the import attempt
         logger.info(

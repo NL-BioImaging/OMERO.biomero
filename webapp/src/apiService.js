@@ -12,7 +12,10 @@ export const apiRequest = async (
     // Include CSRF token for methods that modify data
     const csrfToken = window.csrftoken;
     const headers = options.headers || {};
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) && csrfToken) {
+    if (
+      ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) &&
+      csrfToken
+    ) {
       headers["X-CSRFToken"] = csrfToken;
     }
 
@@ -183,9 +186,9 @@ export const runWorkflow = async (workflowName, params = {}) => {
     const csrfToken = window.csrftoken;
 
     // Prepare the payload with script_name and optional params
-  const payload = { workflow_name: workflowName, params };
-  const endpoint = `${urls.api_run_workflow}${workflowName}/jobs/`;
-  const response = await apiRequest(endpoint, "POST", payload, {
+    const payload = { workflow_name: workflowName, params };
+    const endpoint = `${urls.api_run_workflow}${workflowName}/jobs/`;
+    const response = await apiRequest(endpoint, "POST", payload, {
       headers: {
         "X-CSRFToken": csrfToken, // Include CSRF token in request headers
       },
@@ -371,6 +374,12 @@ export const importUploadedFile = async (
   group
 ) => {
   const { urls } = getDjangoConstants();
+  console.log("importUploadedFile calling:", urls.api_import_uploaded_file, {
+    filename,
+    datasetId,
+    datasetType,
+    group,
+  });
   return apiRequest(urls.api_import_uploaded_file, "POST", {
     filename,
     datasetId,

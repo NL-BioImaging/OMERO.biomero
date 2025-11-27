@@ -283,7 +283,9 @@ SUPPORTED_FILE_EXTENSIONS = [
 # Directory where intermediate chunks are stored
 TUS_UPLOAD_DIR = os.getenv("TUS_UPLOAD_DIR", os.path.join(BASE_DIR, "tus_upload"))
 # Directory where the final file is assembled
-TUS_DESTINATION_DIR = os.getenv("TUS_DESTINATION_DIR", os.path.join(BASE_DIR, "tus_destination"))
+TUS_DESTINATION_DIR = os.getenv(
+    "TUS_DESTINATION_DIR", os.path.join(BASE_DIR, "tus_destination")
+)
 # How to name the file if it already exists
 TUS_FILE_NAME_FORMAT = "increment"
 # What to do if the file exists (we use error to let the uploader handle it or increment to avoid overwrite)

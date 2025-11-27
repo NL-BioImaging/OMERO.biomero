@@ -272,11 +272,10 @@ class TusUploadView(View):
 
         try:
             with open(chunk_path, "ab") as f:
-                # Stream from request in smaller pieces to avoid memory issues
-                # request.read() with a size argument streams the data
+                # Stream from request in larger pieces for better throughput
+                # 1MB buffer balances memory usage with I/O efficiency
                 while True:
-                    # Read in 64KB chunks from the incoming stream
-                    piece = request.read(64 * 1024)
+                    piece = request.read(1024 * 1024)  # 1MB read buffer
                     if not piece:
                         break
                     f.write(piece)
@@ -288,11 +287,6 @@ class TusUploadView(View):
         new_offset = meta["offset"] + bytes_written
         meta["offset"] = new_offset
         save_metadata(resource_id, meta)
-
-        logger.debug(
-            f"TUS upload {resource_id}: received {bytes_written} bytes, "
-            f"offset now {new_offset}/{meta['length']}"
-        )
 
         # Check if upload is complete
         if new_offset >= meta["length"]:

@@ -658,7 +658,7 @@ const ImporterApp = () => {
           <div className="w-1/4 overflow-auto pt-2">
             <div className="flex space-x-4 items-center">
               <h1 className="text-base font-bold p-0 m-0 inline-block">
-                3. Upload list
+                3. Import list
               </h1>
               <Button
                 onClick={removeUploadItems}
@@ -708,7 +708,7 @@ const ImporterApp = () => {
           </Card>
           <Icon icon="circle-arrow-right" size={24} color="grey" />
           <Card>
-            <span className="text-base">{`Upload destination: ${
+            <span className="text-base">{`Import destination: ${
               selectedOmeroPath || "None"
             }`}</span>
           </Card>

@@ -22,7 +22,7 @@ const RunTab = () => (
         target="_blank"
         rel="noopener noreferrer"
       >
-        BIOMERO
+        BIOMERO.analyzer
       </a>.
     </H6>
     <div className="bp5-form-group">

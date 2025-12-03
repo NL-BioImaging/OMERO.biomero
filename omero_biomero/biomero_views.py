@@ -83,7 +83,7 @@ def biomero(request, conn=None, **kwargs):
         "is_admin": is_admin,
         "main_js": get_react_build_file("main.js"),
         "main_css": get_react_build_file("main.css"),
-        "title": "Biomero",
+        "title": "BIOMERO",
         "app_name": "biomero",
         "importer_enabled": importer_enabled,
         "analyzer_enabled": analyzer_enabled,

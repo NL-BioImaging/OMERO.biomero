@@ -35,9 +35,9 @@ setup(
     author="Cellular Imaging Amsterdam UMC",
     author_email="cellularimaging@amsterdamumc.nl",
     license="AGPL-3.0",
-    url="https://github.com/Cellular-Imaging-Amsterdam-UMC/OMERO.biomero",
+    url="https://github.com/NL-BioImaging/OMERO.biomero",
     download_url=(
-        "https://github.com/Cellular-Imaging-Amsterdam-UMC/OMERO.biomero/"
+        "https://github.com/NL-BioImaging/OMERO.biomero/"
         "archive/refs/tags/v{version}.tar.gz"
     ),
     keywords=[
@@ -52,9 +52,9 @@ setup(
     install_requires=[
         "omero-web>=5.6.0",
         "pyjwt",
-        "biomero>=2.0.0-alpha.4",
+        "biomero>=2.0.0",
         "configupdater>=3.2",
-        "biomero-importer>=1.0.0b5",
+        "biomero-importer>=1.0.0",
     ],
     python_requires=">=3.12",
     include_package_data=True,

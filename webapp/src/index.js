@@ -78,7 +78,7 @@ const AppRouter = () => {
           <NavbarGroup>
             {/* <Icon icon="style" className="mr-[7px]" /> */}
             <BiomeroIcon />
-            <NavbarHeading>Biomero</NavbarHeading>
+            <NavbarHeading>BIOMERO</NavbarHeading>
             <NavbarDivider />
             {IMPORTER_ENABLED && (
               <Button

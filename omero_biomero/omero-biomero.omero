@@ -2,4 +2,4 @@
 
 # Left Header Links
 config append -- omero.web.apps '"omero_biomero"'
-config append -- omero.web.ui.top_links '["Biomero", "biomero", {"title": "Biomero"}]'
+config append -- omero.web.ui.top_links '["BIOMERO", "biomero", {"title": "BIOMERO"}]'

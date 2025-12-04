@@ -1,5 +1,9 @@
 # OMERO.biomero Plugin
 
+> 🚀 **This package is part of BIOMERO 2.0** — For complete deployment and FAIR infrastructure setup, start with the [**NL-BIOMERO Documentation**](https://nl-bioimaging.github.io/NL-BIOMERO/) 📖
+
+
+
 ## Description
 
 The OMERO.biomero plugin adds functionality to the OMERO web client, allowing users to upload images directly from the web client. The uploads are in-place, meaning that the data is not duplicated in OMERO but remains where it is. Users can monitor their uploads using a dashboard.

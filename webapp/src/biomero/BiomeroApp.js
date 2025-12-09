@@ -8,10 +8,10 @@ import "@blueprintjs/core/lib/css/blueprint.css";
 import SettingsForm from "./components/SettingsForm";
 
 const RunTab = () => (
-  <div className="h-full overflow-y-auto">
+  <div className="max-h-[calc(100vh-225px)] overflow-y-auto">
     <H4>Run image analysis workflows</H4>
     <div className="flex">
-      <div className="w-full p-4 flex-1 overflow-hidden">
+      <div className="w-full p-4 flex-1">
         <RunPanel />
       </div>
     </div>
@@ -53,13 +53,13 @@ const AdminPanel = () => {
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="max-h-[calc(100vh-225px)] overflow-y-auto">
       <H4>Admin</H4>
       <div className="flex">
-        <div className="w-1/2 p-4 overflow-auto">
+        <div className="w-1/2 p-4 max-h-[calc(100vh-250px)] overflow-y-auto">
           <SettingsForm />
         </div>
-        <div className="w-1/2 p-4 flex-1 overflow-hidden">
+        <div className="w-1/2 p-4 max-h-[calc(100vh-250px)] overflow-y-auto">
           {state.scripts?.length > 0 ? (
             <TabContainer />
           ) : (
@@ -115,7 +115,7 @@ const StatusPanel = ({
   }, [iframeUrl]);
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="max-h-[calc(100vh-225px)] overflow-y-auto">
       <H4>Status</H4>
       <div className="bp5-form-group">
         <div className="bp5-form-content">
@@ -130,7 +130,7 @@ const StatusPanel = ({
           </div>
         </div>
       </div>
-      <div className="p-4 h-full overflow-hidden">
+      <div className="p-4">
         {!metabaseError ? (
           <iframe
             title="Metabase dashboard"
@@ -145,8 +145,8 @@ const StatusPanel = ({
           </div>
         )}
         {isAdmin && (
-          <div className="bottom-message">
-            <a href={metabaseUrl} target="_blank" rel="noopener noreferrer">
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded">
+            <a href={metabaseUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
               Click here to access the Metabase interface
             </a>
           </div>

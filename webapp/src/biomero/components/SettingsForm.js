@@ -19,8 +19,12 @@ import ModelCard from "./ModelCard.js";
 import ConverterCard from "./ConverterCard.js";
 
 const SettingsForm = () => {
-  const { state, updateState, loadBiomeroConfig, saveConfigData } =
-    useAppContext();
+  const { 
+    state, 
+    updateState, 
+    loadBiomeroConfig, 
+    saveConfigData
+  } = useAppContext();
   const [settingsForm, setSettingsForm] = useState(null);
   const [initialFormData, setInitialFormData] = useState(null); // Stable reference to initial data
   const [editMode, setEditMode] = useState({});

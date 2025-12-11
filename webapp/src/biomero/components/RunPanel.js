@@ -13,18 +13,66 @@ import {
   Spinner,
   SpinnerSize,
   ButtonGroup,
+  Tag,
+  Tooltip,
+  Intent,
 } from "@blueprintjs/core";
 import { FaDocker } from "react-icons/fa6";
 import WorkflowForm from "./WorkflowForm";
 import WorkflowOutput from "./WorkflowOutput";
 import WorkflowInput from "./WorkflowInput";
 
-const RunPanel = () => {
+const RunPanel = ({ onWorkflowError }) => {
   const { state, updateState, toaster, runWorkflowData } = useAppContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
+
+  // Get workflow versions from SLURM status
+  const workflowVersions = state.workflowVersions || {};
+
+  // Helper to get SLURM status intent for version tags
+  const getSlurmIntent = () => {
+    if (state.slurmStatus === "online") return Intent.SUCCESS;
+    if (state.slurmStatus === "offline" || state.slurmStatus === "error") return Intent.DANGER;
+    return Intent.WARNING;
+  };
+
+  // Helper to get workflow-specific intent and info
+  const getWorkflowStatus = (workflowName) => {
+    const isOnline = state.slurmStatus === "online";
+    const hasVersions = workflowVersions[workflowName];
+    const hasValidVersion = hasVersions && hasVersions.latest_version && hasVersions.latest_version.trim() !== "";
+    
+    if (!isOnline) {
+      return {
+        intent: Intent.DANGER,
+        icon: "error",
+        message: "SLURM cluster offline",
+        showTag: true,
+        tagText: "Offline"
+      };
+    }
+    
+    if (!hasValidVersion) {
+      return {
+        intent: Intent.WARNING,
+        icon: "warning-sign", 
+        message: "Workflow not installed on SLURM cluster",
+        showTag: true,
+        tagText: "Not Available"
+      };
+    }
+    
+    return {
+      intent: Intent.NONE,
+      icon: "tag",
+      message: `Available versions: ${hasVersions.available_versions.join(', ')}`,
+      showTag: true,
+      tagText: hasVersions.latest_version
+    };
+  };
 
   // Utility to beautify names
   const beautifyName = (name) => {
@@ -78,7 +126,7 @@ const RunPanel = () => {
   };
 
   const submitWorkflow = (workflow_name) => {
-    runWorkflowData(workflow_name, state.formData);
+    runWorkflowData(workflow_name, state.formData, onWorkflowError);
   };
 
   const handleStepChange = (stepIndex) => {
@@ -102,18 +150,44 @@ const RunPanel = () => {
 
         {filteredWorkflows?.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredWorkflows.map((workflow) => (
-              <Card
-                key={workflow.name} // Use the workflow name as the key
-                interactive
-                elevation={Elevation.TWO}
-                className="flex flex-col gap-2 p-4"
-                onClick={() => handleWorkflowClick(workflow)} // Pass the full metadata for clicking
-              >
+            {filteredWorkflows.map((workflow) => {
+              const workflowStatus = getWorkflowStatus(workflow.name);
+              const isReady = workflowStatus.intent === Intent.NONE;
+              
+              const cardContent = (
+                <Card
+                  key={workflow.name} // Use the workflow name as the key
+                  interactive={isReady}
+                  elevation={Elevation.TWO}
+                  className={`flex flex-col gap-2 p-4 ${
+                    workflowStatus.intent === Intent.WARNING ? 'bp4-intent-warning' :
+                    workflowStatus.intent === Intent.DANGER ? 'bp4-intent-danger' : ''
+                  } ${!isReady ? 'opacity-75 cursor-not-allowed' : ''}`}
+                  onClick={isReady ? () => handleWorkflowClick(workflow) : undefined}
+                >
                 {/* Header Section with Title and Icons */}
                 <div className="flex justify-between items-center">
                   <H5 className="mb-0">{beautifyName(workflow.name)}</H5>
-                  <ButtonGroup>
+                  <div className="flex items-center gap-2">
+                    {/* Version Tag */}
+                    {workflowStatus.showTag && (
+                      <Tooltip
+                        content={workflowStatus.message}
+                        position="bottom"
+                      >
+                        <Tag
+                          icon={workflowStatus.icon}
+                          intent={workflowStatus.intent}
+                          minimal
+                          round
+                        >
+                          {workflowStatus.tagText}
+                        </Tag>
+                      </Tooltip>
+                    )}
+                    </div>
+                    
+                    <ButtonGroup>
                     {/* GitHub Icon */}
                     {workflow.githubUrl && (
                       <Button
@@ -150,12 +224,25 @@ const RunPanel = () => {
                       />
                     )}
                   </ButtonGroup>
-                </div>
+                  </div>
 
                 {/* Description Section */}
                 <p className="text-sm text-gray-600">{workflow.description}</p>
               </Card>
-            ))}
+              );
+              
+              // Wrap entire card in tooltip if not ready
+              return isReady ? cardContent : (
+                <Tooltip
+                  key={workflow.name}
+                  content={workflowStatus.message}
+                  position="bottom"
+                  intent={workflowStatus.intent}
+                >
+                  {cardContent}
+                </Tooltip>
+              );
+            })}
           </div>
         ) : (
           <Card

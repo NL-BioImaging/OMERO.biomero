@@ -48,6 +48,7 @@ export const getDjangoConstants = () => {
     api_config: "/omero_biomero/api/biomero/admin/config/",
     api_run_workflow: "/omero_biomero/api/analyzer/workflows/", // append <name>/jobs/
     get_workflows: "/omero_biomero/api/analyzer/scripts/",
+    api_slurm_status: "/omero_biomero/api/analyzer/slurm/status/",
   };
 
   const ui = {

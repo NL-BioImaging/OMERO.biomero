@@ -45,6 +45,11 @@ urlpatterns = [
         analyzer_views.get_workflows,  # GET: legacy script info for menu
         name="analyzer_scripts_list",
     ),
+    path(
+        "api/analyzer/slurm/status/",
+        analyzer_views.get_slurm_status,  # GET: SLURM cluster status
+        name="analyzer_slurm_status",
+    ),
     # Main Biomero URL
     path(
         "biomero/",

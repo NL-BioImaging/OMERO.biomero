@@ -3,16 +3,17 @@ import { useAppContext } from "../AppContext";
 import TabContainer from "./components/TabContainer";
 import RunPanel from "./components/RunPanel";
 import GroupSelect from "../shared/components/GroupSelect"; // Add this import
+import SlurmStatusIndicator from "../shared/components/SlurmStatusIndicator";
 import { Tabs, Tab, H4, Tooltip, H6 } from "@blueprintjs/core";
 import "@blueprintjs/core/lib/css/blueprint.css";
 import SettingsForm from "./components/SettingsForm";
 
-const RunTab = () => (
+const RunTab = ({ onWorkflowError }) => (
   <div className="max-h-[calc(100vh-225px)] overflow-y-auto">
     <H4>Run image analysis workflows</H4>
     <div className="flex">
       <div className="w-full p-4 flex-1">
-        <RunPanel />
+        <RunPanel onWorkflowError={onWorkflowError} />
       </div>
     </div>
     <H6>
@@ -59,7 +60,7 @@ const AdminPanel = () => {
         <div className="w-1/2 p-4 max-h-[calc(100vh-250px)] overflow-y-auto">
           <SettingsForm />
         </div>
-        <div className="w-1/2 p-4 max-h-[calc(100vh-250px)] overflow-y-auto">
+        <div className="w-1/2 p-4 flex flex-col">
           {state.scripts?.length > 0 ? (
             <TabContainer />
           ) : (
@@ -167,6 +168,7 @@ const BiomeroApp = () => {
   } = useAppContext();
   const [metabaseError, setMetabaseError] = useState(false);
   const [activeTab, setActiveTab] = useState("Run");
+  const [workflowError, setWorkflowError] = useState(false);
   const [loadedTabs, setLoadedTabs] = useState({
     Run: true, // Automatically load the first tab
     Admin: false,
@@ -202,6 +204,10 @@ const BiomeroApp = () => {
     setActiveTab(newTabId);
   };
 
+  const handleWorkflowError = () => {
+    setWorkflowError(prev => !prev); // Toggle to trigger useEffect
+  };
+
   const metabaseUrl = document
     .getElementById("root")
     .getAttribute("data-metabase-url");
@@ -216,9 +222,15 @@ const BiomeroApp = () => {
     <div>
       <div className="p-4">
         {state?.user?.groups && (
-          <div className="flex items-center">
-            <span className="text-base mr-4">Select group</span>
-            <GroupSelect />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <span className="text-base mr-4">Select group</span>
+              <GroupSelect />
+            </div>
+            <SlurmStatusIndicator 
+              onTabChange={activeTab} 
+              onWorkflowError={workflowError}
+            />
           </div>
         )}
       </div>
@@ -238,7 +250,7 @@ const BiomeroApp = () => {
             id="Run"
             title="Run"
             icon="play"
-            panel={loadedTabs.Run ? <RunTab state={state} /> : null}
+            panel={loadedTabs.Run ? <RunTab state={state} onWorkflowError={handleWorkflowError} /> : null}
           />
           <Tab
             id="Status"

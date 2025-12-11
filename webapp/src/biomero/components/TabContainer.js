@@ -13,6 +13,7 @@ const TabContainer = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredData, setFilteredData] = useState(state.scripts);
   const [hasWritePrivileges, setHasWritePrivileges] = useState(false);
+  const [openSectionsPerTab, setOpenSectionsPerTab] = useState({}); // Track open section per tab
 
   useEffect(() => {
     setHasWritePrivileges(user.isAdmin);
@@ -50,51 +51,96 @@ const TabContainer = () => {
     setFilteredData(filtered);
   }, [searchQuery, state.scripts, user.isAdmin]);
 
-  const renderScripts = (folder) => (
-    <div className="folders-list">
-      {folder.ul?.map((group) => (
-        <ScriptCardGroup key={group.name} folder={group} />
-      ))}
-    </div>
-  );
+  // Initialize open sections - auto-open admin sections or first section per tab
+  useEffect(() => {
+    if (filteredData.length > 0) {
+      const initialOpenSections = {};
+      filteredData.forEach(folder => {
+        if (folder.ul && folder.ul.length > 0) {
+          // Find admin section or use first section
+          const adminSection = folder.ul.find(group => 
+            group.name.toLowerCase().includes("admin")
+          );
+          const sectionToOpen = adminSection || folder.ul[0];
+          const folderId = `${folder.name}-${sectionToOpen.name}`;
+          initialOpenSections[folder.name] = folderId;
+        }
+      });
+      setOpenSectionsPerTab(initialOpenSections);
+    }
+  }, [filteredData]);
+
+  const renderScripts = (folder) => {
+    const tabKey = folder.name;
+    
+    return (
+      <div className="folders-list">
+        {folder.ul?.map((group) => {
+          const folderId = `${folder.name}-${group.name}`;
+          const isOpen = openSectionsPerTab[tabKey] === folderId;
+          
+          return (
+            <ScriptCardGroup 
+              key={group.name} 
+              folder={group} 
+              folderId={folderId}
+              isOpen={isOpen}
+              onToggle={(folderId) => {
+                setOpenSectionsPerTab(prev => ({
+                  ...prev,
+                  [tabKey]: prev[tabKey] === folderId ? null : folderId
+                }));
+              }}
+            />
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
-    <div className="tab-container h-full">
-      <div className="tab-controls flex justify-between items-center mb-4">
-        <div className="tab-right-controls flex space-x-4">
-          <SearchBar
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-          />
-          {hasWritePrivileges && <UploadButton />}
+    <div className="flex flex-col h-full">
+      {/* Static controls - always visible, non-scrollable */}
+      <div className="flex-shrink-0 mb-4">
+        <div className="tab-controls flex justify-between items-center">
+          <div className="tab-right-controls flex space-x-4">
+            <SearchBar
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+            />
+            {hasWritePrivileges && <UploadButton />}
+          </div>
         </div>
       </div>
 
-      {/* Tabs with Panels */}
-      <Tabs
-        id="script-tabs"
-        renderActiveTabPanelOnly={false}
-        animate={true}
-        large={true}
-      >
-        {filteredData.map((folder) => (
-          <Tab
-            key={folder.name}
-            id={folder.name}
-            title={folder.name}
-            tagContent={folder.ul?.reduce(
-              (sum, group) => sum + (group.ul?.length || 0),
-              0
-            )}
-            tagProps={{ round: true }}
-            panel={
-              <div className="p-4 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {renderScripts(folder)}
-              </div>
-            }
-          />
-        ))}
-      </Tabs>
+      {/* Tabs with static headers and scrollable content */}
+      <div className="flex-1 overflow-hidden">
+        <Tabs
+          id="script-tabs"
+          renderActiveTabPanelOnly={false}
+          animate={true}
+          large={true}
+          className="h-full flex flex-col"
+        >
+          {filteredData.map((folder) => (
+            <Tab
+              key={folder.name}
+              id={folder.name}
+              title={folder.name}
+              tagContent={folder.ul?.reduce(
+                (sum, group) => sum + (group.ul?.length || 0),
+                0
+              )}
+              tagProps={{ round: true }}
+              panel={
+                <div className="h-full overflow-y-auto p-4">
+                  {renderScripts(folder)}
+                </div>
+              }
+            />
+          ))}
+        </Tabs>
+      </div>
     </div>
   );
 };

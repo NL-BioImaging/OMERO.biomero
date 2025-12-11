@@ -98,6 +98,11 @@ export const fetchConfig = async () => {
   return apiRequest(urls.api_config, "GET");
 };
 
+export const fetchSlurmStatus = async () => {
+  const { urls } = getDjangoConstants();
+  return apiRequest(urls.api_slurm_status, "GET");
+};
+
 // Fetch metadata for a specific workflow
 export const fetchWorkflowMetadata = async (workflow) => {
   const { urls } = getDjangoConstants();

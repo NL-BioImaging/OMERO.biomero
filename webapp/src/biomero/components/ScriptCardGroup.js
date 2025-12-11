@@ -1,20 +1,16 @@
-import React, { useState } from "react";
+import React from "react";
 import { CardList, Section, SectionCard } from "@blueprintjs/core";
 import ScriptCard from "./ScriptCard";
 import "@blueprintjs/core/lib/css/blueprint.css";
 
-const ScriptCardGroup = ({ folder }) => {
-  const [isExpanded, setIsExpanded] = useState(
-    folder.name.toLowerCase().includes("admin")
-  );
-
-  const toggleFolder = () => {
-    setIsExpanded(!isExpanded);
+const ScriptCardGroup = ({ folder, folderId, isOpen, onToggle }) => {
+  const handleToggle = () => {
+    onToggle(folderId);
   };
 
   const collapseProps = {
-    isOpen: isExpanded,
-    onToggle: toggleFolder,
+    isOpen: isOpen,
+    onToggle: handleToggle,
     keepChildrenMounted: true,
   };
 

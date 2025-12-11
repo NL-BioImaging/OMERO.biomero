@@ -3,23 +3,66 @@ import { useAppContext } from "../../AppContext";
 import { Card, Elevation, H6, Button } from "@blueprintjs/core";
 
 const ScriptCard = ({ script }) => {
-  const { openScriptWindow, fetchScriptDetails, state, apiLoading, apiError } =
-    useAppContext();
-  const [isCardLoaded, setIsCardLoaded] = useState(false);
+  const { 
+    openScriptWindow, 
+    fetchScriptDetails, 
+    state, 
+    apiLoading, 
+    apiError,
+    markSlurmInitExecuted,
+    markSlurmCheckExecuted,
+    needsSlurmInit,
+    needsSlurmCheck
+  } = useAppContext();
+  const [hasTriggeredLoad, setHasTriggeredLoad] = useState(false);
 
   useEffect(() => {
-    if (!isCardLoaded && !state.scripts.find((s) => s.id === script.id)) {
+    // Check if this script needs detailed data
+    const needsLoading = !script.description || 
+                        script.description === "No description available" ||
+                        !script.authors || 
+                        script.authors === "Unknown" ||
+                        !script.version || 
+                        script.version === "Unknown";
+    
+    if (needsLoading && !hasTriggeredLoad) {
       fetchScriptDetails(script.id, script.name);
-      setIsCardLoaded(true);
+      setHasTriggeredLoad(true);
     }
-  }, []);
+  }, [script.id, fetchScriptDetails]); // Simplified dependencies - only trigger on script ID change
 
   const handleCardClick = () => {
     const scriptUrl = `/webclient/script_ui/${script.id}`;
+    
+    // Track admin script executions
+    if (script.name === "Slurm Init (Admin Only)") {
+      markSlurmInitExecuted();
+    } else if (script.name === "Slurm Check Setup (Admin Only)") {
+      markSlurmCheckExecuted();
+    }
+    
     openScriptWindow(scriptUrl);
   };
 
   const isSlurmWorkflow = script.name === "Slurm Workflow";
+  const isSlurmInit = script.name === "Slurm Init (Admin Only)";
+  const isSlurmCheck = script.name === "Slurm Check Setup (Admin Only)";
+  
+  // Determine intent based on admin script importance
+  const getScriptIntent = () => {
+    if (isSlurmInit && needsSlurmInit()) {
+      return "warning"; // Orange - Settings changed, init needed
+    }
+    if (isSlurmCheck && needsSlurmCheck()) {
+      return "warning"; // Orange - Init was run, check recommended
+    }
+    if (isSlurmWorkflow) {
+      return "success"; // Green - Main workflow
+    }
+    return "primary"; // Blue - Default
+  };
+  
+  const isHighPriority = (isSlurmInit && needsSlurmInit()) || (isSlurmCheck && needsSlurmCheck());
 
   return (
     <Card
@@ -27,14 +70,14 @@ const ScriptCard = ({ script }) => {
       className="script-card"
       interactive={true}
       onClick={handleCardClick}
-      selected={isSlurmWorkflow}
+      selected={isSlurmWorkflow || isHighPriority}
       elevation={Elevation.ONE}
     >
       <ScriptDetailsContent
         script={script}
         apiLoading={apiLoading}
         handleCardClick={handleCardClick}
-        isSlurmWorkflow={isSlurmWorkflow}
+        intent={getScriptIntent()}
       />
       {apiError && <p className="error">{apiError}</p>}
     </Card>
@@ -45,7 +88,7 @@ const ScriptDetailsContent = ({
   script,
   apiLoading,
   handleCardClick,
-  isSlurmWorkflow,
+  intent,
 }) => {
   return (
     <div>
@@ -62,7 +105,7 @@ const ScriptDetailsContent = ({
         <strong>Version:</strong> {script?.version || "Unknown"}
       </p>
       <Button
-        intent={isSlurmWorkflow ? "success" : "primary"}
+        intent={intent}
         icon="document"
         rightIcon="take-action"
         onClick={handleCardClick}

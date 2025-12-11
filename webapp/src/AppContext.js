@@ -18,6 +18,7 @@ import {
   createContainer,
   fetchGroupMappings,
   postGroupMappings,
+  fetchSlurmStatus,
 } from "./apiService";
 import { getDjangoConstants } from "./constants";
 import { transformStructure, extractGroups } from "./utils";
@@ -42,6 +43,11 @@ export const AppProvider = ({ children }) => {
     omeroFileTreeSelection: [],
     localFileTreeSelection: [],
     groupFolderMappings: {},
+    // Admin state tracking
+    hasUnsavedSettingsChanges: false,
+    lastSettingsSaveTime: null,
+    lastSlurmInitTime: null,
+    lastSlurmCheckTime: null,
   });
   const [apiLoading, setLoading] = useState(false);
   const [apiError, setError] = useState(null);
@@ -51,6 +57,48 @@ export const AppProvider = ({ children }) => {
     setState((prevState) => {
       return { ...prevState, ...newState };
     });
+  };
+
+  // Admin state management functions
+  const markSettingsChanged = () => {
+    setState(prev => ({
+      ...prev,
+      hasUnsavedSettingsChanges: true
+    }));
+  };
+
+  const markSettingsSaved = () => {
+    setState(prev => ({
+      ...prev,
+      hasUnsavedSettingsChanges: false,
+      lastSettingsSaveTime: Date.now()
+    }));
+  };
+
+  const markSlurmInitExecuted = () => {
+    setState(prev => ({
+      ...prev,
+      lastSlurmInitTime: Date.now()
+    }));
+  };
+
+  const markSlurmCheckExecuted = () => {
+    setState(prev => ({
+      ...prev,
+      lastSlurmCheckTime: Date.now()
+    }));
+  };
+
+  // Check if SLURM Init is needed (settings were saved but init hasn't been run since)
+  const needsSlurmInit = () => {
+    return state.lastSettingsSaveTime && 
+           (!state.lastSlurmInitTime || state.lastSettingsSaveTime > state.lastSlurmInitTime);
+  };
+
+  // Check if SLURM Check is recommended (init was run but not checked)
+  const needsSlurmCheck = () => {
+    return state.lastSlurmInitTime && 
+           (!state.lastSlurmCheckTime || state.lastSlurmInitTime > state.lastSlurmCheckTime);
   };
 
   // Initialize toaster asynchronously
@@ -193,7 +241,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const runWorkflowData = async (workflowName, params = {}) => {
+  const runWorkflowData = async (workflowName, params = {}, onWorkflowError) => {
     setLoading(true);
     setError(null);
     try {
@@ -223,6 +271,11 @@ export const AppProvider = ({ children }) => {
         timeout: 0,
       });
       setError(err.message);
+      
+      // Trigger SLURM status refresh on workflow errors
+      if (onWorkflowError) {
+        onWorkflowError();
+      }
     } finally {
       setLoading(false);
     }
@@ -242,6 +295,9 @@ export const AppProvider = ({ children }) => {
         message: `${message}`,
         timeout: 0,
       });
+      
+      // Mark settings as saved for admin state tracking
+      markSettingsSaved();
     } catch (err) {
       toaster.show({
         intent: "danger",
@@ -491,6 +547,7 @@ export const AppProvider = ({ children }) => {
         });
 
       const updatedScripts = updateNestedScripts(state.scripts);
+      
       // Update the state with the updated nested scripts
       setState((prevState) => ({
         ...prevState,
@@ -615,6 +672,12 @@ export const AppProvider = ({ children }) => {
       value={{
         state,
         updateState,
+        markSettingsChanged,
+        markSettingsSaved,
+        markSlurmInitExecuted,
+        markSlurmCheckExecuted,
+        needsSlurmInit,
+        needsSlurmCheck,
         loadOmeroTreeData,
         loadFolderData,
         loadGroups,

@@ -1,14 +1,47 @@
-import React, { useEffect } from "react";
-import { FormGroup, InputGroup, NumericInput, Switch } from "@blueprintjs/core";
+import React, { useEffect, useState } from "react";
+import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
+  const [selectedVersion, setSelectedVersion] = useState("");
 
   const ghURL = state.selectedWorkflow?.githubUrl;
   const versionMatch = ghURL?.match(/\/tree\/(v[\d.]+)/);
-  const version = versionMatch ? versionMatch[1] : "";
+  const configuredVersion = versionMatch ? versionMatch[1] : "";
   const workflowMetadata = state.selectedWorkflow?.metadata;
+  const workflowName = state.selectedWorkflow?.name;
+  const workflowVersions = state.workflowVersions?.[workflowName];
+  const availableVersions = workflowVersions?.available_versions || [];
+  const latestVersion = workflowVersions?.latest_version;
+  const slurmOnline = state.slurmStatus === "online";
+
+  // Determine version status
+  const getVersionStatus = (version) => {
+    if (!slurmOnline) {
+      return { intent: Intent.DANGER, message: "SLURM cluster offline" };
+    }
+    if (!availableVersions.includes(version)) {
+      return { intent: Intent.DANGER, message: "Version not available on SLURM" };
+    }
+    if (version !== latestVersion && latestVersion) {
+      return { intent: Intent.WARNING, message: `Outdated version (latest: ${latestVersion})` };
+    }
+    return { intent: Intent.SUCCESS, message: "Version available" };
+  };
+
+  // Initialize selected version
+  useEffect(() => {
+    if (!selectedVersion) {
+      if (availableVersions.includes(configuredVersion)) {
+        setSelectedVersion(configuredVersion);
+      } else if (latestVersion) {
+        setSelectedVersion(latestVersion);
+      } else if (configuredVersion) {
+        setSelectedVersion(configuredVersion);
+      }
+    }
+  }, [configuredVersion, availableVersions, latestVersion, selectedVersion]);
 
   if (!workflowMetadata) {
     return <div>Loading workflow...</div>;
@@ -29,8 +62,16 @@ const WorkflowForm = () => {
   }, {});
 
   useEffect(() => {
-    updateState({ formData: { ...defaultValues, ...state.formData, version } });
-  }, [state.formData, version]);
+    if (selectedVersion) {
+      updateState({ 
+        formData: { 
+          ...defaultValues, 
+          ...state.formData, 
+          version: selectedVersion 
+        } 
+      });
+    }
+  }, [state.formData, selectedVersion]);
 
   const handleInputChange = (id, value) => {
     updateState({
@@ -143,6 +184,77 @@ const WorkflowForm = () => {
   return (
     <form>
       <h2>{workflowMetadata.workflow}</h2>
+      
+      {/* Version Selection */}
+      <FormGroup
+        label="Workflow Version"
+        labelInfo="(required)"
+        helperText="Select the version to run on SLURM cluster"
+      >
+        <div className="flex items-center gap-2">
+          <HTMLSelect
+            value={selectedVersion}
+            onChange={(e) => setSelectedVersion(e.target.value)}
+            disabled={!slurmOnline}
+          >
+            {!selectedVersion && <option value="">Select version...</option>}
+            {configuredVersion && (
+              <option value={configuredVersion}>
+                {configuredVersion} (Configured)
+              </option>
+            )}
+            {availableVersions.map(version => 
+              version !== configuredVersion && (
+                <option key={version} value={version}>
+                  {version} {version === latestVersion ? "(Latest)" : ""}
+                </option>
+              )
+            )}
+            {/* Show unavailable configured version as option */}
+            {configuredVersion && !availableVersions.includes(configuredVersion) && (
+              <option value={configuredVersion} disabled>
+                {configuredVersion} (Not Available)
+              </option>
+            )}
+          </HTMLSelect>
+          
+          {selectedVersion && (
+            <Tag
+              intent={getVersionStatus(selectedVersion).intent}
+              minimal
+              round
+            >
+              {getVersionStatus(selectedVersion).message}
+            </Tag>
+          )}
+        </div>
+      </FormGroup>
+      
+      {/* Warning callouts - only show critical ones inline */}
+      {!slurmOnline && (
+        <FormGroup helperText="">
+          <Callout intent={Intent.DANGER}>
+            SLURM cluster is offline. Cannot validate or run workflows.
+          </Callout>
+        </FormGroup>
+      )}
+      
+      {selectedVersion && slurmOnline && !availableVersions.includes(selectedVersion) && (
+        <FormGroup helperText="">
+          <Callout intent={Intent.DANGER}>
+            Selected version "{selectedVersion}" is not available on the SLURM cluster. 
+            {availableVersions.length > 0 ? `Available versions: ${availableVersions.join(", ")}` : "No versions available."}
+          </Callout>
+        </FormGroup>
+      )}
+      
+      {selectedVersion && selectedVersion !== latestVersion && latestVersion && availableVersions.includes(selectedVersion) && (
+        <FormGroup helperText="">
+          <Callout intent={Intent.WARNING}>
+            You are using an older version. Latest available: {latestVersion}
+          </Callout>
+        </FormGroup>
+      )}
       {renderFormFields()}
       
       {/* Experimental ZARR Format Support */}

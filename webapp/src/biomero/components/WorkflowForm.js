@@ -1,10 +1,40 @@
 import React, { useEffect, useState } from "react";
-import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout } from "@blueprintjs/core";
+import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout, Slider, Divider, Tooltip, Button } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
   const [selectedVersion, setSelectedVersion] = useState("");
+  const [batchEnabled, setBatchEnabled] = useState(false);
+  const [unlockDangerousJobs, setUnlockDangerousJobs] = useState(false);
+  
+  // Calculate batch size from job count
+  const calculateBatchSizeFromJobCount = (totalImages, jobCount) => {
+    if (jobCount <= 1) return totalImages;
+    return Math.ceil(totalImages / jobCount);
+  };
+
+  // Calculate job count from batch size  
+  const calculateJobCountFromBatchSize = (totalImages, batchSize) => {
+    if (batchSize <= 0) return 1;
+    return Math.ceil(totalImages / batchSize);
+  };
+
+  // Get smart default job count
+  const getDefaultJobCount = (totalImages) => {
+    if (totalImages <= 1) return 1;
+    if (totalImages <= 10) return Math.min(2, totalImages);
+    if (totalImages <= 64) return Math.min(4, Math.ceil(totalImages / 16));
+    if (totalImages <= 200) return 5; // Sweet spot for medium datasets
+    return 6; // Conservative for large datasets (matches recommendation)
+  };
+
+  const totalImages = state.formData?.IDs?.length || 0;
+  const [selectedJobCount, setSelectedJobCount] = useState(() => {
+    return totalImages > 0 ? getDefaultJobCount(totalImages) : 2;
+  });
+  
+  const batchSize = calculateBatchSizeFromJobCount(totalImages, selectedJobCount);
 
   const ghURL = state.selectedWorkflow?.githubUrl;
   const versionMatch = ghURL?.match(/\/tree\/(v[\d.]+)/);
@@ -61,17 +91,36 @@ const WorkflowForm = () => {
     return acc;
   }, {});
 
+  // Update selected job count when IDs change
+  useEffect(() => {
+    const currentTotalImages = state.formData?.IDs?.length || 0;
+    if (currentTotalImages > 0) {
+      const optimalJobCount = getDefaultJobCount(currentTotalImages);
+      if (optimalJobCount !== selectedJobCount || totalImages !== currentTotalImages) {
+        setSelectedJobCount(optimalJobCount);
+      }
+    }
+  }, [state.formData?.IDs?.length]);
+
   useEffect(() => {
     if (selectedVersion) {
+      // Calculate batch count based on job count and total images
+      const currentTotalImages = state.formData?.IDs?.length || 0;
+      const calculatedBatchCount = batchEnabled && currentTotalImages > 0 ? selectedJobCount : 1;
+      const calculatedBatchSize = calculateBatchSizeFromJobCount(currentTotalImages, selectedJobCount);
+      
       updateState({ 
         formData: { 
           ...defaultValues, 
           ...state.formData, 
-          version: selectedVersion 
+          version: selectedVersion,
+          batchEnabled: batchEnabled,
+          batchCount: calculatedBatchCount,
+          batchSize: calculatedBatchSize
         } 
       });
     }
-  }, [state.formData, selectedVersion]);
+  }, [state.formData, selectedVersion, batchEnabled, selectedJobCount]);
 
   const handleInputChange = (id, value) => {
     updateState({
@@ -80,6 +129,14 @@ const WorkflowForm = () => {
         [id]: value,
       },
     });
+  };
+
+  const handleBatchToggle = (enabled) => {
+    setBatchEnabled(enabled);
+  };
+
+  const handleJobCountChange = (jobCount) => {
+    setSelectedJobCount(jobCount);
   };
 
   const renderFormFields = () => {
@@ -255,6 +312,146 @@ const WorkflowForm = () => {
           </Callout>
         </FormGroup>
       )}
+      
+      <Divider />
+      
+      {/* Batch Processing Section */}
+      <FormGroup
+        label="Batch Processing"
+        helperText={batchEnabled ? 
+          `Split ${totalImages} images across ${selectedJobCount} parallel SLURM jobs` :
+          "Process all images in a single SLURM job"
+        }
+      >
+        <Switch
+          checked={batchEnabled}
+          onChange={(e) => handleBatchToggle(e.target.checked)}
+          label={
+            <Tooltip
+              content="Batch processing splits your images across multiple smaller jobs instead of one large job. This can improve performance but adds overhead."
+              placement="top"
+              intent={Intent.PRIMARY}
+            >
+              <span>Enable batch processing for large datasets</span>
+            </Tooltip>
+          }
+          disabled={!slurmOnline || totalImages < 2}
+        />
+        
+        {batchEnabled && totalImages > 1 && (
+          <div style={{ marginTop: '12px' }}>
+            <FormGroup>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontWeight: 'bold' }}>
+                  {selectedJobCount} parallel jobs ({batchSize} images each)
+                </span>
+                
+                {totalImages > 10 && (
+                  <Switch
+                    checked={unlockDangerousJobs}
+                    onChange={(e) => {
+                      const unlock = e.target.checked;
+                      setUnlockDangerousJobs(unlock);
+                      // Reset to safe value when locking
+                      if (!unlock && selectedJobCount > 10) {
+                        setSelectedJobCount(10);
+                      }
+                    }}
+                    label={
+                      <span style={{ color: '#c23030', fontWeight: unlockDangerousJobs ? 'bold' : 'normal' }}>
+                        Allow >10 jobs (dangerous)
+                      </span>
+                    }
+                    intent={Intent.DANGER}
+                  />
+                )}
+              </div>
+              
+              <div style={unlockDangerousJobs ? { 
+                padding: '8px', 
+                backgroundColor: '#ffebee', 
+                border: '1px solid #f44336', 
+                borderRadius: '4px' 
+              } : {}}>
+                <Slider
+                  min={2}
+                  max={unlockDangerousJobs ? Math.min(100, totalImages) : Math.min(10, totalImages)}
+                  stepSize={1}
+                  value={selectedJobCount}
+                  onChange={handleJobCountChange}
+                  showTrackFill={true}
+                  labelStepSize={unlockDangerousJobs ? Math.max(10, Math.floor(totalImages / 8)) : 1}
+                  labelRenderer={(value) => {
+                    const imagesPerJob = calculateBatchSizeFromJobCount(totalImages, value);
+                    return `${value}`;
+                  }}
+                  intent={unlockDangerousJobs && selectedJobCount > 10 ? Intent.DANGER : Intent.PRIMARY}
+                />
+              </div>
+            </FormGroup>
+            
+            {(() => {
+              const jobCount = selectedJobCount;
+              
+              // Practical warnings about job failure likelihood
+              if (jobCount > 50) {
+                return (
+                  <Callout intent={Intent.DANGER} style={{ marginTop: '8px' }}>
+                    <strong>CRITICAL:</strong> {jobCount} jobs significantly increases likelihood of job failures and data loss. 
+                    High server resource usage may affect other users.
+                  </Callout>
+                );
+              }
+              
+              if (jobCount > 20) {
+                return (
+                  <Callout intent={Intent.DANGER} style={{ marginTop: '8px' }}>
+                    <strong>HIGH RISK:</strong> {jobCount} jobs greatly increases chance of job failures and result data loss.
+                  </Callout>
+                );
+              }
+              
+              if (jobCount > 10) {
+                return (
+                  <Callout intent={Intent.WARNING} style={{ marginTop: '8px' }}>
+                    <strong>CAUTION:</strong> {jobCount} jobs increases likelihood of job failures compared to fewer, larger jobs.
+                  </Callout>
+                );
+              }
+              
+              // Performance suggestions
+              if (batchSize === 1) {
+                return (
+                  <Callout intent={Intent.WARNING} style={{ marginTop: '8px' }}>
+                    One image per job creates maximum overhead. Consider fewer jobs for better efficiency.
+                  </Callout>
+                );
+              }
+              
+              if (totalImages > 64 && jobCount >= 4 && jobCount <= 6) {
+                return (
+                  <Callout intent={Intent.SUCCESS} style={{ marginTop: '8px' }}>
+                    Excellent choice! {jobCount} jobs is optimal for {totalImages} images - good balance of speed and reliability.
+                  </Callout>
+                );
+              }
+              
+              if (totalImages > 64 && jobCount <= 3) {
+                return (
+                  <Callout intent={Intent.SUCCESS} style={{ marginTop: '8px' }}>
+                    Conservative choice! For {totalImages} images, you might try 4-6 jobs for better performance.
+                  </Callout>
+                );
+              }
+              
+              return null;
+            })()}
+          </div>
+        )}
+      </FormGroup>
+      
+      <Divider />
+      
       {renderFormFields()}
       
       {/* Experimental ZARR Format Support */}

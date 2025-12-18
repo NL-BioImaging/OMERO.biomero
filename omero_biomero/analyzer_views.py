@@ -5,6 +5,7 @@ from django.core.cache import cache
 
 
 from biomero import SlurmClient
+from biomero.constants import workflow_batched, workflow, transfer
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from omeroweb.webclient.decorators import login_required
@@ -15,9 +16,7 @@ logger = logging.getLogger(__name__)
 
 @login_required()
 @require_http_methods(["POST"])
-def run_workflow_script(
-    request, conn=None, script_name="SLURM_Run_Workflow.py", **kwargs
-):
+def run_workflow_script(request, conn=None, **kwargs):
     """
     Trigger a specific OMERO script to run based on the provided script name and parameters.
     """
@@ -29,6 +28,10 @@ def run_workflow_script(
         if not workflow_name:
             return JsonResponse({"error": "workflow_name is required"}, status=400)
         params = data.get("params", {})
+        
+        # Determine which script to use based on batch processing settings
+        batch_enabled = params.get("batchEnabled", False)
+        script_name = "SLURM_Run_Workflow_Batched.py" if batch_enabled else "SLURM_Run_Workflow.py"
         
         # Extract and use the active group ID if provided from the frontend
         active_group_id = params.pop("active_group_id", None)
@@ -135,11 +138,15 @@ def run_workflow_script(
         version = params.get("version")
         # EXPERIMENTAL: ZARR format support
         use_zarr = params.get("useZarrFormat", False)
+        # Batch processing parameters
+        batch_enabled = params.get("batchEnabled", False)
+        batch_count = params.get("batchCount", 1)
+        batch_size = params.get("batchSize", len(input_ids) if input_ids else 1)
 
         # Convert provided params to OMERO rtypes using wrap
         known_params = [
-            "Data_Type",
-            "IDs",
+            transfer.DATA_TYPE,
+            transfer.IDS,
             "receiveEmail",
             "importAsZip",
             "uploadCsv",
@@ -154,6 +161,9 @@ def run_workflow_script(
             "cytomine_public_key",
             "version",
             "useZarrFormat",  # EXPERIMENTAL: ZARR format support
+            "batchEnabled",   # Frontend flag (not sent to script)
+            "batchCount",     # Frontend calculated (not sent to script)
+            "batchSize",      # Converted to Batch_Size for script
         ]
         inputs = {
             f"{workflow_name}_|_{key}": wrap(value)
@@ -164,23 +174,27 @@ def run_workflow_script(
             {
                 workflow_name: rbool(True),
                 f"{workflow_name}_Version": wrap(version),
-                "IDs": wrap([rlong(i) for i in input_ids]),
-                "Data_Type": wrap(data_type),
-                "E-mail": rbool(out_email),
+                transfer.IDS: wrap([rlong(i) for i in input_ids]),
+                transfer.DATA_TYPE: wrap(data_type),
+                workflow.EMAIL: rbool(out_email),
                 "Use_ZARR_Format": rbool(use_zarr),  # EXPERIMENTAL
-                "Select how to import your results (one or more)": rbool(True),
-                "1) Zip attachment to parent": rbool(import_zp),
-                "2) Attach to original images": rbool(attach_og),
-                "3a) Import into NEW Dataset": (
-                    wrap(output_ds[0]) if output_ds else wrap("--NO THANK YOU--")
+                workflow_batched.BATCH_SIZE: wrap(batch_size) if batch_enabled else None,  # Only for batched script
+                workflow.SELECT_IMPORT: rbool(True),
+                workflow.OUTPUT_PARENT: rbool(import_zp),
+                workflow.OUTPUT_ATTACH: rbool(attach_og),
+                workflow.OUTPUT_NEW_DATASET: (
+                    wrap(output_ds[0]) if output_ds else wrap(workflow.NO)
                 ),
-                "3b) Allow duplicate dataset (name)?": rbool(False),
-                "3c) Rename the imported images": (
-                    wrap(rename_pt) if rename_pt else wrap("--NO THANK YOU--")
+                workflow.OUTPUT_DUPLICATES: rbool(False),
+                workflow.OUTPUT_RENAME: (
+                    wrap(rename_pt) if rename_pt else wrap(workflow.NO)
                 ),
-                "4) Upload result CSVs as OMERO tables": rbool(uploadcsv),
+                workflow.OUTPUT_CSV_TABLE: rbool(uploadcsv),
             }
         )
+        
+        # Remove None values for non-batched workflows
+        inputs = {k: v for k, v in inputs.items() if v is not None}
         logger.debug(inputs)
 
         try:

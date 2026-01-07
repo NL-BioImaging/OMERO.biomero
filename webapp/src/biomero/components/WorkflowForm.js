@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout } from "@blueprintjs/core";
+import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout, Divider, Tooltip } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
 
 const WorkflowForm = () => {
@@ -67,11 +67,11 @@ const WorkflowForm = () => {
         formData: { 
           ...defaultValues, 
           ...state.formData, 
-          version: selectedVersion 
+          version: selectedVersion
         } 
       });
     }
-  }, [state.formData, selectedVersion]);
+  }, [selectedVersion]);
 
   const handleInputChange = (id, value) => {
     updateState({
@@ -255,21 +255,10 @@ const WorkflowForm = () => {
           </Callout>
         </FormGroup>
       )}
-      {renderFormFields()}
       
-      {/* Experimental ZARR Format Support */}
-      <FormGroup
-        label="Use ZARR Format (Experimental)"
-        labelFor="useZarrFormat"
-        helperText="⚠️ Experimental feature: Skip TIFF conversion and use ZARR format directly. Only use if your workflow supports ZARR input."
-      >
-        <Switch
-          id="useZarrFormat"
-          checked={state.formData?.useZarrFormat || false}
-          onChange={(e) => handleInputChange('useZarrFormat', e.target.checked)}
-          label="Enable ZARR Format"
-        />
-      </FormGroup>
+      <Divider />
+      
+      {renderFormFields()}
     </form>
   );
 };

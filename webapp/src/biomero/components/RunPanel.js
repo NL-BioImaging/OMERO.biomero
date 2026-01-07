@@ -21,6 +21,7 @@ import { FaDocker } from "react-icons/fa6";
 import WorkflowForm from "./WorkflowForm";
 import WorkflowOutput from "./WorkflowOutput";
 import WorkflowInput from "./WorkflowInput";
+import InputOptions from "./InputOptions";
 
 const RunPanel = ({ onWorkflowError }) => {
   const { state, updateState, toaster, runWorkflowData } = useAppContext();
@@ -295,8 +296,19 @@ const RunPanel = ({ onWorkflowError }) => {
           />
 
           <DialogStep
+            id="step1b"
+            title="Input Options"
+            panel={
+              <DialogBody>
+                <H6>Advanced Input Options (Optional)</H6>
+                <InputOptions />
+              </DialogBody>
+            }
+          />
+
+          <DialogStep
             id="step2"
-            title="Workflow Form"
+            title="Workflow Parameters"
             panel={
               <DialogBody>
                 <H6>{state.selectedWorkflow.description}</H6>

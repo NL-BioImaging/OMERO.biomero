@@ -52,7 +52,7 @@ setup(
     install_requires=[
         "omero-web>=5.31.0,<6",
         "pyjwt>=2.12.1,<3",
-        "biomero>=2.9.0b1,<3",
+        "biomero>=2.9.0b4,<3",
         "configupdater>=3.2,<4",
         "biomero-importer>=1.5.0b2,<2",
         "convertleica-file-browser>=1.7.4,<2",

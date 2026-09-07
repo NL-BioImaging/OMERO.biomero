@@ -169,7 +169,7 @@ export const WorkflowSubmitToast = ({
       <Divider className="my-1" />
       {executionMode === "detached" ? (
         <div className="bp5-text-small">
-          <strong>Your workflow runs in the background.</strong> You may close this tab or log out. Results will be imported into OMERO automatically, and progress is shown in the BIOMERO workflow overview.
+          <strong>Your workflow runs in the background.</strong> You may close this tab or browser window. Results will be imported into OMERO automatically.
         </div>
       ) : (
         <div className="bp5-text-small">

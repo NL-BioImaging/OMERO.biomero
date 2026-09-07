@@ -19,10 +19,11 @@ test("warns inline workflows to keep the OMERO session active", () => {
 });
 
 
-test("allows the browser session to close for detached workflows", () => {
+test("allows the browser tab to close for detached workflows", () => {
   render(<WorkflowSubmitToast {...props} executionMode="detached" />);
 
   expect(screen.getByText(/runs in the background/)).toBeInTheDocument();
-  expect(screen.getByText(/You may close this tab or log out/)).toBeInTheDocument();
+  expect(screen.getByText(/You may close this tab or browser window/)).toBeInTheDocument();
+  expect(screen.queryByText(/You may .*log out/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Do not log out/)).not.toBeInTheDocument();
 });

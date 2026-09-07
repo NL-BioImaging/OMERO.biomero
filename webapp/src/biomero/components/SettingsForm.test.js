@@ -95,6 +95,8 @@ test("shows all scheduler-native image-pull controls and portable partition guid
   expect(screen.getByText("Pull Time")).toBeInTheDocument();
   expect(screen.getByText("Pull Concurrency")).toBeInTheDocument();
   expect(screen.getByText("Pull Partition")).toBeInTheDocument();
+  expect(screen.getByText("sbatch_cpus-per-task")).toBeInTheDocument();
+  expect(screen.getByText("sbatch_mem")).toBeInTheDocument();
   expect(screen.getAllByText(/Leave blank to inherit/)).not.toHaveLength(0);
   expect(screen.getByText("BIOMERO_PULL_PARTITION")).toBeInTheDocument();
 });

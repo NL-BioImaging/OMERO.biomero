@@ -1160,8 +1160,8 @@ const SettingsForm = () => {
             settingsForm.SLURM?.image_pull_cpus,
             "",
             <>
-              CPUs for sbatch image pull jobs. Only used when Pull via sbatch is on. Default: 8.
-              <ExampleNote>8</ExampleNote>
+              CPUs for sbatch image pull jobs. Leave blank to inherit <code>sbatch_cpus-per-task</code>, then the scheduler default.
+              <ExampleNote>2</ExampleNote>
               <EnvVarNote vars={["BIOMERO_PULL_CPUS"]} />
             </>
           )}
@@ -1171,7 +1171,7 @@ const SettingsForm = () => {
             settingsForm.SLURM?.image_pull_mem,
             "",
             <>
-              Memory for sbatch image pull jobs. Size to fit your cluster node. Default: 32G.
+              Memory for sbatch image pull jobs. Leave blank to inherit <code>sbatch_mem</code>, then the scheduler default.
               <ExampleNote>4G</ExampleNote>
               <EnvVarNote vars={["BIOMERO_PULL_MEM"]} />
             </>

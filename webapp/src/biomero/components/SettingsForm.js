@@ -1138,8 +1138,8 @@ const SettingsForm = () => {
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
-                Controls how BIOMERO pulls container images. Default: background <code>nohup</code> on login node.
-                Enable sbatch-based pulling on clusters that restrict long-running login-node processes.
+                Controls how BIOMERO pulls container images. Default: legacy background <code>nohup</code> on the login node.
+                Enable scheduler-native pulling to use one bounded workflow-and-converter job array, node-local temporary storage, per-image logs, validation, and atomic publication.
                 <EnvVarNote vars={["BIOMERO_IMAGE_PULL_VIA_SBATCH"]} />
               </div>
             </div>
@@ -1160,8 +1160,8 @@ const SettingsForm = () => {
             settingsForm.SLURM?.image_pull_cpus,
             "",
             <>
-              CPUs for sbatch image pull jobs. Only used when Pull via sbatch is on. Default: 8.
-              <ExampleNote>8</ExampleNote>
+              CPUs for sbatch image pull jobs. Leave blank to inherit <code>sbatch_cpus-per-task</code>, then the scheduler default.
+              <ExampleNote>2</ExampleNote>
               <EnvVarNote vars={["BIOMERO_PULL_CPUS"]} />
             </>
           )}
@@ -1171,9 +1171,41 @@ const SettingsForm = () => {
             settingsForm.SLURM?.image_pull_mem,
             "",
             <>
-              Memory for sbatch image pull jobs. Size to fit your cluster node. Default: 32G.
+              Memory for sbatch image pull jobs. Leave blank to inherit <code>sbatch_mem</code>, then the scheduler default.
               <ExampleNote>4G</ExampleNote>
               <EnvVarNote vars={["BIOMERO_PULL_MEM"]} />
+            </>
+          )}
+          {renderEditableField(
+            "Pull Time",
+            "SLURM.image_pull_time",
+            settingsForm.SLURM?.image_pull_time,
+            "",
+            <>
+              Time limit for the combined workflow and converter image array. Leave blank to inherit <code>sbatch_time</code> when configured.
+              <ExampleNote>1-00:00:00</ExampleNote>
+              <EnvVarNote vars={["BIOMERO_PULL_TIME"]} />
+            </>
+          )}
+          {renderEditableField(
+            "Pull Concurrency",
+            "SLURM.image_pull_concurrency",
+            settingsForm.SLURM?.image_pull_concurrency,
+            "",
+            <>
+              Maximum image array tasks running simultaneously. Default: 1 for compatibility; 2–4 is recommended to protect shared storage.
+              <ExampleNote>4</ExampleNote>
+              <EnvVarNote vars={["BIOMERO_PULL_CONCURRENCY"]} />
+            </>
+          )}
+          {renderEditableField(
+            "Pull Partition",
+            "SLURM.image_pull_partition",
+            settingsForm.SLURM?.image_pull_partition,
+            "",
+            <>
+              Dedicated partition for image initialization. Leave blank to inherit <code>sbatch_partition</code>. This value overrides the global flag when set.
+              <EnvVarNote vars={["BIOMERO_PULL_PARTITION"]} />
             </>
           )}
           <H6><span className="inline-flex items-center gap-1">ZIP Command <RuntimeIcon /></span></H6>
@@ -1202,8 +1234,8 @@ const SettingsForm = () => {
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
-                Additional <code>sbatch</code> flags applied to every workflow <em>and</em> conversion submission.
-                Per-workflow job parameters always take precedence.
+                Additional <code>sbatch</code> flags applied to workflow, conversion, and scheduled image-pull submissions.
+                Per-workflow, conversion-specific, and dedicated image-pull values take precedence.
                 Stored as <code>sbatch_flag=value</code> in the config.
               </div>
               <div className="bp5-form-helper-text">

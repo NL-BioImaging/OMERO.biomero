@@ -26,6 +26,10 @@ committed and published together.
 3. Implement using the nearest established pattern. Extract shared code only
    when behavior genuinely repeats.
 4. Run the narrowest useful checks, then the relevant backend/frontend suite.
+   Read the repository README's Testing section before choosing commands. For
+   backend or integration changes, include its documented `python manage.py
+   test` run; for React behavior, also run the focused `yarn test` selection
+   described by the frontend reference.
 5. Run Python installation and tests through the repository-local `venv`.
    Install the editable package and test requirements into that environment
    when imports are missing; never fall back to bare `python` or `pip`.

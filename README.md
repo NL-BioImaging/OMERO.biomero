@@ -21,6 +21,13 @@ Additionally, the plugin provides a user-friendly interface to execute OMERO scr
 
 ### Detached workflows and session guidance
 
+> **New in OMERO.biomero 1.7:** `BIOMERO_DETACHED_WORKFLOWS` is an opt-in
+> feature flag. Installing or upgrading the plugin does not enable it. Existing
+> and custom deployments retain inline execution while
+> `BIOMERO_DETACHED_WORKFLOWS` is
+> absent or false; administrators must opt in through their deployment
+> configuration.
+
 OMERO.biomero reads `BIOMERO_DETACHED_WORKFLOWS` so its submission message can
 match the backend execution mode. When detached mode is enabled, the successful
 response confirms that the workflow was handed to the background supervisor;
@@ -32,7 +39,7 @@ just to cover the complete workflow duration.
 When detached mode is disabled, OMERO.biomero retains the warning to keep the
 browser and OMERO session active because the workflow still runs inline.
 NL-BIOMERO applies the setting consistently to the web and worker services. See the
-[NL-BIOMERO detached-workflow guide](https://nl-bioimaging.github.io/NL-BIOMERO/sysadmin/detached-workflows.html)
+[NL-BIOMERO detached-workflow guide](https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/detached-workflows.html)
 for configuration and verification.
 
 ### File annotation destination behavior

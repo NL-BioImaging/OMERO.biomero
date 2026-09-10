@@ -41,7 +41,14 @@ const INFRA_PARAMS = new Set([
 const MAX_INPUT_IDS_SHOWN = 20;
 
 
-const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata, warnings = [] }) => {
+export const WorkflowSubmitToast = ({
+  workflowName,
+  startedAt,
+  params,
+  metadata,
+  warnings = [],
+  executionMode = "inline",
+}) => {
   const [openSection, setOpenSection] = React.useState(null);
   const toggle = (key) => setOpenSection((prev) => (prev === key ? null : key));
 
@@ -160,9 +167,15 @@ const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata, warnin
       )}
 
       <Divider className="my-1" />
-      <div className="bp5-text-small">
-        <strong>⚠ Do not log out or close this browser tab.</strong> Your OMERO session must stay active for results to be automatically imported. Logging out risks data loss and wastes compute time.
-      </div>
+      {executionMode === "detached" ? (
+        <div className="bp5-text-small">
+          <strong>Your workflow runs in the background.</strong> You may close this tab or browser window. Results will be imported into OMERO automatically.
+        </div>
+      ) : (
+        <div className="bp5-text-small">
+          <strong>⚠ Do not log out or close this browser tab.</strong> Your OMERO session must stay active for results to be automatically imported. Logging out risks data loss and wastes compute time.
+        </div>
+      )}
     </div>
   );
 };
@@ -415,8 +428,6 @@ export const AppProvider = ({ children }) => {
       
       const response = await runWorkflow(workflowName, paramsWithGroup);
 
-      const message = response?.message || "Workflow executed successfully.";
-
       // Use local browser time with timezone label (server time is UTC, browser clock may differ)
       const startedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
 
@@ -425,7 +436,7 @@ export const AppProvider = ({ children }) => {
       toaster.show({
         intent: warnings.length ? "warning" : "success",
         icon: warnings.length ? "warning-sign" : "tick-circle",
-        message: <WorkflowSubmitToast workflowName={workflowName} startedAt={startedAt} params={effectiveParams} metadata={state.selectedWorkflow?.metadata} warnings={warnings} />,
+        message: <WorkflowSubmitToast workflowName={workflowName} startedAt={startedAt} params={effectiveParams} metadata={state.selectedWorkflow?.metadata} warnings={warnings} executionMode={response?.executionMode} />,
         timeout: 0,
       });
     } catch (err) {

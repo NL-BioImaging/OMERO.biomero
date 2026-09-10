@@ -51,6 +51,16 @@ def run_workflow_script(request, conn=None, **kwargs):
             return JsonResponse({"error": "workflow_name is required"}, status=400)
         params = data.get("params", {})
         launch_warnings = []
+        execution_mode = (
+            "detached"
+            if parse_bool_env(
+                os.environ.get(
+                    constants.slurm_env.BIOMERO_DETACHED_WORKFLOWS
+                ),
+                default=False,
+            )
+            else "inline"
+        )
         if (
             params.get("importPlateLabelPreview", False)
             and not parse_bool_env(
@@ -403,6 +413,7 @@ def run_workflow_script(request, conn=None, **kwargs):
                     "status": "success",
                     "message": f"Script {script_name} for {workflow_name} started successfully: {msg}",
                     "jobId": job_id,
+                    "executionMode": execution_mode,
                     "warnings": launch_warnings,
                     "effectiveOptions": {
                         "createRois": create_rois,

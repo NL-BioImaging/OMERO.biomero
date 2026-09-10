@@ -101,7 +101,10 @@ class AnalyzerViewsTests(TestCase):
             "plateLabelPreviewName": "nuclei",
         }
         with patch.dict(
-            "os.environ", {"BIOMERO_SHALLOW_ZARR": "true"}
+            "os.environ", {
+                "BIOMERO_SHALLOW_ZARR": "true",
+                "BIOMERO_DETACHED_WORKFLOWS": "true",
+            }
         ), patch(
             "omero_biomero.analyzer_views.SlurmClient", StubSlurm
         ), patch(
@@ -124,6 +127,7 @@ class AnalyzerViewsTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
         self.assertEqual(data["status"], "success")
+        self.assertEqual(data["executionMode"], "detached")
         self.assertIn("jobId", data)
         # Verify the Activities callback was registered in the session
         self.assertIn("callback", request.session)
@@ -202,7 +206,9 @@ class AnalyzerViewsTests(TestCase):
             body=json.dumps({"workflow_name": "wfA", "params": params}).encode(),
             session=_Session(),
         )
-        with patch(
+        with patch.dict(
+            "os.environ", {"BIOMERO_DETACHED_WORKFLOWS": "false"}
+        ), patch(
             "omero_biomero.analyzer_views.prepare_workflow_parameters",
             lambda *a, **k: params,
         ):
@@ -210,6 +216,7 @@ class AnalyzerViewsTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
         data = json.loads(resp.content)
+        self.assertEqual(data["executionMode"], "inline")
         self.assertEqual(data["warnings"][0]["code"], "roi_script_unavailable")
         self.assertFalse(data["effectiveOptions"]["createRois"])
         sent_inputs = svc.runScript.call_args.args[1]

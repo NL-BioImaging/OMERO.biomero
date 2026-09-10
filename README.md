@@ -16,7 +16,31 @@ Additionally, the plugin provides a user-friendly interface to execute OMERO scr
 - **Upload Monitoring**: Monitor the status and history of uploads using a dashboard.
 - **Script Execution**: Execute OMERO scripts through a user-friendly interface and monitor their execution.
 - **Workflow Execution**: Execute BIOMERO workflows on SLURM cluster and monitor their execution.
+- **Detached Workflow Execution**: With a compatible BIOMERO worker supervisor, queued workflows continue after the submitting browser or OMERO session ends.
 - **Optional ROI Output**: Import label-image results and convert them into Polygon or Mask ROIs on the original images. BIOMERO automatically matches results to source images and selects label-like outputs on a best-effort basis.
+
+### Detached workflows and session guidance
+
+> **New in OMERO.biomero 1.7:** `BIOMERO_DETACHED_WORKFLOWS` is an opt-in
+> feature flag. Installing or upgrading the plugin does not enable it. Existing
+> and custom deployments retain inline execution while
+> `BIOMERO_DETACHED_WORKFLOWS` is
+> absent or false; administrators must opt in through their deployment
+> configuration.
+
+OMERO.biomero reads `BIOMERO_DETACHED_WORKFLOWS` so its submission message can
+match the backend execution mode. When detached mode is enabled, the successful
+response confirms that the workflow was handed to the background supervisor;
+the user may close the tab or browser, and monitoring and automatic result
+import continue independently of that web session. Deployments do not need
+seven-day or infinite OMERO sessions, or an unusually large web-session cookie,
+just to cover the complete workflow duration.
+
+When detached mode is disabled, OMERO.biomero retains the warning to keep the
+browser and OMERO session active because the workflow still runs inline.
+NL-BIOMERO applies the setting consistently to the web and worker services. See the
+[NL-BIOMERO detached-workflow guide](https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/detached-workflows.html)
+for configuration and verification.
 
 ### File annotation destination behavior
 

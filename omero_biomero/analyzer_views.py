@@ -19,14 +19,6 @@ from .utils import parse_bool_env
 
 logger = logging.getLogger(__name__)
 
-# BIOMERO 2.9 does not expose this name yet. Keep the fallback until the
-# detached-workflow constants release is the minimum supported version.
-DETACHED_WORKFLOWS_ENV = getattr(
-    constants.slurm_env,
-    "BIOMERO_DETACHED_WORKFLOWS",
-    "BIOMERO_DETACHED_WORKFLOWS",
-)
-
 def get_roi_script_capability(script_service, scripts=None):
     """Ask OMERO whether the optional Labels2Rois script is installed."""
     scripts = scripts if scripts is not None else script_service.getScripts()
@@ -62,7 +54,10 @@ def run_workflow_script(request, conn=None, **kwargs):
         execution_mode = (
             "detached"
             if parse_bool_env(
-                os.environ.get(DETACHED_WORKFLOWS_ENV), default=False
+                os.environ.get(
+                    constants.slurm_env.BIOMERO_DETACHED_WORKFLOWS
+                ),
+                default=False,
             )
             else "inline"
         )

@@ -93,7 +93,7 @@ test("different-data action restores settings with empty inputs, not stale selec
   expect(screen.getByText("1 of 56")).toBeInTheDocument();
   expect(total).toHaveBeenCalledWith(56);
   fireEvent.click(screen.getByRole("button", { name: "Run on different data" }));
-  expect(apply).toHaveBeenCalledWith(detail, { Data_Type: "Plate", IDs: [] });
+  expect(apply).toHaveBeenCalledWith(detail, { Data_Type: "Plate", IDs: [], batchEnabled: false, batchSize: 1 });
   expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
 });
 
@@ -137,6 +137,24 @@ test("failed runs without outputs hide the output section and use the correct UU
 test("duration is calculated from recorded start and end, never guessed", () => {
   expect(durationLabel("2026-09-16T10:00:00Z", "2026-09-16T14:13:00Z")).toBe("4h 13m");
   expect(durationLabel("2026-09-16T10:00:00Z", null)).toBeNull();
+});
+
+test("batch child's primary action restores the parent and its secondary action restores only the batch", async () => {
+  const apply = jest.fn();
+  const parent = { ...detail, workflow_id: "parent", form: { ...detail.form, IDs: [15, 16], batchEnabled: true } };
+  const child = { ...detail, batch: { role: "child", parent_id: "parent", index: 2, total: 2 },
+    parent_run: parent, form: { ...detail.form, batchEnabled: false } };
+  fetchWorkflowHistoryDetail.mockResolvedValue(child);
+  render(<PreviousRuns onApply={apply} />);
+  const whole = await screen.findByRole("button", { name: "Rerun whole run" });
+  expect(whole).not.toHaveClass("bp5-outlined");
+  expect(screen.getByText("Batch 2 of 2")).toBeInTheDocument();
+  fireEvent.click(whole);
+  expect(apply).toHaveBeenLastCalledWith(parent, null);
+  const only = screen.getByRole("button", { name: "Rerun this batch only" });
+  expect(only).toHaveClass("bp5-outlined");
+  fireEvent.click(only);
+  expect(apply).toHaveBeenLastCalledWith(child, null);
 });
 
 test("many inputs start compact and can be expanded beyond six", async () => {

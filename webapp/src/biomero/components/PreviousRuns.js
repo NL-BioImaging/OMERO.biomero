@@ -108,8 +108,9 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     return () => observer.disconnect();
   }, [isOpen, loading, error, page.has_more, page.runs.length]);
 
-  const apply = (useSelection, differentData = false) => {
-    try { onApply(detail, differentData ? { Data_Type: detail.form.Data_Type, IDs: [] } : useSelection ? selection : null); }
+  const apply = (useSelection, differentData = false, wholeRun = false) => {
+    const source = wholeRun ? detail.parent_run : detail;
+    try { onApply(source, differentData ? { Data_Type: source.form.Data_Type, IDs: [], batchEnabled: false, batchSize: 1 } : useSelection ? selection : null); }
     catch (error) { setError(error.message); }
   };
   const content = <div className="flex flex-col gap-3">
@@ -168,6 +169,13 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         <Tag minimal icon="stopwatch">Duration: {durationLabel(detail.started, detail.ended)}</Tag>
       </Tooltip>}
       {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
+      {detail.batch && <Callout compact icon="layers" intent="primary" className="my-2">
+        {detail.batch.role === "child" ? <>
+          <strong>Batch {detail.batch.index} of {detail.batch.total}</strong> — part of a larger run.
+          <Button minimal small intent="primary" icon="arrow-up" onClick={() => setSelectedId(detail.batch.parent_id)}>View whole run</Button>
+          <div className="text-xs">The primary action restores the whole run. Rerunning only this batch does not split it again.</div>
+        </> : <strong>Whole run · {detail.batch.total} batches</strong>}
+      </Callout>}
       <div className={!embedded && detail.outputs?.length > 0 ? "grid grid-cols-1 xl:grid-cols-2 gap-4 my-3" : "my-3"}>
       {detail.form.IDs.length > 0 && <section aria-label="Input data" className="min-w-0">
         <strong>Input data</strong> <Tag minimal round>{detail.form.IDs.length} {detail.form.Data_Type}{detail.form.IDs.length === 1 ? "" : "s"}</Tag>
@@ -198,8 +206,11 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         </div>
       </Collapse>
       <div className="flex flex-wrap gap-2 mt-3">
+        {!embedded && detail.batch?.role === "child" && <Tooltip content="Restore all original inputs and batching settings from the parent run.">
+          <span><Button intent="primary" icon="repeat" disabled={!detail.parent_run?.inputs_available} onClick={() => apply(false, false, true)}>Rerun whole run</Button></span>
+        </Tooltip>}
         {!embedded && <Tooltip content={detail.inputs_available ? "Restore this run's original inputs and settings for review." : "Original inputs are missing or inaccessible."}>
-          <span><Button intent="primary" icon="repeat" disabled={!detail.inputs_available || !!detail.rerun_error} onClick={() => apply(false)}>Run again on same data</Button></span>
+          <span><Button intent="primary" outlined={detail.batch?.role === "child"} icon="repeat" disabled={!detail.inputs_available || !!detail.rerun_error} onClick={() => apply(false)}>{detail.batch?.role === "child" ? "Rerun this batch only" : detail.batch?.role === "parent" ? "Rerun whole run" : "Run again on same data"}</Button></span>
         </Tooltip>}
         {!embedded && <Tooltip content="Restore the settings, then choose new input data. Nothing is submitted yet.">
           <Button outlined intent="primary" icon="exchange" disabled={!!detail.rerun_error} onClick={() => apply(false, true)}>Run on different data</Button>

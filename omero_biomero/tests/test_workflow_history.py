@@ -151,6 +151,41 @@ def test_result_links_are_bounded_and_exclude_input_objects():
         params = conn.getQueryService.return_value.projection.call_args_list[0].args[1]
         assert params.map['inputs'].val[0].val == 15
     assert all(output['id'] != 15 for output in outputs)
+    query = conn.getQueryService.return_value.projection.call_args_list[0].args[0]
+    assert "Batch_Supervisor_Workflow_ID" in query
+    assert "biomero/workflow/batch" in query
+
+
+def test_child_reuse_disables_batching_and_retains_whole_parent_configuration():
+    from sqlalchemy import create_engine
+    engine = create_engine('sqlite://')
+    table = history.WorkflowProgressView.__table__
+    table.create(engine)
+    child, child_tasks = fixture()
+    parent, parent_tasks = fixture()
+    parent_tasks[0].task_name = 'SLURM_Run_Workflow_Batched.py'
+    parent_tasks[0].params.update(IDs=[15, 16, 17], batches=[[15, 16], [17]])
+    child_tasks[0].params['IDs'] = [17]
+    launcher_id, link_id = uuid4(), uuid4()
+    parent.tasks = [launcher_id, link_id]
+    link = SimpleNamespace(task_name='SLURM_Run_Workflow.py', params={'child_workflow_id': str(child.id), 'batch_index': 1})
+    with engine.begin() as db:
+        db.execute(table.insert().values(workflow_id=parent.id, user=1, group=2,
+            name='Slurm Workflow (Batched)', start_time=datetime.datetime(2026, 1, 1), status='DONE'))
+    tracker = Mock()
+    tracker.factory.datastore.engine = engine
+    tracker.repository.get.side_effect = {parent.id: parent, launcher_id: parent_tasks[0], link_id: link}.__getitem__
+    conn = Mock()
+    conn.getEventContext.return_value = SimpleNamespace(userId=1, groupId=2)
+    config = history.run_configuration(child, child_tasks)
+    with patch.object(history, '_inputs', return_value=[{'id': i} for i in [15, 16, 17]]):
+        history._batch_context(tracker, child, child_tasks, config, conn)
+    assert config['batch'] == {'role': 'child', 'parent_id': str(parent.id), 'index': 2, 'total': 2}
+    assert config['form']['IDs'] == [17]
+    assert not config['form']['batchEnabled']
+    assert config['parent_run']['form']['IDs'] == [15, 16, 17]
+    assert config['parent_run']['form']['batchEnabled']
+    engine.dispose()
 
 
 def test_inline_run_reads_original_transfer_inputs_and_output_options():
@@ -185,6 +220,7 @@ def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypat
     stored_run.add_task(stored_task.id)
     stored_run.complete_workflow()
     writer.save(stored_run, stored_task)
+    history.WorkflowProgressView.__table__.create(writer.factory.datastore.engine)
     before = inspect(writer.factory.datastore.engine).get_table_names()
     monkeypatch.delenv('SQLALCHEMY_URL', raising=False)
     monkeypatch.setenv(url_variable, url)

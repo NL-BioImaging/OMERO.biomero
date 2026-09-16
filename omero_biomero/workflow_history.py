@@ -170,7 +170,8 @@ def _outputs(conn, config):
         rows = conn.getQueryService().projection(
             f'SELECT DISTINCT obj.id, obj.name FROM {kind} obj '
             'JOIN obj.annotationLinks link JOIN link.child ann JOIN ann.mapValue mv '
-            "WHERE TYPE(ann) = MapAnnotation AND mv.name = 'Workflow_ID' "
+            "WHERE TYPE(ann) = MapAnnotation AND (mv.name = 'Workflow_ID' OR "
+            "(ann.ns = 'biomero/workflow/batch' AND mv.name = 'Batch_Supervisor_Workflow_ID')) "
             'AND mv.value = :uuid ' + exclude + 'ORDER BY obj.id', params, conn.SERVICE_OPTS)
         for row in rows:
             object_id = row[0].val
@@ -178,6 +179,42 @@ def _outputs(conn, config):
                 continue
             outputs.append({'id': object_id, 'name': row[1].val, 'type': kind})
     return outputs[:6], len(outputs) > 6
+
+
+def _batch_context(tracker, run, tasks, config, conn):
+    """Resolve explicit child IDs; a candidate's name alone proves nothing."""
+    parent_launcher = next((t for t in tasks if t.task_name.endswith('SLURM_Run_Workflow_Batched.py')), None)
+    if parent_launcher:
+        config['batch'] = {'role': 'parent', 'total': len(parent_launcher.params.get('batches', []))}
+        return
+    if not config['form'].get('batchEnabled'):
+        return
+    table = WorkflowProgressView.__table__
+    # Older child launchers have no back-reference. Narrow the candidate set in
+    # SQL, then verify the relationship from the parent's recorded task params.
+    statement = select(table.c.workflow_id).where(
+        table.c.user == run.user, table.c.group == run.group,
+        table.c.name.endswith('(Batched)')).order_by(table.c.start_time.desc()).limit(100)
+    with tracker.factory.datastore.engine.connect() as db:
+        candidates = list(db.execute(statement).scalars())
+    for parent_id in candidates:
+        parent = tracker.repository.get(parent_id)
+        if not _owned(parent, conn):
+            continue
+        parent_tasks = [tracker.repository.get(i) for i in parent.tasks]
+        child = next((t for t in parent_tasks if str((t.params or {}).get('child_workflow_id')) == str(run.id)), None)
+        if child is None:
+            continue
+        parent_config = run_configuration(parent, parent_tasks)
+        parent_config['inputs'] = _inputs(conn, parent_config)
+        parent_config['inputs_available'] = len(parent_config['inputs']) == len(parent_config['form']['IDs'])
+        launcher = next(t for t in parent_tasks if t.task_name.endswith('SLURM_Run_Workflow_Batched.py'))
+        config['batch'] = {'role': 'child', 'parent_id': str(parent.id),
+                           'index': int(child.params['batch_index']) + 1,
+                           'total': len(launcher.params.get('batches', []))}
+        config['parent_run'] = parent_config
+        config['form'].update(batchEnabled=False, batchSize=1)
+        return
 
 
 @login_required()
@@ -207,6 +244,7 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
                     break
             config['inputs'] = _inputs(conn, config) if config['form']['IDs'] else []
             config['inputs_available'] = len(config['inputs']) == len(config['form']['IDs'])
+            _batch_context(tracker, run, tasks, config, conn)
             # A missing annotation or failed result lookup must not block reuse.
             try:
                 config['outputs'], config['outputs_more'] = _outputs(conn, config)

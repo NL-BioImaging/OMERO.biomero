@@ -61,3 +61,23 @@ test("failed lookup is not presented as empty history", async () => {
   await screen.findByText("Could not load previous runs. Try again.");
   expect(screen.queryByText("No previous runs found.")).not.toBeInTheDocument();
 });
+
+test("selected run uses Blueprint primary intent and settings expand as a table", async () => {
+  render(<PreviousRuns embedded isOpen onApply={jest.fn()} />);
+  await screen.findByRole("button", { name: "Use settings on selected data" });
+  const selected = screen.getByRole("button", { pressed: true });
+  expect(selected).toHaveClass("bp5-intent-primary");
+  expect(selected).toHaveTextContent("segment");
+  const settings = screen.getByRole("button", { name: "Recorded settings" });
+  expect(settings).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(settings);
+  expect(settings).toHaveAttribute("aria-expanded", "true");
+  expect(await screen.findByRole("columnheader", { name: "Recorded value" })).toBeInTheDocument();
+});
+
+test("clear search returns to browsing all own runs", async () => {
+  render(<PreviousRuns embedded isOpen workflowName="segment" onApply={jest.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Clear history search" }));
+  expect(screen.getByLabelText("Search previous runs")).toHaveValue("");
+  await waitFor(() => expect(fetchWorkflowHistory).toHaveBeenCalledWith("", 0, expect.anything()));
+});

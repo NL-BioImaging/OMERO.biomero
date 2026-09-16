@@ -84,7 +84,6 @@ const RunPanel = ({ onWorkflowError }) => {
   const { state, updateState, toaster, runWorkflowData, apiLoading } = useAppContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [dialogRevision, setDialogRevision] = useState(0);
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
@@ -255,6 +254,7 @@ const RunPanel = ({ onWorkflowError }) => {
     // Only auto-switch if there's a search term (user is actively filtering)
     if (!searchTerm) return;
     
+    if (activeWorkflowTab === "history") return;
     const currentTabCount = activeWorkflowTab === "images" ? imageWorkflowCount : plateWorkflowCount;
     const otherTabCount = activeWorkflowTab === "images" ? plateWorkflowCount : imageWorkflowCount;
     
@@ -315,8 +315,6 @@ const RunPanel = ({ onWorkflowError }) => {
       updates.images = updates.historicalInputImages;
     }
     updateState(updates);
-    setActiveWorkflowTab(form.workflowMode);
-    setHistoryOpen(false);
     setDialogRevision(value => value + 1);
     setDialogOpen(true);
   };
@@ -396,18 +394,14 @@ const RunPanel = ({ onWorkflowError }) => {
 
   return (
     <div>
-      <PreviousRuns key={state.user?.active_group_id} isOpen={historyOpen} onClose={() => setHistoryOpen(false)}
-        onApply={applyHistory} />
       <div className="p-4">
-        <div className="mb-3">
-          <Button icon="repeat" intent="primary" onClick={() => setHistoryOpen(true)}>Rerun a workflow</Button>
-          <p className="bp5-text-muted text-sm mt-1">Restore a previous run’s data and settings, then review before submitting.</p>
-        </div>
         {/* Unified Workflow Search */}
         <div className="mb-4">
           <InputGroup
             leftIcon="search"
-            placeholder="Search workflows (segment, count, etc.)..."
+            placeholder={activeWorkflowTab === "history" ? "Search previous runs by workflow or UUID..." : "Search workflows (segment, count, etc.)..."}
+            aria-label={activeWorkflowTab === "history" ? "Search previous runs" : "Search workflows"}
+            maxLength={activeWorkflowTab === "history" ? 128 : undefined}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             rightElement={
@@ -450,10 +444,14 @@ const RunPanel = ({ onWorkflowError }) => {
                 }}
               />
             )}
+            <Tab id="history" title={<span><Icon icon="history" /> Previous runs</span>} />
           </Tabs>
           
           {/* Active Tab Description */}
           <div className="mt-2">
+            {activeWorkflowTab === "history" && <p className="text-sm bp5-text-muted">
+              Your runs in the active group, newest first. Inspect a run, then restore its data and settings for review.
+            </p>}
             {activeWorkflowTab === "images" && (
               <p className="text-sm text-gray-500">
                 For analyzing individual images from datasets or plates
@@ -467,7 +465,9 @@ const RunPanel = ({ onWorkflowError }) => {
           </div>
         </div>
 
-        {filteredWorkflows?.length > 0 ? (
+        {activeWorkflowTab === "history" ? (
+          <PreviousRuns key={`${state.user?.active_group_id}:${searchTerm}`} searchQuery={searchTerm} onApply={applyHistory} />
+        ) : filteredWorkflows?.length > 0 ? (
           // Only render grid after SLURM status is determined to prevent height jumping
           state.slurmStatus ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

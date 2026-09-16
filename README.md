@@ -80,9 +80,11 @@ Reads remain backward compatible with deployments that only have
 
 ### Reusing previous workflow settings
 
-In the Run panel, choose **Rerun a workflow** without selecting data first. Search
-by workflow name or paste a workflow UUID. The newest matching run is opened
-for inspection automatically.
+In the Run panel, open **Previous runs** alongside Image Workflows and Plate
+Workflows, without selecting data first. The shared search accepts a workflow
+name or UUID. Runs are listed newest first, with details beside the list on
+wide screens and below it on narrow screens. **Load more runs** appends older
+runs without changing the selected run. There is no separate history popup.
 
 - **Run again** loads the original Image or Plate selection.
 - **Use settings on selected data** is offered inside the workflow dialog when

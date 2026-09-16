@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, ButtonGroup, Callout, Card, Collapse, Dialog, DialogBody, HTMLTable, Icon, InputGroup, NonIdealState, Spinner, Tag, Tooltip } from "@blueprintjs/core";
+import { Button, Callout, Card, Collapse, HTMLTable, Icon, InputGroup, NonIdealState, Spinner, Tag, Tooltip } from "@blueprintjs/core";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 
 const statusIntent = status => ({ DONE: "success", FAILED: "danger", CANCELLED: "warning" }[status] || "primary");
@@ -8,8 +8,9 @@ const startedLabel = value => {
   return value && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "Start time unavailable";
 };
 
-export default function PreviousRuns({ isOpen, onClose, onApply, selection, embedded = false, workflowName = "" }) {
-  const [query, setQuery] = useState(workflowName);
+export default function PreviousRuns({ isOpen = true, onApply, selection, embedded = false, workflowName = "", searchQuery }) {
+  const [localQuery, setQuery] = useState(workflowName);
+  const query = searchQuery ?? localQuery;
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState({ runs: [], has_more: false });
   const [selectedId, setSelectedId] = useState(null);
@@ -24,14 +25,17 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection, embe
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    setSelectedId(null);
-    setDetail(null);
-    setDetailLoading(false);
+    if (offset === 0) {
+      setSelectedId(null);
+      setDetail(null);
+      setDetailLoading(false);
+    }
     const timer = setTimeout(() => {
       fetchWorkflowHistory(query, offset, controller.signal).then(result => {
         if (!controller.signal.aborted) {
-          setPage(result);
-          setSelectedId(result.runs[0]?.workflow_id || null);
+          setPage(previous => ({ ...result, runs: offset === 0 ? result.runs :
+            [...new Map([...previous.runs, ...result.runs].map(run => [run.workflow_id, run])).values()] }));
+          setSelectedId(previous => offset === 0 ? result.runs[0]?.workflow_id || null : previous);
         }
       }).catch(() => {
         if (!controller.signal.aborted) setError("Could not load previous runs. Try again.");
@@ -63,18 +67,21 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection, embe
     catch (error) { setError(error.message); }
   };
   const content = <div className="flex flex-col gap-3">
-    <div className="flex items-center gap-2">
+    {searchQuery === undefined && <div className="flex items-center gap-2">
       <InputGroup fill leftIcon="search" aria-label="Search previous runs" placeholder="Search workflow or paste workflow UUID"
         value={query} maxLength={128} onChange={e => { setQuery(e.target.value); setOffset(0); }}
         rightElement={query ? <Button minimal icon="cross" aria-label="Clear history search" onClick={() => { setQuery(""); setOffset(0); }} /> : undefined} />
       <Tooltip content="Your runs in the active group. Select a run to inspect it. Loading settings never submits a workflow." hoverOpenDelay={250}>
         <Button minimal icon="help" aria-label="About previous runs" />
       </Tooltip>
-    </div>
+    </div>}
     {error && <Callout intent="danger" icon="error" title="History unavailable">
       {error} <Button minimal intent="danger" icon="refresh" onClick={() => setRetry(value => value + 1)}>Retry</Button>
     </Callout>}
-    {loading ? <Spinner size={24} aria-label="Loading previous runs" /> : <div className="max-h-64 overflow-auto flex flex-col gap-1">
+    <div className={embedded ? "flex flex-col gap-3" : "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start"}>
+    <section aria-label="Workflow run history" className="min-w-0">
+    <div className="flex items-center justify-between mb-2"><strong>Recent runs</strong><Tag minimal round>{page.runs.length} loaded</Tag></div>
+    {loading && offset === 0 ? <Spinner size={24} aria-label="Loading previous runs" /> : <div className={`${embedded ? "max-h-64" : "max-h-[65vh]"} overflow-auto flex flex-col gap-1`}>
       {!error && !page.runs.length && <NonIdealState icon="search" title="No previous runs found." description="Try another workflow name or UUID." />}
       {page.runs.map(run => {
         const selected = selectedId === run.workflow_id;
@@ -85,20 +92,18 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection, embe
             icon={selected ? "tick-circle" : "history"} rightIcon="chevron-right">
             <div className="flex items-center justify-between gap-3 py-1">
               <div className="min-w-0"><div className="font-semibold truncate">{run.workflow_name}</div>
-                <div className="text-xs">{startedLabel(run.started)}</div></div>
+                <div className="text-xs">{startedLabel(run.started)}</div>
+                {!embedded && <div className="text-xs font-mono break-all">{run.workflow_id}</div>}</div>
               <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
             </div>
           </Button>
         </Tooltip>;
       })}
     </div>}
-    <div className="flex items-center justify-between">
-      <span className="bp5-text-muted text-xs">Page {offset / 20 + 1}</span>
-      <ButtonGroup minimal>
-        <Button icon="chevron-left" disabled={loading || offset === 0} onClick={() => setOffset(offset - 20)}>Previous page</Button>
-        <Button rightIcon="chevron-right" disabled={loading || !page.has_more} onClick={() => setOffset(offset + 20)}>Next page</Button>
-      </ButtonGroup>
-    </div>
+    {page.has_more && <Button className="mt-2" fill outlined icon="more" loading={loading} disabled={loading || !!error}
+      onClick={() => setOffset(offset + 20)}>Load more runs</Button>}
+    </section>
+    <section aria-label="Selected run details" className="min-w-0">
     {detailLoading && <Spinner size={24} aria-label="Loading run details" />}
     {detail && <Card compact>
       <div className="flex items-center gap-2 mb-2"><Icon icon="lab-test" intent="primary" />
@@ -129,9 +134,10 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection, embe
         </Tooltip>}
       </div>
     </Card>}
+    {!detail && !detailLoading && !error && !loading && page.runs.length > 0 &&
+      <NonIdealState icon="history" title="Select a run" description="Inspect its inputs and settings before running again." />}
+    </section>
+    </div>
   </div>;
-  if (embedded) return isOpen ? content : null;
-  return <Dialog isOpen={isOpen} onClose={onClose} title="Previous runs" icon="history" className="w-full max-w-3xl">
-    <DialogBody>{content}</DialogBody>
-  </Dialog>;
+  return isOpen ? content : null;
 }

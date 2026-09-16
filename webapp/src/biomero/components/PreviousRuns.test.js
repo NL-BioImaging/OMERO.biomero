@@ -93,3 +93,16 @@ test("clear search returns to browsing all own runs", async () => {
   expect(screen.getByLabelText("Search previous runs")).toHaveValue("");
   await waitFor(() => expect(fetchWorkflowHistory).toHaveBeenCalledWith("", 0, expect.anything()));
 });
+
+test("load more appends runs and preserves selected details", async () => {
+  fetchWorkflowHistory.mockResolvedValueOnce({ runs: [run], has_more: true })
+    .mockResolvedValueOnce({ runs: [{ ...run, workflow_id: "second", workflow_name: "older" }], has_more: false });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  await screen.findByRole("button", { name: "Run again" });
+  fireEvent.click(screen.getByRole("button", { name: "Load more runs" }));
+  await waitFor(() => expect(fetchWorkflowHistory).toHaveBeenCalledWith("", 20, expect.anything()));
+  await screen.findByRole("button", { name: /older/ });
+  expect(screen.getByRole("button", { pressed: true })).toHaveTextContent("segment");
+  expect(fetchWorkflowHistoryDetail).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("button", { name: "Load more runs" })).not.toBeInTheDocument();
+});

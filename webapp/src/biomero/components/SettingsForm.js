@@ -139,7 +139,7 @@ const SettingsForm = () => {
   
   const remoteShallowEnabled = !["false", "0", "no", "off"].includes(
     String(settingsForm?.SLURM?.remote_shallow_zarr ?? "true").trim().toLowerCase());
-  const workers = String(settingsForm?.SLURM?.result_normalizer_workers ?? "").trim();
+  const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
   const invalidShallowWorkers = state.ui?.shallow_zarr_enabled && remoteShallowEnabled &&
     workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
 
@@ -1296,7 +1296,7 @@ const SettingsForm = () => {
       {state.ui?.shallow_zarr_enabled && (
         <CollapsibleSection title="Shallow Zarr">
           <FormGroup helperText={<>
-            Normalize eligible results on Slurm before transfer. Enabled by default;
+            Shallow eligible Zarr results on Slurm before transfer. Enabled by default;
             opt out to shallow locally in the importer and avoid additional Slurm compute costs.
             <EnvVarNote vars={["BIOMERO_REMOTE_SHALLOW_ZARR"]} />
             Keep the worker and importer settings aligned. Environment overrides must
@@ -1324,9 +1324,9 @@ const SettingsForm = () => {
               ["time", "Shallower time limit", "", "Leave blank to inherit global sbatch_time, then the scheduler default."],
             ].map(([key, label, placeholder, description]) => (
               <React.Fragment key={key}>
-                {renderEditableField(label, `SLURM.result_normalizer_${key}`,
-                  settingsForm.SLURM?.[`result_normalizer_${key}`], placeholder,
-                  <>{description}<EnvVarNote vars={[`BIOMERO_RESULT_NORMALIZER_${key.toUpperCase()}`]} /></>)}
+                {renderEditableField(label, `SLURM.remote_shallower_${key}`,
+                  settingsForm.SLURM?.[`remote_shallower_${key}`], placeholder,
+                  <>{description}<EnvVarNote vars={[`BIOMERO_REMOTE_SHALLOWER_${key.toUpperCase()}`]} /></>)}
               </React.Fragment>
             ))}
           </>}

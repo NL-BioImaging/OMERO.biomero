@@ -101,7 +101,7 @@ test('hides shallower settings when shallow Zarr is disabled', async () => {
 });
 
 test('defaults remote on and retains helper settings across opt-out', async () => {
-  renderShallower(true, { result_normalizer_image: 'registry/helper:custom' });
+  renderShallower(true, { remote_shallower_image: 'registry/helper:custom' });
   const toggle = await screen.findByLabelText('Remote shallowing');
   expect(toggle).toBeChecked();
   expect(screen.getByLabelText('Shallower image')).toHaveValue('registry/helper:custom');
@@ -118,17 +118,17 @@ test('honours saved remote opt-out', async () => {
 });
 
 test('saves opt-out without deleting hidden helper values', async () => {
-  renderShallower(true, { result_normalizer_workers: '4' });
+  renderShallower(true, { remote_shallower_workers: '4' });
   fireEvent.click(await screen.findByLabelText('Remote shallowing'));
   fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
     expect.objectContaining({ SLURM: expect.objectContaining({
-      remote_shallow_zarr: 'false', result_normalizer_workers: '4',
+      remote_shallow_zarr: 'false', remote_shallower_workers: '4',
     }) }), expect.anything()));
 });
 
 test('rejects non-positive workers only while remote shallowing is enabled', async () => {
-  renderShallower(true, { result_normalizer_workers: '0' });
+  renderShallower(true, { remote_shallower_workers: '0' });
   const toggle = await screen.findByLabelText('Remote shallowing');
   expect(screen.getByRole('alert')).toHaveTextContent('positive integer');
   expect(screen.getByRole('button', { name: 'Save Settings' })).toBeDisabled();

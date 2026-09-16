@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Button, Callout, Card, Dialog, DialogBody, InputGroup, Spinner, Tag } from "@blueprintjs/core";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 
-export default function PreviousRuns({ isOpen, onClose, onApply, selection }) {
-  const [query, setQuery] = useState("");
+export default function PreviousRuns({ isOpen, onClose, onApply, selection, embedded = false, workflowName = "" }) {
+  const [query, setQuery] = useState(workflowName);
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState({ runs: [], has_more: false });
   const [selectedId, setSelectedId] = useState(null);
@@ -55,8 +55,7 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection }) {
     try { onApply(detail, useSelection ? selection : null); }
     catch (error) { setError(error.message); }
   };
-  return <Dialog isOpen={isOpen} onClose={onClose} title="Previous runs" icon="history" style={{ width: 760 }}>
-    <DialogBody>
+  const content = <div>
       <p>Your runs in the active group. Loading settings does not start a workflow.</p>
       <InputGroup aria-label="Search previous runs" placeholder="Search workflow or paste workflow UUID"
         value={query} maxLength={128} onChange={e => { setQuery(e.target.value); setOffset(0); }} />
@@ -64,7 +63,7 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection }) {
         <Button minimal onClick={() => setRetry(value => value + 1)}>Retry</Button>
       </Callout>}
       {loading ? <Spinner size={24} /> : <div className="max-h-64 overflow-auto my-3">
-        {!page.runs.length && <p>No previous runs found.</p>}
+        {!error && !page.runs.length && <p>No previous runs found.</p>}
         {page.runs.map(run => <Card key={run.workflow_id} className="mb-2">
           <Button minimal active={selectedId === run.workflow_id} onClick={() => setSelectedId(run.workflow_id)}>
             {run.workflow_name} — {new Date(run.started).toLocaleString()}
@@ -83,10 +82,13 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection }) {
         {!detail.inputs_available && <Callout intent="warning">Some original inputs are missing or inaccessible.</Callout>}
         <details><summary>Recorded settings</summary><pre className="max-h-48 overflow-auto">{JSON.stringify(detail.form, null, 2)}</pre></details>
         <div className="flex gap-2 mt-3">
-          <Button intent="primary" disabled={!detail.inputs_available} onClick={() => apply(false)}>Run again</Button>
-          <Button disabled={!selection?.IDs?.length} onClick={() => apply(true)}>Use settings on selected data</Button>
+          {!embedded && <Button intent="primary" disabled={!detail.inputs_available} onClick={() => apply(false)}>Run again</Button>}
+          <Button intent={embedded ? "primary" : undefined} disabled={!selection?.IDs?.length} onClick={() => apply(true)}>Use settings on selected data</Button>
         </div>
       </div>}
-    </DialogBody>
+    </div>;
+  if (embedded) return isOpen ? content : null;
+  return <Dialog isOpen={isOpen} onClose={onClose} title="Previous runs" icon="history" style={{ width: 760 }}>
+    <DialogBody>{content}</DialogBody>
   </Dialog>;
 }

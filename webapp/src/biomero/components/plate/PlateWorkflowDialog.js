@@ -8,7 +8,7 @@ import {
 import { useAppContext } from "../../../AppContext";
 import PlateWorkflowInput from "./PlateWorkflowInput";
 import PlateWorkflowOutput from "./PlateWorkflowOutput";
-import WorkflowForm from "../WorkflowForm";
+import WorkflowConfiguration from "../WorkflowConfiguration";
 import InputOptions from "../InputOptions";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "../WorkflowFileInputStep";
 
@@ -18,7 +18,6 @@ const PlateWorkflowDialog = ({
   setDialogOpen, 
   onWorkflowError, 
   onFinalSubmit,
-  historyButton,
   historyNotice,
 }) => {
   const { state, runWorkflowData } = useAppContext();
@@ -60,7 +59,7 @@ const PlateWorkflowDialog = ({
         setDialogOpen(false);
       }}
       initialStepIndex={0}
-      title={<span>Run Plate Workflow: {beautifyName(workflow?.name || 'Unknown')} {historyButton}</span>}
+      title={`Run Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`}
       navigationPosition="top"
       icon="lab-test"
       className="w-[calc(100vw-20vw)]"
@@ -123,7 +122,7 @@ const PlateWorkflowDialog = ({
         panel={
           <DialogBody>
             <H6>{workflow?.description}</H6>
-            <WorkflowForm />
+            <WorkflowConfiguration />
           </DialogBody>
         }
       />

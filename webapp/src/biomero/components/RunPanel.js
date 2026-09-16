@@ -22,7 +22,7 @@ import {
   Callout,
 } from "@blueprintjs/core";
 import { FaDocker } from "react-icons/fa6";
-import WorkflowForm from "./WorkflowForm";
+import WorkflowConfiguration from "./WorkflowConfiguration";
 import WorkflowOutput from "./WorkflowOutput";
 import WorkflowInput from "./WorkflowInput";
 import InputOptions from "./InputOptions";
@@ -325,10 +325,6 @@ const RunPanel = ({ onWorkflowError }) => {
     setDialogRevision(value => value + 1);
     setDialogOpen(true);
   };
-
-  const historyButton = <Button minimal icon="history" onClick={() => setHistoryOpen(true)}>
-    Load previous settings…
-  </Button>;
 
   const historyNotice = historyReview && <Callout intent="primary" className="mb-3">
     Settings loaded from {historyReview.workflow_id}. Review before running.
@@ -695,7 +691,6 @@ const RunPanel = ({ onWorkflowError }) => {
           return (
             <PlateWorkflowDialog
               key={dialogRevision}
-              historyButton={historyButton}
               historyNotice={historyNotice}
               workflow={state.selectedWorkflow}
               dialogOpen={dialogOpen}
@@ -716,7 +711,7 @@ const RunPanel = ({ onWorkflowError }) => {
             setCustomStepIndex(0); // Reset step index on close
           }}
           initialStepIndex={0}
-          title={<span>{beautifyName(state.selectedWorkflow.name)} {historyButton}</span>}
+          title={beautifyName(state.selectedWorkflow.name)}
           onChange={handleStepChange}
           navigationPosition={"top"}
           icon="cog"
@@ -781,11 +776,11 @@ const RunPanel = ({ onWorkflowError }) => {
 
           <DialogStep
             id="step2"
-            title="Workflow Parameters"
+            title="Configure Workflow"
             panel={
               <DialogBody>
                 <H6>{state.selectedWorkflow.description}</H6>
-                <WorkflowForm />
+                <WorkflowConfiguration />
               </DialogBody>
             }
           />

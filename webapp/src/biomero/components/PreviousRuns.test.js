@@ -47,3 +47,17 @@ test("closing aborts pending history requests", async () => {
   view.unmount();
   expect(signal.aborted).toBe(true);
 });
+
+test("embedded history renders inline, without another dialog or rerun action", async () => {
+  render(<PreviousRuns embedded isOpen onApply={jest.fn()} selection={{ IDs: [25], Data_Type: "Plate" }} />);
+  await screen.findByRole("button", { name: "Use settings on selected data" });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Run again" })).not.toBeInTheDocument();
+});
+
+test("failed lookup is not presented as empty history", async () => {
+  fetchWorkflowHistory.mockRejectedValue(new Error("unavailable"));
+  render(<PreviousRuns embedded isOpen onApply={jest.fn()} />);
+  await screen.findByText("Could not load previous runs. Try again.");
+  expect(screen.queryByText("No previous runs found.")).not.toBeInTheDocument();
+});

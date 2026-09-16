@@ -1,10 +1,11 @@
 """Read-only history and translation into the existing workflow dialog format."""
 from contextlib import contextmanager
 import logging
+import os
 from uuid import UUID
 
 from biomero import SlurmClient, WorkflowTracker
-from biomero.constants import workflow as wf, results, transfer, workflow_batched
+from biomero.constants import workflow as wf, results, transfer, workflow_batched, slurm_env
 from biomero.database import WorkflowProgressView
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -22,20 +23,22 @@ class HistoryConfigurationError(ValueError):
 @contextmanager
 def history_tracker():
     # No SSH connection, analytics runner, projection rebuild or table creation.
-    with SlurmClient.from_config(config_only=True) as client:
-        if not client.sqlalchemy_url:
-            raise RuntimeError('Workflow tracking is not configured')
-        tracker = WorkflowTracker(env={
+    configs = SlurmClient.load_config()
+    url = os.environ.get(slurm_env.SQLALCHEMY_URL,
+                         configs.get('ANALYTICS', 'sqlalchemy_url', fallback=None))
+    if not url:
+        raise RuntimeError('Workflow tracking is not configured')
+    tracker = WorkflowTracker(env={
             'PERSISTENCE_MODULE': 'eventsourcing_sqlalchemy',
-            'SQLALCHEMY_URL': client.sqlalchemy_url,
+            'SQLALCHEMY_URL': url,
             'SQLALCHEMY_SCOPED_SESSION_TOPIC': '',
             'CREATE_TABLE': 'no', 'WORKFLOWTRACKER_CREATE_TABLE': 'no',
-        })
-        try:
-            yield tracker
-        finally:
-            tracker.close()
-            tracker.factory.datastore.engine.dispose()
+    })
+    try:
+        yield tracker
+    finally:
+        tracker.close()
+        tracker.factory.datastore.engine.dispose()
 
 
 def run_configuration(run, tasks):

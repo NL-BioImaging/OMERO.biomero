@@ -111,7 +111,7 @@ def test_inline_run_reads_original_transfer_inputs_and_output_options():
     assert config['form']['useZarrFormat'] is True
 
 
-def test_replay_existing_event_store_without_creating_tables(tmp_path):
+def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypatch):
     from biomero import WorkflowTracker
     from biomero.eventsourcing import WorkflowRun, Task
     from sqlalchemy import inspect
@@ -124,8 +124,8 @@ def test_replay_existing_event_store_without_creating_tables(tmp_path):
     stored_run.add_task(stored_task.id)
     writer.save(stored_run, stored_task)
     before = inspect(writer.factory.datastore.engine).get_table_names()
-    with patch.object(history.SlurmClient, 'from_config') as factory:
-        factory.return_value.__enter__.return_value.sqlalchemy_url = url
+    monkeypatch.setenv('SQLALCHEMY_URL', url)
+    with patch.object(history.SlurmClient, 'from_config', side_effect=AssertionError('Must not initialize a Slurm client')):
         with history.history_tracker() as reader:
             run = reader.repository.get(workflow_id)
             config = history.run_configuration(run, [reader.repository.get(i) for i in run.tasks])
@@ -133,3 +133,13 @@ def test_replay_existing_event_store_without_creating_tables(tmp_path):
             assert inspect(reader.factory.datastore.engine).get_table_names() == before
     writer.close()
     writer.factory.datastore.engine.dispose()
+
+
+def test_history_reads_actual_config_file_without_slurm_client(tmp_path, monkeypatch):
+    config = tmp_path / 'slurm.ini'
+    url = 'sqlite:///' + str(tmp_path / 'empty.sqlite')
+    config.write_text('[ANALYTICS]\nsqlalchemy_url = ' + url)
+    monkeypatch.delenv('SQLALCHEMY_URL', raising=False)
+    with patch.object(history.SlurmClient, 'get_config_paths', return_value=[str(config)]):
+        with history.history_tracker() as tracker:
+            assert str(tracker.factory.datastore.engine.url) == url

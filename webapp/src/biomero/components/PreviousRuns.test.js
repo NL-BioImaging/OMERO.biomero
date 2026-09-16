@@ -36,6 +36,20 @@ test("reuse forwards current selection instead of old inputs", async () => {
   expect(apply).toHaveBeenCalledWith(detail, selection);
 });
 
+test("embedded reuse keeps apply above I/O and settings and shows recorded results", async () => {
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail,
+    outputs: [{ type: "Plate", id: 99, name: "Result plate" }],
+    batch: { role: "child", parent_id: "parent", index: 2, total: 2 } });
+  render(<PreviousRuns embedded onApply={jest.fn()} selection={{ IDs: [25], Data_Type: "Plate" }} />);
+  const apply = await screen.findByRole("button", { name: "Use settings on selected data" });
+  const output = screen.getByRole("link", { name: "Result plate (99)" });
+  const settings = screen.getByRole("button", { name: "Recorded settings" });
+  expect(apply.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(apply.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText("Batch 2 of 2")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Search workflow results in OMERO" })).toBeInTheDocument();
+});
+
 test("UUID search is sent to the history endpoint", async () => {
   render(<PreviousRuns isOpen onClose={jest.fn()} onApply={jest.fn()} />);
   fireEvent.change(screen.getByLabelText("Search previous runs"), { target: { value: "abc" } });

@@ -152,10 +152,10 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     {error && <Callout intent="danger" icon="error" title="History unavailable">
       {error} <Button minimal intent="danger" icon="refresh" onClick={() => setRetry(value => value + 1)}>Retry</Button>
     </Callout>}
-    <div className={embedded ? "flex flex-col gap-3" : "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start"}>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
     <section aria-label="Workflow run history" className="min-w-0">
     <div className="flex items-center justify-between mb-2"><strong>Recent runs</strong><Tag minimal round>{page.runs.length} of {page.total ?? "…"}</Tag></div>
-    {loading && offset === 0 ? <Spinner size={24} aria-label="Loading previous runs" /> : <div ref={scrollRoot} className={`${embedded ? "max-h-64" : "max-h-[65vh]"} overflow-auto flex flex-col gap-1`}>
+    {loading && offset === 0 ? <Spinner size={24} aria-label="Loading previous runs" /> : <div ref={scrollRoot} className={`${embedded ? "max-h-48 lg:max-h-[55vh]" : "max-h-[65vh]"} overflow-auto flex flex-col gap-1`}>
       {!error && !page.runs.length && <NonIdealState icon="search" title="No previous runs found." description="Try another workflow name or UUID." />}
       {page.runs.map(run => {
         const selected = selectedId === run.workflow_id;
@@ -182,7 +182,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     </section>
     <section aria-label="Selected run details" className="min-w-0">
     {detailLoading && <Spinner size={24} aria-label="Loading run details" />}
-    {detail && <Card compact>
+    {detail && <Card compact className={embedded ? "max-h-[55vh] overflow-auto" : undefined}>
       <div className="flex flex-wrap items-center gap-2 mb-2"><Icon icon="lab-test" intent="primary" />
         <strong>{detail.workflow_name}</strong><Tag minimal round intent="primary">{detail.form.version}</Tag>
         <Tooltip className="ml-auto" content="Search this workflow UUID in OMERO">
@@ -190,6 +190,11 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
             target="_blank" rel="noopener noreferrer">{detail.workflow_id}</a>
         </Tooltip>
       </div>
+      {embedded && !!selection?.IDs?.length && <div className="sticky top-0 z-10 bg-white py-2 mb-2">
+        <Tooltip content="Keep your selected data and output choices, and load this run's settings for review.">
+          <Button intent="primary" disabled={!!detail.rerun_error} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
+        </Tooltip>
+      </div>}
       {[{ ...page.runs.find(run => run.workflow_id === selectedId), ...detail }].map(run => <div key={run.workflow_id} className="flex flex-wrap items-center gap-2 mb-3">
         <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
         <span className="text-sm"><Icon icon="time" size={12} /> {startedLabel(run.started)}</span>
@@ -200,26 +205,26 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
       </Tooltip>}
       {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
       {detail.batch && <BatchNavigation key={selectedId} batch={detail.batch} selectedId={selectedId} onSelect={setSelectedId} />}
-      <div className={!embedded && detail.outputs?.length > 0 ? "grid grid-cols-1 xl:grid-cols-2 gap-4 my-3" : "my-3"}>
+      <div className={detail.outputs?.length > 0 ? "grid grid-cols-1 sm:grid-cols-2 gap-4 my-3" : "my-3"}>
       {detail.form.IDs.length > 0 && <section aria-label="Input data" className="min-w-0">
         <strong>Input data</strong> <Tag minimal round>{detail.form.IDs.length} {detail.form.Data_Type}{detail.form.IDs.length === 1 ? "" : "s"}</Tag>
         <DataLinks key={`inputs-${selectedId}`} objects={detail.inputs} type={detail.form.Data_Type} />
-        {!embedded && detail.inputs[0] && <HistoryDataPreview key={`input-${selectedId}`} type={detail.form.Data_Type} id={detail.inputs[0].id} />}
+        {detail.inputs[0] && <HistoryDataPreview key={`input-${selectedId}`} type={detail.form.Data_Type} id={detail.inputs[0].id} />}
       </section>}
-      {!embedded && detail.outputs?.length > 0 && <section aria-label="Output data" className="min-w-0">
+      {detail.outputs?.length > 0 && <section aria-label="Output data" className="min-w-0">
         <strong><Icon icon="arrow-right" /> Output data</strong> <Tag minimal round>{detail.outputs_more ? `Preview: first ${detail.outputs.length}` : `${detail.outputs.length} objects`}</Tag>
         <DataLinks key={`outputs-${selectedId}`} objects={detail.outputs} preview={detail.outputs_more} />
         {detail.outputs_more && <div className="bp5-text-muted text-xs mt-1">More results are available. Open OMERO below for the full list.</div>}
         {detail.outputs?.[0] && <HistoryDataPreview key={`output-${selectedId}`} type={detail.outputs[0].type} id={detail.outputs[0].id} />}
       </section>}
       </div>
-      {!embedded && <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">
+      <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">
         {!detail.outputs?.length && (detail.status || page.runs.find(run => run.workflow_id === selectedId)?.status) !== "FAILED" &&
           <span className="bp5-text-muted">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</span>}
         <a href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer">
           <Icon icon="search" /> {detail.outputs_more ? "View all results in OMERO" : "Search workflow results in OMERO"}
         </a>
-      </div>}
+      </div>
       {!detail.inputs_available && <Callout intent="warning" compact className="mb-2">Some original inputs are missing or inaccessible.</Callout>}
       <Button minimal fill alignText="left" icon="properties" rightIcon={settingsOpen ? "chevron-up" : "chevron-down"}
         aria-expanded={settingsOpen} aria-controls="history-recorded-settings" onClick={() => setSettingsOpen(value => !value)}>Recorded settings</Button>
@@ -239,9 +244,6 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         </Tooltip>}
         {!embedded && <Tooltip content="Restore the settings, then choose new input data. Nothing is submitted yet.">
           <Button outlined intent="primary" icon="exchange" disabled={!!detail.rerun_error} onClick={() => apply(false, true)}>Run on different data</Button>
-        </Tooltip>}
-        {embedded && !!selection?.IDs?.length && <Tooltip content="Keep your selected data and load this run's settings for review.">
-          <Button intent={embedded ? "primary" : undefined} disabled={!!detail.rerun_error} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
         </Tooltip>}
       </div>
     </Card>}

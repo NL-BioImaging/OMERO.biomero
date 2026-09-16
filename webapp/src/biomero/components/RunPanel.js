@@ -90,6 +90,7 @@ const RunPanel = ({ onWorkflowError }) => {
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
   const [isFileInputNextDisabled, setIsFileInputNextDisabled] = useState(false);
+  const [isConfigurationNextDisabled, setIsConfigurationNextDisabled] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState("images"); // "images" or "plates"
   useEffect(() => {
     // Keep the history badge searchable even before opening its tab.
@@ -784,10 +785,11 @@ const RunPanel = ({ onWorkflowError }) => {
           <DialogStep
             id="step2"
             title="Configure Workflow"
+            nextButtonProps={{ disabled: isConfigurationNextDisabled }}
             panel={
               <DialogBody>
                 <H6>{state.selectedWorkflow.description}</H6>
-                <WorkflowConfiguration />
+                <WorkflowConfiguration onNavigationBlockedChange={setIsConfigurationNextDisabled} />
               </DialogBody>
             }
           />

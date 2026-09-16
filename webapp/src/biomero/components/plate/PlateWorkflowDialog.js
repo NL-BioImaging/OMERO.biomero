@@ -24,6 +24,7 @@ const PlateWorkflowDialog = ({
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(true);
   const [isFileInputNextDisabled, setIsFileInputNextDisabled] = useState(false);
+  const [isConfigurationNextDisabled, setIsConfigurationNextDisabled] = useState(false);
 
   // Utility to beautify names
   const beautifyName = (name) => {
@@ -122,9 +123,10 @@ const PlateWorkflowDialog = ({
         panel={
           <DialogBody>
             <H6>{workflow?.description}</H6>
-            <WorkflowConfiguration />
+            <WorkflowConfiguration onNavigationBlockedChange={setIsConfigurationNextDisabled} />
           </DialogBody>
         }
+        nextButtonProps={{ disabled: isConfigurationNextDisabled }}
       />
 
       {/* Step 3: Output to Screen */}

@@ -17,7 +17,7 @@ export const durationLabel = (started, ended) => {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
-function DataLinks({ objects, type }) {
+function DataLinks({ objects, type, preview = false }) {
   const [expanded, setExpanded] = useState(false);
   return <div className="mt-2">
     <div className="flex flex-wrap gap-1 max-h-32 overflow-auto">
@@ -33,9 +33,36 @@ function DataLinks({ objects, type }) {
     </div>
     {objects.length > 1 && <Button minimal small intent="primary" icon={expanded ? "chevron-up" : "chevron-down"}
       aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
-      {expanded ? "Show fewer" : `+${objects.length - 1} more`}
+      {expanded ? "Show fewer" : preview ? `Show preview (${objects.length})` : `+${objects.length - 1} more`}
     </Button>}
   </div>;
+}
+
+export function batchListLabel(name) {
+  const child = name?.match(/\(batch (\d+)\/(\d+)\)$/i);
+  return child ? `Batch ${child[1]}/${child[2]}` : name?.endsWith("(Batched)") ? "Whole run" : null;
+}
+
+function BatchNavigation({ batch, selectedId, onSelect }) {
+  const [expanded, setExpanded] = useState(false);
+  const children = batch.children || [];
+  return <Callout compact icon="layers" intent="primary" className="my-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <strong>{batch.role === "child" ? `Batch ${batch.index} of ${batch.total}` : `Whole run · ${batch.total} batches`}</strong>
+      {batch.role === "child" && <Button outlined small intent="primary" icon="layers" onClick={() => onSelect(batch.parent_id)}>View whole run</Button>}
+    </div>
+    {batch.role === "child" && <div className="text-xs mt-1">Rerun all original images, or only the images in this batch.</div>}
+    <div className="flex flex-wrap gap-2 mt-2 max-h-40 overflow-auto">
+      {(expanded ? children : children.slice(0, 4)).map(child => <Tooltip key={child.workflow_id} content={`Open batch ${child.index} · ${child.workflow_id}`}>
+        <Button small outlined={child.workflow_id !== selectedId} active={child.workflow_id === selectedId}
+          intent={statusIntent(child.status)} onClick={() => onSelect(child.workflow_id)}>
+          Batch {child.index} · {child.status}
+        </Button>
+      </Tooltip>)}
+    </div>
+    {children.length > 4 && <Button minimal small intent="primary" icon={expanded ? "chevron-up" : "chevron-down"}
+      aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? "Show fewer batches" : `Show all ${children.length} batches`}</Button>}
+  </Callout>;
 }
 
 export default function PreviousRuns({ isOpen = true, onApply, selection, embedded = false, workflowName = "", searchQuery, onTotal }) {
@@ -141,7 +168,10 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
               <div className="min-w-0"><div className="font-semibold truncate">{run.workflow_name}</div>
                 <div className="text-xs">{startedLabel(run.started)}</div>
                 {!embedded && <div className="text-xs font-mono break-all">{run.workflow_id}</div>}</div>
-              <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {batchListLabel(run.name) && <Tag minimal round icon="layers">{batchListLabel(run.name)}</Tag>}
+                <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
+              </div>
             </div>
           </Button>
         </Tooltip>;
@@ -160,7 +190,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
             target="_blank" rel="noopener noreferrer">{detail.workflow_id}</a>
         </Tooltip>
       </div>
-      {page.runs.filter(run => run.workflow_id === selectedId).map(run => <div key={run.workflow_id} className="flex flex-wrap items-center gap-2 mb-3">
+      {[{ ...page.runs.find(run => run.workflow_id === selectedId), ...detail }].map(run => <div key={run.workflow_id} className="flex flex-wrap items-center gap-2 mb-3">
         <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
         <span className="text-sm"><Icon icon="time" size={12} /> {startedLabel(run.started)}</span>
         {run.name && <span className="bp5-text-muted text-xs">{run.name}</span>}
@@ -169,13 +199,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         <Tag minimal icon="stopwatch">Duration: {durationLabel(detail.started, detail.ended)}</Tag>
       </Tooltip>}
       {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
-      {detail.batch && <Callout compact icon="layers" intent="primary" className="my-2">
-        {detail.batch.role === "child" ? <>
-          <strong>Batch {detail.batch.index} of {detail.batch.total}</strong> — part of a larger run.
-          <Button minimal small intent="primary" icon="arrow-up" onClick={() => setSelectedId(detail.batch.parent_id)}>View whole run</Button>
-          <div className="text-xs">The primary action restores the whole run. Rerunning only this batch does not split it again.</div>
-        </> : <strong>Whole run · {detail.batch.total} batches</strong>}
-      </Callout>}
+      {detail.batch && <BatchNavigation key={selectedId} batch={detail.batch} selectedId={selectedId} onSelect={setSelectedId} />}
       <div className={!embedded && detail.outputs?.length > 0 ? "grid grid-cols-1 xl:grid-cols-2 gap-4 my-3" : "my-3"}>
       {detail.form.IDs.length > 0 && <section aria-label="Input data" className="min-w-0">
         <strong>Input data</strong> <Tag minimal round>{detail.form.IDs.length} {detail.form.Data_Type}{detail.form.IDs.length === 1 ? "" : "s"}</Tag>
@@ -183,16 +207,17 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         {!embedded && detail.inputs[0] && <HistoryDataPreview key={`input-${selectedId}`} type={detail.form.Data_Type} id={detail.inputs[0].id} />}
       </section>}
       {!embedded && detail.outputs?.length > 0 && <section aria-label="Output data" className="min-w-0">
-        <strong><Icon icon="arrow-right" /> Output data</strong> <Tag minimal round>{detail.outputs.length}{detail.outputs_more ? "+" : ""} objects</Tag>
-        <DataLinks key={`outputs-${selectedId}`} objects={detail.outputs} />
+        <strong><Icon icon="arrow-right" /> Output data</strong> <Tag minimal round>{detail.outputs_more ? `Preview: first ${detail.outputs.length}` : `${detail.outputs.length} objects`}</Tag>
+        <DataLinks key={`outputs-${selectedId}`} objects={detail.outputs} preview={detail.outputs_more} />
+        {detail.outputs_more && <div className="bp5-text-muted text-xs mt-1">More results are available. Open OMERO below for the full list.</div>}
         {detail.outputs?.[0] && <HistoryDataPreview key={`output-${selectedId}`} type={detail.outputs[0].type} id={detail.outputs[0].id} />}
       </section>}
       </div>
       {!embedded && <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">
-        {!detail.outputs?.length && page.runs.find(run => run.workflow_id === selectedId)?.status !== "FAILED" &&
+        {!detail.outputs?.length && (detail.status || page.runs.find(run => run.workflow_id === selectedId)?.status) !== "FAILED" &&
           <span className="bp5-text-muted">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</span>}
         <a href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer">
-          <Icon icon="search" /> Search workflow results in OMERO
+          <Icon icon="search" /> {detail.outputs_more ? "View all results in OMERO" : "Search workflow results in OMERO"}
         </a>
       </div>}
       {!detail.inputs_available && <Callout intent="warning" compact className="mb-2">Some original inputs are missing or inaccessible.</Callout>}

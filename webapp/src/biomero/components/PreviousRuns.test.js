@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import PreviousRuns, { durationLabel } from "./PreviousRuns";
+import PreviousRuns, { durationLabel, batchListLabel } from "./PreviousRuns";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 
 jest.mock("../../apiService", () => ({ fetchWorkflowHistory: jest.fn(), fetchWorkflowHistoryDetail: jest.fn() }));
@@ -119,7 +119,7 @@ test("load more appends runs and preserves selected details", async () => {
 
 test("failed run can show recorded partial outputs without claiming success", async () => {
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
-  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs: [{ type: "Plate", id: 99, name: "Partial result" }] });
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED", outputs: [{ type: "Plate", id: 99, name: "Partial result" }] });
   render(<PreviousRuns onApply={jest.fn()} />);
   const output = await screen.findByRole("link", { name: "Partial result (99)" });
   expect(output).toHaveAttribute("href", "/webclient/?show=plate-99");
@@ -128,6 +128,7 @@ test("failed run can show recorded partial outputs without claiming success", as
 
 test("failed runs without outputs hide the output section and use the correct UUID search link", async () => {
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED" });
   render(<PreviousRuns onApply={jest.fn()} />);
   const link = await screen.findByRole("link", { name: "abc" });
   expect(link).toHaveAttribute("href", "/webclient/search/?search_query=abc");
@@ -137,6 +138,37 @@ test("failed runs without outputs hide the output section and use the correct UU
 test("duration is calculated from recorded start and end, never guessed", () => {
   expect(durationLabel("2026-09-16T10:00:00Z", "2026-09-16T14:13:00Z")).toBe("4h 13m");
   expect(durationLabel("2026-09-16T10:00:00Z", null)).toBeNull();
+});
+
+test("batch list labels use recorded batch names", () => {
+  expect(batchListLabel("Slurm Workflow (Batched) (batch 2/2)")).toBe("Batch 2/2");
+  expect(batchListLabel("Slurm Workflow (Batched)")).toBe("Whole run");
+  expect(batchListLabel("Slurm Workflow")).toBeNull();
+});
+
+test("parent navigation shows off-page status and expandable child statuses", async () => {
+  const children = Array.from({ length: 5 }, (_, i) => ({ workflow_id: `child-${i}`, index: i + 1, status: i === 4 ? "FAILED" : "DONE" }));
+  fetchWorkflowHistoryDetail.mockResolvedValueOnce({ ...detail, batch: { role: "child", parent_id: "parent", index: 1, total: 5 } })
+    .mockResolvedValueOnce({ ...detail, workflow_id: "parent", status: "FAILED", started: "2026-09-01T12:00:00Z", batch: { role: "parent", total: 5, children } });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  const parentButton = await screen.findByRole("button", { name: "View whole run" });
+  expect(parentButton).toHaveClass("bp5-outlined");
+  fireEvent.click(parentButton);
+  await screen.findByText("Whole run · 5 batches");
+  expect(screen.getByText("FAILED")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Batch 5 · FAILED" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show all 5 batches" }));
+  fireEvent.click(screen.getByRole("button", { name: "Batch 5 · FAILED" }));
+  await waitFor(() => expect(fetchWorkflowHistoryDetail).toHaveBeenCalledWith("child-4", expect.anything()));
+});
+
+test("bounded results are explicitly a preview, not an incomplete full list", async () => {
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs_more: true,
+    outputs: Array.from({ length: 6 }, (_, i) => ({ type: "Image", id: i, name: `Result ${i}` })) });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  await screen.findByText("Preview: first 6");
+  expect(screen.getByRole("button", { name: "Show preview (6)" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "View all results in OMERO" })).toBeInTheDocument();
 });
 
 test("batch child's primary action restores the parent and its secondary action restores only the batch", async () => {

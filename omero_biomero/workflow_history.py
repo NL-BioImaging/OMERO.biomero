@@ -181,11 +181,28 @@ def _outputs(conn, config):
     return outputs[:6], len(outputs) > 6
 
 
+def _batch_children(tracker, parent, tasks):
+    links = [(UUID(str(t.params['child_workflow_id'])), int(t.params['batch_index']) + 1)
+             for t in tasks if isinstance(t.params, dict)
+             and 'child_workflow_id' in t.params and 'batch_index' in t.params]
+    if not links:
+        return []
+    table = WorkflowProgressView.__table__
+    with tracker.factory.datastore.engine.connect() as db:
+        rows = db.execute(select(table.c.workflow_id, table.c.status).where(
+            table.c.workflow_id.in_([uid for uid, _ in links]),
+            table.c.user == parent.user, table.c.group == parent.group)).mappings()
+        visible = {row['workflow_id']: row['status'] for row in rows}
+    return [{'workflow_id': str(uid), 'index': index, 'status': visible[uid]}
+            for uid, index in sorted(links, key=lambda link: link[1]) if uid in visible]
+
+
 def _batch_context(tracker, run, tasks, config, conn):
     """Resolve explicit child IDs; a candidate's name alone proves nothing."""
     parent_launcher = next((t for t in tasks if t.task_name.endswith('SLURM_Run_Workflow_Batched.py')), None)
     if parent_launcher:
         config['batch'] = {'role': 'parent', 'total': len(parent_launcher.params.get('batches', []))}
+        config['batch']['children'] = _batch_children(tracker, run, tasks)
         return
     if not config['form'].get('batchEnabled'):
         return
@@ -212,6 +229,7 @@ def _batch_context(tracker, run, tasks, config, conn):
         config['batch'] = {'role': 'child', 'parent_id': str(parent.id),
                            'index': int(child.params['batch_index']) + 1,
                            'total': len(launcher.params.get('batches', []))}
+        config['batch']['children'] = _batch_children(tracker, parent, parent_tasks)
         config['parent_run'] = parent_config
         config['form'].update(batchEnabled=False, batchSize=1)
         return
@@ -235,6 +253,12 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
                           'form': {'IDs': [], 'Data_Type': None, 'version': None},
                           'rerun_error': str(exc), 'warnings': []}
             config['started'] = run.created_on
+            config['name'] = run.name
+            table = WorkflowProgressView.__table__
+            with tracker.factory.datastore.engine.connect() as db:
+                config['status'] = db.execute(select(table.c.status).where(
+                    table.c.workflow_id == run.id, table.c.user == run.user,
+                    table.c.group == run.group)).scalar_one_or_none() or 'UNKNOWN'
             config['ended'] = None
             from biomero.eventsourcing import WorkflowRun
             for stored in tracker.recorder.select_events(run.id, desc=True):

@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 from uuid import uuid4
 import datetime
 
@@ -83,6 +83,8 @@ def test_empty_run_can_be_inspected_but_not_restored():
     tracker = Mock()
     tracker.repository.get.return_value = run
     tracker.recorder.select_events.return_value = []
+    tracker.factory.datastore.engine = MagicMock()
+    tracker.factory.datastore.engine.connect.return_value.__enter__.return_value.execute.return_value.scalar_one_or_none.return_value = 'FAILED'
     conn = Mock()
     conn.getEventContext.return_value = SimpleNamespace(userId=1, groupId=2)
     with patch.object(history, 'history_tracker') as factory, patch.object(history, '_outputs', return_value=([], False)):
@@ -172,6 +174,8 @@ def test_child_reuse_disables_batching_and_retains_whole_parent_configuration():
     with engine.begin() as db:
         db.execute(table.insert().values(workflow_id=parent.id, user=1, group=2,
             name='Slurm Workflow (Batched)', start_time=datetime.datetime(2026, 1, 1), status='DONE'))
+        db.execute(table.insert().values(workflow_id=child.id, user=1, group=2,
+            name='Slurm Workflow (Batched) (batch 2/2)', start_time=datetime.datetime(2026, 1, 1), status='FAILED'))
     tracker = Mock()
     tracker.factory.datastore.engine = engine
     tracker.repository.get.side_effect = {parent.id: parent, launcher_id: parent_tasks[0], link_id: link}.__getitem__
@@ -180,7 +184,8 @@ def test_child_reuse_disables_batching_and_retains_whole_parent_configuration():
     config = history.run_configuration(child, child_tasks)
     with patch.object(history, '_inputs', return_value=[{'id': i} for i in [15, 16, 17]]):
         history._batch_context(tracker, child, child_tasks, config, conn)
-    assert config['batch'] == {'role': 'child', 'parent_id': str(parent.id), 'index': 2, 'total': 2}
+    assert config['batch'] == {'role': 'child', 'parent_id': str(parent.id), 'index': 2, 'total': 2,
+                               'children': [{'workflow_id': str(child.id), 'index': 2, 'status': 'FAILED'}]}
     assert config['form']['IDs'] == [17]
     assert not config['form']['batchEnabled']
     assert config['parent_run']['form']['IDs'] == [15, 16, 17]

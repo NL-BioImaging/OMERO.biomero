@@ -321,6 +321,7 @@ const RunPanel = ({ onWorkflowError }) => {
     if (!selection || !selection.IDs.length) {
       updates.workflowInputState = {
         ...state.workflowInputState,
+        searchQuery: "",
         selectedImageIds: form.Data_Type === "Image" ? form.IDs : [],
         selectedPlates: !selection && form.Data_Type === "Plate" ? detail.inputs : [],
       };

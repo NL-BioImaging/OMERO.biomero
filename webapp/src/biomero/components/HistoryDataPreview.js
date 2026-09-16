@@ -3,7 +3,7 @@ import { Spinner, Tooltip } from "@blueprintjs/core";
 import { fetchPlateGridData } from "../../apiService";
 
 export const objectUrl = (type, id) => `/webclient/?show=${type.toLowerCase()}-${encodeURIComponent(id)}`;
-export const workflowSearchUrl = id => `/webclient/search/?search_query=${encodeURIComponent(id)}`;
+export const workflowSearchUrl = id => `/webclient/search/?search_query=${encodeURIComponent(`"${id}"`)}`;
 
 // Only the selected run's first object is previewed. Plate cells reuse the
 // webgateway grid used by PlateWorkflowInput, with at most six thumbnails.

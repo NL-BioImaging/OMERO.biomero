@@ -180,6 +180,8 @@ const WorkflowInput = () => {
   // Persistent state (survives Back/Next navigation)
   const wis = state.workflowInputState || {};
   const selectedImageIds = wis.selectedImageIds ?? [];
+  const hasHistoricalImages = (state.historicalInputImages?.length || 0) > 0;
+  const hasImageSources = hasHistoricalImages || (state.inputDatasets?.length || 0) > 0;
   // searchQuery stays local for instant typing; debounced value is mirrored to AppContext
   // so it survives Back/Next navigation
   const [searchQuery, setSearchQuery] = useState(wis.searchQuery ?? "");
@@ -572,7 +574,7 @@ const WorkflowInput = () => {
             value={state.inputDatasets.map((dataset) =>
               dataset?.id ? `${dataset.data} (ID: ${dataset.id})` : dataset?.data
             ) || []}
-            label="Select dataset(s) or plate(s)"
+            label={hasHistoricalImages ? "Add images from dataset(s) or plate(s) (optional)" : "Select dataset(s) or plate(s)"}
             placeholder="Select one or more datasets or plates..."
             buttonText="Select Datasets or Plates"
             tooltip="Select one or more OMERO datasets or plates as workflow input."
@@ -615,7 +617,7 @@ const WorkflowInput = () => {
             multiSelect={true}
             allowedCategories={["datasets", "plates"]}
             onClear={() => {
-              updateState({ inputDatasets: [], images: [] });
+              updateState({ inputDatasets: [], images: [], historicalInputImages: [] });
               updateWIS({ selectedImageIds: [] });
             }}
           />
@@ -688,7 +690,7 @@ const WorkflowInput = () => {
         )}
         
       </div>
-      {inputMode === "images" && state.inputDatasets?.length > 0 && (
+      {inputMode === "images" && hasImageSources && (
         <>
             {/* Filter bar and buttons */}
             <div className="pb-2">
@@ -701,9 +703,10 @@ const WorkflowInput = () => {
                         icon="refresh"
                         minimal
                         small
+                        disabled={!state.inputDatasets?.length}
                         onClick={() => {
-                          updateState({ images: [] });
-                          updateWIS({ selectedImageIds: [] });
+                          updateState({ images: state.historicalInputImages || [] });
+                          updateWIS({ selectedImageIds: (state.historicalInputImages || []).map(image => image.id) });
                           state.inputDatasets.forEach((ds) => {
                             loadImagesForDataset({
                               dataset: ds,
@@ -906,7 +909,7 @@ const WorkflowInput = () => {
             </div>
         </>
       )}
-      {inputMode === "images" && state.inputDatasets?.length > 0 && (
+      {inputMode === "images" && hasImageSources && (
         <div className="p-1 h-full overflow-hidden">
           <Tabs
             id="workflow-input-tabs"

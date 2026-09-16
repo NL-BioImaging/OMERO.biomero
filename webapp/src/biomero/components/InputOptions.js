@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { FormGroup, Switch, Slider, Divider, Tooltip, Intent, Callout, Button } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
+import { WorkflowStepIntro } from "./HistoryFeedback";
 
 const InputOptions = ({ itemLabel = "images" }) => {
   const { state, updateState } = useAppContext();
@@ -118,9 +119,9 @@ const InputOptions = ({ itemLabel = "images" }) => {
 
   return (
     <form>
-      <Callout intent={Intent.PRIMARY} icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the batching options">
         Batch options control how your selected data is split across SLURM jobs. These settings are optional, and if you are unsure you can keep the defaults and continue.
-      </Callout>
+      </WorkflowStepIntro>
       
       {/* Show recommendation callout for large datasets */}
       {recommendation.shouldRecommendBatch && !batchEnabled && (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout, Divider, Tooltip, Icon, Collapse, Button } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
-import { HistoryFieldCue } from "./HistoryFeedback";
+import { HistoryFieldCue, WorkflowStepIntro } from "./HistoryFeedback";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
@@ -418,9 +418,9 @@ const WorkflowForm = () => {
     <form>
       <h2>{workflowMetadata.name || workflowMetadata.workflow}</h2>
 
-      {!state.historyRun && <Callout intent={Intent.PRIMARY} icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the workflow parameters">
         Review the workflow parameters before launch. Most fields start with sensible defaults, so in many cases you only need to confirm the version and adjust only those settings relevant to your run.
-      </Callout>}
+      </WorkflowStepIntro>
       
       {/* Version Selection */}
       <FormGroup

@@ -10,6 +10,7 @@ import {
   Tooltip,
 } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
+import { WorkflowStepIntro } from "./HistoryFeedback";
 import OmeroAttachmentBrowser from "./OmeroAttachmentBrowser";
 
 /**
@@ -94,13 +95,13 @@ const WorkflowFileInputStep = ({ dialogBodyClassName = "" }) => {
 
   return (
     <DialogBody className={dialogBodyClassName || undefined}>
-      <Callout intent="primary" icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the file attachments">
         <span className="text-sm">
           {hasRequired
             ? "Select the OMERO file attachments required by this workflow. Each field is defined by the workflow, and the browser is pre-filtered to the expected file type for that input."
             : "Select any optional OMERO file attachments offered by this workflow. Each field is defined by the workflow, and the browser is pre-filtered to the expected file type for that input."}
         </span>
-      </Callout>
+      </WorkflowStepIntro>
 
       <Callout intent="primary" compact minimal className="mb-4">
         <span className="text-sm">

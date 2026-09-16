@@ -399,7 +399,10 @@ const RunPanel = ({ onWorkflowError }) => {
       <PreviousRuns key={state.user?.active_group_id} isOpen={historyOpen} onClose={() => setHistoryOpen(false)}
         onApply={applyHistory} />
       <div className="p-4">
-        <Button icon="history" className="mb-3" onClick={() => setHistoryOpen(true)}>Previous runs</Button>
+        <div className="mb-3">
+          <Button icon="repeat" intent="primary" onClick={() => setHistoryOpen(true)}>Rerun a workflow</Button>
+          <p className="bp5-text-muted text-sm mt-1">Restore a previous run’s data and settings, then review before submitting.</p>
+        </div>
         {/* Unified Workflow Search */}
         <div className="mb-4">
           <InputGroup

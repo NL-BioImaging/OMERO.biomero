@@ -22,7 +22,7 @@ test("configuration tab applies parameters inline while preserving data and outp
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...run, inputs_available: true, inputs: [{ id: 15, name: "Old plate" }],
     form: { IDs: [15], Data_Type: "Plate", version: "v1", diameter: 12, batchSize: 6, selectedScreens: ["old"] } });
   render(<WorkflowConfiguration />);
-  fireEvent.click(screen.getByRole("tab", { name: "Previous runs" }));
+  fireEvent.click(screen.getByRole("tab", { name: "Reuse previous settings" }));
   fireEvent.click(await screen.findByRole("button", { name: "Use settings on selected data" }));
   await waitFor(() => expect(screen.getByRole("tab", { name: "Parameters" })).toHaveAttribute("aria-selected", "true"));
   expect(state.formData).toMatchObject({ IDs: [25], version: "v1", diameter: 12, batchSize: 3, selectedScreens: ["new"] });

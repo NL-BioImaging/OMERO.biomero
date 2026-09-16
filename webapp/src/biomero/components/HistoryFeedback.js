@@ -7,12 +7,18 @@ export function HistoryDialogTitle({ title }) {
   const { state } = useAppContext();
   const history = state.historyRun;
   if (!history) return title;
-  return <div>
-    <div>{history.mode === "rerun" ? "Rerun" : "Reuse settings"}: {title}</div>
-    <Callout intent="primary" icon="history" className="mt-2 text-sm font-normal">
-      From <span className="break-all">{history.id}</span>. Review the restored settings before submitting.
-    </Callout>
-  </div>;
+  return `${history.mode === "rerun" ? "Rerun" : "Reuse settings"}: ${title}`;
+}
+
+export function WorkflowStepIntro({ children, step = "settings" }) {
+  const { state } = useAppContext();
+  const history = state.historyRun;
+  return <Callout intent="primary" icon={history ? "history" : "info-sign"} className="mb-4">
+    {history ? <>
+      {history.mode === "rerun" ? "Rerunning workflow from " : "Reusing settings from "}
+      <span className="break-all">{history.id}</span>. Review {step} before submitting.
+    </> : children}
+  </Callout>;
 }
 
 export function HistoryWarnings() {

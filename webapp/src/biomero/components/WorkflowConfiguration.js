@@ -4,7 +4,7 @@ import { useAppContext } from "../../AppContext";
 import PreviousRuns from "./PreviousRuns";
 import WorkflowForm from "./WorkflowForm";
 import { prepareHistoryRun, historyContext } from "../runHistory";
-import { HistoryWarnings } from "./HistoryFeedback";
+import { HistoryWarnings, WorkflowStepIntro } from "./HistoryFeedback";
 
 export default function WorkflowConfiguration() {
   const { state, updateState } = useAppContext();
@@ -29,10 +29,11 @@ export default function WorkflowConfiguration() {
     <HistoryWarnings />
     <Tabs id="workflow-configuration" large selectedTabId={tab} onChange={setTab} renderActiveTabPanelOnly>
       <Tab id="parameters" title="Parameters" panel={<WorkflowForm key={revision} />} />
-      <Tab id="previous-runs" title="Previous runs" panel={
+      <Tab id="previous-runs" title="Reuse previous settings" panel={<>
+        {state.historyRun && <WorkflowStepIntro step="the source run and settings" />}
         <PreviousRuns embedded isOpen={tab === "previous-runs"} workflowName={workflow.name}
           selection={selection} onApply={apply} />
-      } />
+      </>} />
     </Tabs>
   </>;
 }

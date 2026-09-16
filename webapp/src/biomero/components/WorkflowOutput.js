@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Alignment, Card, FormGroup, HTMLSelect, InputGroup, Switch, SwitchCard, Callout, Tooltip, Icon, Divider, Tag } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
-import { HistoryOutputCue, HistoryDestructiveWarning } from "./HistoryFeedback";
+import { HistoryOutputCue, HistoryDestructiveWarning, WorkflowStepIntro } from "./HistoryFeedback";
 import DatasetSelectWithPopover from "./DatasetSelectWithPopover.js";
 
 const MAX_SUGGESTED_DATASET_NAME_LENGTH = 64;
@@ -580,7 +580,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
   return (
     <form>
       {/* ── Intro ────────────────────────────────────── */}
-      {!state.historyRun && <Callout intent="primary" icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the output destinations and options">
         <span className="text-sm">
           Choose how your workflow results are imported back into OMERO.
             You must select <strong>at least one output option</strong> below.
@@ -588,7 +588,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
             <Tag minimal round intent="primary" className="px-1">Suggested</Tag>
               options are recommended based on this workflow's declared outputs.
         </span>
-      </Callout>}
+      </WorkflowStepIntro>
 
 
       {plateMode && !isImporterEnabled && (

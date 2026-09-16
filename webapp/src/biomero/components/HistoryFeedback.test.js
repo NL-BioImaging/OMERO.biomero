@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { useAppContext } from "../../AppContext";
-import { HistoryDialogTitle, HistoryFieldCue, HistoryOutputCue, HistoryWarnings, HistoryDestructiveWarning } from "./HistoryFeedback";
+import { HistoryDialogTitle, WorkflowStepIntro, HistoryFieldCue, HistoryOutputCue, HistoryWarnings, HistoryDestructiveWarning } from "./HistoryFeedback";
 
 jest.mock("../../AppContext", () => ({ useAppContext: jest.fn() }));
 let state;
@@ -16,12 +16,24 @@ beforeEach(() => {
 test("dialog title identifies source; field cue changes after editing", () => {
   const view = render(<><HistoryDialogTitle title="Plate Workflow: segment" /><HistoryFieldCue field="diameter" /></>);
   expect(screen.getByText("Rerun: Plate Workflow: segment")).toBeInTheDocument();
-  expect(screen.getByText("old-uuid")).toBeInTheDocument();
+  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
+  expect(view.container.querySelector(".bp5-callout")).toBeNull();
   expect(screen.getByText("From previous run")).toBeInTheDocument();
   state.formData.diameter = 15;
   view.rerender(<HistoryFieldCue field="diameter" />);
   expect(screen.getByText("Modified")).toBeInTheDocument();
   expect(screen.queryByText("From previous run")).not.toBeInTheDocument();
+});
+
+test("step banner replaces normal guidance in the existing body location", () => {
+  const view = render(<WorkflowStepIntro step="the selected input plates">Normal plate guidance</WorkflowStepIntro>);
+  expect(screen.getByText("old-uuid")).toBeInTheDocument();
+  expect(screen.queryByText("Normal plate guidance")).not.toBeInTheDocument();
+  expect(view.container.querySelectorAll(".bp5-callout")).toHaveLength(1);
+  state.historyRun = null;
+  view.rerender(<WorkflowStepIntro>Normal plate guidance</WorkflowStepIntro>);
+  expect(screen.getByText("Normal plate guidance")).toBeInTheDocument();
+  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
 });
 
 test("warnings and disabled source suggestions are orange, not informational", () => {

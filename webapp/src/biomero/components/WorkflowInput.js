@@ -22,6 +22,7 @@ import {
 import { fetchPlateImages } from "../../apiService";
 import DatasetSelectWithPopover from "./DatasetSelectWithPopover";
 import { useAppContext } from "../../AppContext";
+import { WorkflowStepIntro } from "./HistoryFeedback";
 
 /**
  * Renders a single thumbnail lazily — only requests the image when it scrolls
@@ -555,9 +556,9 @@ const WorkflowInput = () => {
 
   return (
     <DialogBody className="flex flex-col min-h-[75vh]">
-      {!state.historyRun && <Callout intent="primary" icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the selected input data">
         Choose the OMERO data this workflow should process. Start by selecting one or more datasets or plates, then review the images that will be included.
-      </Callout>}
+      </WorkflowStepIntro>
 
       <div className="w-full">
         <H6 className="mb-2">

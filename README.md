@@ -80,14 +80,14 @@ Reads remain backward compatible with deployments that only have
 
 ### Reusing previous workflow settings
 
-In the Run panel, choose **Previous runs** without selecting data first. Search
+In the Run panel, choose **Rerun a workflow** without selecting data first. Search
 by workflow name or paste a workflow UUID. The newest matching run is opened
 for inspection automatically.
 
 - **Run again** loads the original Image or Plate selection.
 - **Use settings on selected data** is offered inside the workflow dialog when
   input data is selected, and keeps that selection instead.
-- **Configure Workflow → Previous runs** embeds the same picker inside either
+- **Configure Workflow → Reuse previous settings** embeds the same picker inside either
   workflow dialog. Applying a run here restores its workflow parameters and
   version, keeping current input data, batching and output options unchanged.
 
@@ -97,7 +97,7 @@ prevent Run again, but do not prevent applying settings to other accessible data
 Output destinations and attachments must be reviewed. ROI clearing and deletion
 of label images are always off when loading history.
 
-The dialog header identifies the source run on every step. Parameter badges
+The existing step banners identify the source run; the title stays compact. Parameter badges
 show which values were restored and which have since been modified. Output
 suggestions reflect options enabled in the source run; disabled suggestions
 are orange. Destructive options receive a review warning only if the source

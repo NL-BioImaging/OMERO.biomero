@@ -75,6 +75,26 @@ def test_invalid_search_is_rejected_before_database_access():
     factory.assert_not_called()
 
 
+def test_empty_run_can_be_inspected_but_not_restored():
+    import json
+    run, _ = fixture()
+    run.name = 'Incomplete run'
+    run.created_on = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    tracker = Mock()
+    tracker.repository.get.return_value = run
+    tracker.recorder.select_events.return_value = []
+    conn = Mock()
+    conn.getEventContext.return_value = SimpleNamespace(userId=1, groupId=2)
+    with patch.object(history, 'history_tracker') as factory, patch.object(history, '_outputs', return_value=([], False)):
+        factory.return_value.__enter__.return_value = tracker
+        response = history.workflow_history_detail(RequestFactory().get('/history/'), workflow_id=run.id, conn=conn)
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    assert data['rerun_error']
+    assert data['ended'] is None
+    assert data['inputs'] == []
+
+
 def test_list_is_scoped_and_sorted_in_database():
     from sqlalchemy import create_engine
     from biomero.database import WorkflowProgressView
@@ -121,13 +141,15 @@ def test_result_links_are_bounded_and_exclude_input_objects():
     conn.getQueryService.return_value.projection.side_effect = [
         [row(15), row(99)], [], [row(i) for i in range(200, 207)]]
     config = {'workflow_id': str(uuid4()), 'form': {'Data_Type': 'Plate', 'IDs': [15]}}
-    with patch('omero.sys.ParametersI') as parameters:
+    from omero.sys import ParametersI
+    with patch('omero.sys.ParametersI', wraps=ParametersI) as parameters:
         outputs, more = history._outputs(conn, config)
         assert len(outputs) == 6
         assert more
         assert outputs[0] == {'id': 99, 'name': 'result 99', 'type': 'Plate'}
-        parameters.return_value.addLongList.assert_called_once_with('inputs', [15])
-        assert parameters.return_value.page.call_count == 3
+        assert parameters.call_count == 3
+        params = conn.getQueryService.return_value.projection.call_args_list[0].args[1]
+        assert params.map['inputs'].val[0].val == 15
     assert all(output['id'] != 15 for output in outputs)
 
 
@@ -161,6 +183,7 @@ def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypat
     _, tasks = fixture()
     stored_task = Task(workflow_id, tasks[0].task_name, '2.9', [15], tasks[0].params)
     stored_run.add_task(stored_task.id)
+    stored_run.complete_workflow()
     writer.save(stored_run, stored_task)
     before = inspect(writer.factory.datastore.engine).get_table_names()
     monkeypatch.delenv('SQLALCHEMY_URL', raising=False)
@@ -171,6 +194,16 @@ def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypat
             run = reader.repository.get(workflow_id)
             config = history.run_configuration(run, [reader.repository.get(i) for i in run.tasks])
             assert config['form']['diameter'] == 12
+            conn = Mock()
+            conn.getEventContext.return_value = SimpleNamespace(userId=1, groupId=2)
+            with patch.object(history, 'history_tracker') as factory, patch.object(history, '_inputs', return_value=[]), patch.object(history, '_outputs', return_value=([], False)):
+                factory.return_value.__enter__.return_value = reader
+                response = history.workflow_history_detail(RequestFactory().get('/history/'), workflow_id=workflow_id, conn=conn)
+                import json
+                detail = json.loads(response.content)
+                assert response.status_code == 200
+                assert detail['ended'] is not None
+                assert detail['started'] <= detail['ended']
             assert inspect(reader.factory.datastore.engine).get_table_names() == before
     writer.close()
     writer.factory.datastore.engine.dispose()

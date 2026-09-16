@@ -11,7 +11,7 @@ test("plate preview is bounded and cancels its request when leaving the run", as
     grid: [Array.from({ length: 20 }, (_, i) => ({ name: `image ${i}`, thumb_url: `/thumb/${i}` }))] });
   const view = render(<HistoryDataPreview type="Plate" id={15} />);
   await waitFor(() => expect(screen.getAllByRole("img")).toHaveLength(6));
-  expect(screen.getByRole("button", { name: "Open full plate" })).toHaveAttribute("href", "/webclient/?show=plate-15");
+  expect(screen.queryByRole("button", { name: "Open full plate" })).not.toBeInTheDocument();
   const signal = fetchPlateGridData.mock.calls[0][1];
   view.unmount();
   expect(signal.aborted).toBe(true);

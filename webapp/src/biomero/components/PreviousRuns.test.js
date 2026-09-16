@@ -1,11 +1,12 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import PreviousRuns from "./PreviousRuns";
+import PreviousRuns, { durationLabel } from "./PreviousRuns";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 
 jest.mock("../../apiService", () => ({ fetchWorkflowHistory: jest.fn(), fetchWorkflowHistoryDetail: jest.fn() }));
 jest.mock("./HistoryDataPreview", () => ({ __esModule: true, default: () => null,
+  workflowSearchUrl: id => `/webclient/search/?search_query=${id}`,
   objectUrl: (type, id) => `/webclient/?show=${type.toLowerCase()}-${id}` }));
 const run = { workflow_id: "abc", workflow_name: "segment", started: "2026-09-15T15:00:00Z", status: "DONE" };
 const detail = { ...run, inputs_available: true, inputs: [{ id: 15, name: "Plate A" }],
@@ -123,4 +124,17 @@ test("failed run can show recorded partial outputs without claiming success", as
   const output = await screen.findByRole("link", { name: "Plate: Partial result (99)" });
   expect(output).toHaveAttribute("href", "/webclient/?show=plate-99");
   expect(screen.getAllByText("FAILED")).toHaveLength(2);
+});
+
+test("failed runs without outputs hide the output section and use the correct UUID search link", async () => {
+  fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  const link = await screen.findByRole("link", { name: "abc" });
+  expect(link).toHaveAttribute("href", "/webclient/search/?search_query=abc");
+  expect(screen.queryByRole("region", { name: "Output data" })).not.toBeInTheDocument();
+});
+
+test("duration is calculated from recorded start and end, never guessed", () => {
+  expect(durationLabel("2026-09-16T10:00:00Z", "2026-09-16T14:13:00Z")).toBe("4h 13m");
+  expect(durationLabel("2026-09-16T10:00:00Z", null)).toBeNull();
 });

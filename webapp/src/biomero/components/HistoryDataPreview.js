@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { AnchorButton, Spinner, Tooltip } from "@blueprintjs/core";
+import { Spinner, Tooltip } from "@blueprintjs/core";
 import { fetchPlateGridData } from "../../apiService";
 
 export const objectUrl = (type, id) => `/webclient/?show=${type.toLowerCase()}-${encodeURIComponent(id)}`;
+export const workflowSearchUrl = id => `/webclient/search/?search_query=${encodeURIComponent(id)}`;
 
 // Only the selected run's first object is previewed. Plate cells reuse the
 // webgateway grid used by PlateWorkflowInput, with at most six thumbnails.
@@ -38,6 +39,5 @@ export default function HistoryDataPreview({ type, id }) {
         {cell.well}
       </a>
     </Tooltip>)}</div>
-    <AnchorButton minimal small icon="grid-view" href={objectUrl(type, id)} target="_blank" rel="noopener noreferrer">Open full plate</AnchorButton>
   </div>;
 }

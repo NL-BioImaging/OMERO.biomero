@@ -165,7 +165,7 @@ def _outputs(conn, config):
         params.page(0, 7)
         exclude = ''
         if kind == config['form']['Data_Type']:
-            params.addLongList('inputs', config['form']['IDs'])
+            params.addLongs('inputs', config['form']['IDs'])
             exclude = 'AND obj.id NOT IN (:inputs) '
         rows = conn.getQueryService().projection(
             f'SELECT DISTINCT obj.id, obj.name FROM {kind} obj '
@@ -188,8 +188,24 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
             run = tracker.repository.get(UUID(str(workflow_id)))
             if not _owned(run, conn):
                 return JsonResponse({'error': 'Run not found.'}, status=404)
-            config = run_configuration(run, [tracker.repository.get(i) for i in run.tasks])
-            config['inputs'] = _inputs(conn, config)
+            tasks = [tracker.repository.get(i) for i in run.tasks]
+            try:
+                config = run_configuration(run, tasks)
+            except HistoryConfigurationError as exc:
+                # Inspection is still useful when legacy/incomplete runs cannot
+                # be translated into a launchable dialog configuration.
+                config = {'workflow_id': str(run.id), 'workflow_name': run.name,
+                          'form': {'IDs': [], 'Data_Type': None, 'version': None},
+                          'rerun_error': str(exc), 'warnings': []}
+            config['started'] = run.created_on
+            config['ended'] = None
+            from biomero.eventsourcing import WorkflowRun
+            for stored in tracker.recorder.select_events(run.id, desc=True):
+                event = tracker.mapper.to_domain_event(stored)
+                if isinstance(event, (WorkflowRun.WorkflowCompleted, WorkflowRun.WorkflowFailed)):
+                    config['ended'] = event.timestamp
+                    break
+            config['inputs'] = _inputs(conn, config) if config['form']['IDs'] else []
             config['inputs_available'] = len(config['inputs']) == len(config['form']['IDs'])
             # A missing annotation or failed result lookup must not block reuse.
             try:

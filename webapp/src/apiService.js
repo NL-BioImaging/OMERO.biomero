@@ -28,7 +28,7 @@ export const apiRequest = async (
     });
     return response.data;
   } catch (error) {
-    console.error("API Request Error in apiService:", error);
+    if (!axios.isCancel(error)) console.error("API Request Error in apiService:", error);
     throw error;
   }
 };
@@ -490,7 +490,7 @@ export const fetchPlateGridData = async (plateId, signal) => {
     
     return plateData;
   } catch (error) {
-    console.error("Error fetching plate grid data:", error);
+    if (error.name !== "AbortError") console.error("Error fetching plate grid data:", error);
     throw error;
   }
 };

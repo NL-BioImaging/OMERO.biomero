@@ -1,12 +1,20 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Button, Callout, Card, Collapse, HTMLTable, Icon, InputGroup, NonIdealState, Spinner, Tag, Tooltip } from "@blueprintjs/core";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
-import HistoryDataPreview, { objectUrl } from "./HistoryDataPreview";
+import HistoryDataPreview, { objectUrl, workflowSearchUrl } from "./HistoryDataPreview";
 
 const statusIntent = status => ({ DONE: "success", FAILED: "danger", CANCELLED: "warning" }[status] || "primary");
 const startedLabel = value => {
   const date = new Date(value);
   return value && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "Start time unavailable";
+};
+export const durationLabel = (started, ended) => {
+  if (!started || !ended) return null;
+  const seconds = Math.floor((new Date(ended) - new Date(started)) / 1000);
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
 export default function PreviousRuns({ isOpen = true, onApply, selection, embedded = false, workflowName = "", searchQuery, onTotal }) {
@@ -126,7 +134,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
       <div className="flex flex-wrap items-center gap-2 mb-2"><Icon icon="lab-test" intent="primary" />
         <strong>{detail.workflow_name}</strong><Tag minimal round intent="primary">{detail.form.version}</Tag>
         <Tooltip className="ml-auto" content="Search this workflow UUID in OMERO">
-          <a className="text-xs font-mono break-all" href={`/webclient/?view=search&query=${encodeURIComponent(detail.workflow_id)}`}
+          <a className="text-xs font-mono break-all" href={workflowSearchUrl(detail.workflow_id)}
             target="_blank" rel="noopener noreferrer">{detail.workflow_id}</a>
         </Tooltip>
       </div>
@@ -135,26 +143,32 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         <span className="text-sm"><Icon icon="time" size={12} /> {startedLabel(run.started)}</span>
         {run.name && <span className="bp5-text-muted text-xs">{run.name}</span>}
       </div>)}
+      {durationLabel(detail.started, detail.ended) && <Tooltip content={`Ended ${startedLabel(detail.ended)}`}>
+        <Tag minimal icon="stopwatch">Duration: {durationLabel(detail.started, detail.ended)}</Tag>
+      </Tooltip>}
+      {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
+      {detail.form.IDs.length > 0 && <>
       <section aria-label="Input data" className="my-3">
         <strong>Input data</strong> <Tag minimal round>{detail.form.IDs.length} {detail.form.Data_Type}{detail.form.IDs.length === 1 ? "" : "s"}</Tag>
         <div className="flex flex-col gap-1 mt-2">{detail.inputs.slice(0, 6).map(input =>
-          <a key={input.id} href={objectUrl(detail.form.Data_Type, input.id)} target="_blank" rel="noopener noreferrer">
+          <a key={input.id} title={`Open full ${detail.form.Data_Type.toLowerCase()}`} href={objectUrl(detail.form.Data_Type, input.id)} target="_blank" rel="noopener noreferrer">
             <Icon icon={detail.form.Data_Type === "Plate" ? "grid-view" : "media"} /> {input.name} ({input.id})
           </a>)}</div>
         {detail.inputs.length > 6 && <span className="bp5-text-muted text-xs">Showing the first 6 inputs.</span>}
         {!embedded && detail.inputs[0] && <HistoryDataPreview key={`input-${selectedId}`} type={detail.form.Data_Type} id={detail.inputs[0].id} />}
       </section>
-      {!embedded && <section aria-label="Output data" className="my-3">
+      </>}
+      {!embedded && (detail.outputs?.length > 0 || page.runs.find(run => run.workflow_id === selectedId)?.status !== "FAILED") && <section aria-label="Output data" className="my-3">
         <strong><Icon icon="arrow-right" /> Output data</strong>
-        <div className="bp5-text-muted text-xs mb-2">Objects linked by workflow provenance; original inputs are excluded.</div>
         {(detail.outputs || []).map(output => <div key={`${output.type}-${output.id}`}>
           <a href={objectUrl(output.type, output.id)} target="_blank" rel="noopener noreferrer">{output.type}: {output.name} ({output.id})</a>
         </div>)}
         {!detail.outputs?.length && <p className="bp5-text-muted text-sm">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</p>}
         {detail.outputs?.[0] && <HistoryDataPreview key={`output-${selectedId}`} type={detail.outputs[0].type} id={detail.outputs[0].id} />}
-        <a href={`/webclient/?view=search&query=${encodeURIComponent(detail.workflow_id)}`} target="_blank" rel="noopener noreferrer">
-          <Icon icon="search" /> {detail.outputs_more ? "Find all linked data in OMERO" : "Search workflow in OMERO"}
+        <div className="text-right mt-2"><a href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer">
+          <Icon icon="search" /> Search workflow results in OMERO
         </a>
+        </div>
       </section>}
       {!detail.inputs_available && <Callout intent="warning" compact className="mb-2">Some original inputs are missing or inaccessible.</Callout>}
       <Button minimal fill alignText="left" icon="properties" rightIcon={settingsOpen ? "chevron-up" : "chevron-down"}
@@ -168,13 +182,13 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
       </Collapse>
       <div className="flex flex-wrap gap-2 mt-3">
         {!embedded && <Tooltip content={detail.inputs_available ? "Restore this run's original inputs and settings for review." : "Original inputs are missing or inaccessible."}>
-          <span><Button intent="primary" icon="repeat" disabled={!detail.inputs_available} onClick={() => apply(false)}>Run again on same data</Button></span>
+          <span><Button intent="primary" icon="repeat" disabled={!detail.inputs_available || !!detail.rerun_error} onClick={() => apply(false)}>Run again on same data</Button></span>
         </Tooltip>}
         {!embedded && <Tooltip content="Restore the settings, then choose new input data. Nothing is submitted yet.">
-          <Button outlined intent="primary" icon="exchange" onClick={() => apply(false, true)}>Run on different data</Button>
+          <Button outlined intent="primary" icon="exchange" disabled={!!detail.rerun_error} onClick={() => apply(false, true)}>Run on different data</Button>
         </Tooltip>}
         {embedded && !!selection?.IDs?.length && <Tooltip content="Keep your selected data and load this run's settings for review.">
-          <Button intent={embedded ? "primary" : undefined} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
+          <Button intent={embedded ? "primary" : undefined} disabled={!!detail.rerun_error} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
         </Tooltip>}
       </div>
     </Card>}

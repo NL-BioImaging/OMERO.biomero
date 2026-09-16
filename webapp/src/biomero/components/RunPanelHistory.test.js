@@ -7,6 +7,7 @@ import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiServi
 
 jest.mock("../../AppContext", () => ({ useAppContext: jest.fn() }));
 jest.mock("./HistoryDataPreview", () => ({ __esModule: true, default: () => null,
+  workflowSearchUrl: id => `/webclient/search/?search_query=${id}`,
   objectUrl: (type, id) => `/webclient/?show=${type.toLowerCase()}-${id}` }));
 jest.mock("../../apiService", () => ({ fetchWorkflowHistory: jest.fn(), fetchWorkflowHistoryDetail: jest.fn() }));
 

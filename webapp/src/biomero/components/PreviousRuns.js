@@ -124,9 +124,9 @@ export default function PreviousRuns({ isOpen, onClose, onApply, selection, embe
         {!embedded && <Tooltip content={detail.inputs_available ? "Restore this run's original inputs and settings for review." : "Original inputs are missing or inaccessible."}>
           <span><Button intent="primary" icon="repeat" disabled={!detail.inputs_available} onClick={() => apply(false)}>Run again</Button></span>
         </Tooltip>}
-        <Tooltip content={selection?.IDs?.length ? "Keep your selected data and load this run's settings for review." : "Select input data first to reuse settings on another selection."}>
-          <span><Button intent={embedded ? "primary" : undefined} icon="import" disabled={!selection?.IDs?.length} onClick={() => apply(true)}>Use settings on selected data</Button></span>
-        </Tooltip>
+        {embedded && !!selection?.IDs?.length && <Tooltip content="Keep your selected data and load this run's settings for review.">
+          <Button intent={embedded ? "primary" : undefined} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
+        </Tooltip>}
       </div>
     </Card>}
   </div>;

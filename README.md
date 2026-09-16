@@ -85,7 +85,8 @@ by workflow name or paste a workflow UUID. The newest matching run is opened
 for inspection automatically.
 
 - **Run again** loads the original Image or Plate selection.
-- **Use settings on selected data** keeps the current selection instead.
+- **Use settings on selected data** is offered inside the workflow dialog when
+  input data is selected, and keeps that selection instead.
 - **Configure Workflow → Previous runs** embeds the same picker inside either
   workflow dialog. Applying a run here restores its workflow parameters and
   version, keeping current input data, batching and output options unchanged.

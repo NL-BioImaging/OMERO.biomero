@@ -292,10 +292,6 @@ const RunPanel = ({ onWorkflowError }) => {
     setDialogOpen(true); // Open the dialog
   };
 
-  const historySelection = activeWorkflowTab === "plates"
-    ? { IDs: (state.workflowInputState?.selectedPlates || []).map(plate => plate.id), Data_Type: "Plate" }
-    : { IDs: state.workflowInputState?.selectedImageIds || [], Data_Type: "Image" };
-
   const applyHistory = (detail, selection) => {
     const workflow = state.workflows?.find(item => item.name === detail.workflow_name);
     const { form, warnings } = prepareHistoryRun(detail, workflow,
@@ -401,7 +397,7 @@ const RunPanel = ({ onWorkflowError }) => {
   return (
     <div>
       <PreviousRuns key={state.user?.active_group_id} isOpen={historyOpen} onClose={() => setHistoryOpen(false)}
-        onApply={applyHistory} selection={historySelection} />
+        onApply={applyHistory} />
       <div className="p-4">
         <Button icon="history" className="mb-3" onClick={() => setHistoryOpen(true)}>Previous runs</Button>
         {/* Unified Workflow Search */}

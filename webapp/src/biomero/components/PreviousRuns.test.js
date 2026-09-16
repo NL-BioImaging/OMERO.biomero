@@ -20,7 +20,7 @@ test("opens newest run directly and only applies when requested", async () => {
   const button = await screen.findByRole("button", { name: "Run again" });
   expect(apply).not.toHaveBeenCalled();
   expect(screen.getByText(/Plate A/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Use settings on selected data" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
   fireEvent.click(button);
   expect(apply).toHaveBeenCalledWith(detail, null);
 });
@@ -28,7 +28,7 @@ test("opens newest run directly and only applies when requested", async () => {
 test("reuse forwards current selection instead of old inputs", async () => {
   const apply = jest.fn();
   const selection = { IDs: [25], Data_Type: "Plate" };
-  render(<PreviousRuns isOpen onClose={jest.fn()} onApply={apply} selection={selection} />);
+  render(<PreviousRuns embedded isOpen onClose={jest.fn()} onApply={apply} selection={selection} />);
   fireEvent.click(await screen.findByRole("button", { name: "Use settings on selected data" }));
   expect(apply).toHaveBeenCalledWith(detail, selection);
 });
@@ -64,7 +64,7 @@ test("failed lookup is not presented as empty history", async () => {
 
 test("selected run uses Blueprint primary intent and settings expand as a table", async () => {
   render(<PreviousRuns embedded isOpen onApply={jest.fn()} />);
-  await screen.findByRole("button", { name: "Use settings on selected data" });
+  await screen.findByRole("button", { name: "Recorded settings" });
   const selected = screen.getByRole("button", { pressed: true });
   expect(selected).toHaveClass("bp5-intent-primary");
   expect(selected).toHaveTextContent("segment");
@@ -73,6 +73,18 @@ test("selected run uses Blueprint primary intent and settings expand as a table"
   fireEvent.click(settings);
   expect(settings).toHaveAttribute("aria-expanded", "true");
   expect(await screen.findByRole("columnheader", { name: "Recorded value" })).toBeInTheDocument();
+});
+
+test("empty selection hides reuse instead of offering a disabled action", async () => {
+  render(<PreviousRuns embedded isOpen onApply={jest.fn()} selection={{ IDs: [], Data_Type: "Plate" }} />);
+  await screen.findByRole("button", { name: "Recorded settings" });
+  expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
+});
+
+test("standalone entry only offers rerun even if a selection is supplied", async () => {
+  render(<PreviousRuns isOpen onApply={jest.fn()} selection={{ IDs: [25], Data_Type: "Plate" }} />);
+  await screen.findByRole("button", { name: "Run again" });
+  expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
 });
 
 test("clear search returns to browsing all own runs", async () => {

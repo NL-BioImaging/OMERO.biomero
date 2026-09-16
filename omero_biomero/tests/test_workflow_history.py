@@ -111,7 +111,8 @@ def test_inline_run_reads_original_transfer_inputs_and_output_options():
     assert config['form']['useZarrFormat'] is True
 
 
-def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypatch):
+@pytest.mark.parametrize('url_variable', ['SQLALCHEMY_URL', 'INGEST_TRACKING_DB_URL'])
+def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypatch, url_variable):
     from biomero import WorkflowTracker
     from biomero.eventsourcing import WorkflowRun, Task
     from sqlalchemy import inspect
@@ -124,7 +125,9 @@ def test_replay_existing_event_store_without_creating_tables(tmp_path, monkeypat
     stored_run.add_task(stored_task.id)
     writer.save(stored_run, stored_task)
     before = inspect(writer.factory.datastore.engine).get_table_names()
-    monkeypatch.setenv('SQLALCHEMY_URL', url)
+    monkeypatch.delenv('SQLALCHEMY_URL', raising=False)
+    monkeypatch.setenv(url_variable, url)
+    monkeypatch.setattr(history.SlurmClient, 'get_config_paths', lambda *args: [])
     with patch.object(history.SlurmClient, 'from_config', side_effect=AssertionError('Must not initialize a Slurm client')):
         with history.history_tracker() as reader:
             run = reader.repository.get(workflow_id)
@@ -143,3 +146,23 @@ def test_history_reads_actual_config_file_without_slurm_client(tmp_path, monkeyp
     with patch.object(history.SlurmClient, 'get_config_paths', return_value=[str(config)]):
         with history.history_tracker() as tracker:
             assert str(tracker.factory.datastore.engine.url) == url
+
+
+@pytest.mark.parametrize('explicit_env,config_url,expected', [
+    ('sqlite:///explicit', 'sqlite:///config', 'sqlite:///explicit'),
+    (None, 'sqlite:///config', 'sqlite:///config'),
+    (None, None, 'sqlite:///ingest'),
+    ('', '', 'sqlite:///ingest'),
+])
+def test_history_database_precedence(monkeypatch, explicit_env, config_url, expected):
+    from configparser import ConfigParser
+    config = ConfigParser()
+    if config_url is not None:
+        config.read_dict({'ANALYTICS': {'sqlalchemy_url': config_url}})
+    monkeypatch.delenv('SQLALCHEMY_URL', raising=False)
+    if explicit_env is not None:
+        monkeypatch.setenv('SQLALCHEMY_URL', explicit_env)
+    monkeypatch.setenv('INGEST_TRACKING_DB_URL', 'sqlite:///ingest')
+    with patch.object(history.SlurmClient, 'load_config', return_value=config), patch.object(history, 'WorkflowTracker') as factory:
+        with history.history_tracker():
+            assert factory.call_args.kwargs['env']['SQLALCHEMY_URL'] == expected

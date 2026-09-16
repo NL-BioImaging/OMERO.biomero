@@ -24,8 +24,11 @@ class HistoryConfigurationError(ValueError):
 def history_tracker():
     # No SSH connection, analytics runner, projection rebuild or table creation.
     configs = SlurmClient.load_config()
-    url = os.environ.get(slurm_env.SQLALCHEMY_URL,
-                         configs.get('ANALYTICS', 'sqlalchemy_url', fallback=None))
+    # NL-BIOMERO web already receives the shared tracking database under the
+    # importer setting. Prefer an explicitly configured workflow database.
+    url = (os.environ.get(slurm_env.SQLALCHEMY_URL)
+           or configs.get('ANALYTICS', 'sqlalchemy_url', fallback=None)
+           or os.environ.get('INGEST_TRACKING_DB_URL'))
     if not url:
         raise RuntimeError('Workflow tracking is not configured')
     tracker = WorkflowTracker(env={

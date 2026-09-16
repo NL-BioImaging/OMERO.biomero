@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { FormGroup, Switch, Slider, Divider, Tooltip, Intent, Callout, Button } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
 
 const InputOptions = ({ itemLabel = "images" }) => {
   const { state, updateState } = useAppContext();
-  const [batchEnabled, setBatchEnabled] = useState(false);
+  const [batchEnabled, setBatchEnabled] = useState(!!state.formData?.batchEnabled);
+  const preservedBatchSize = useRef(state.formData?.batchEnabled ? state.formData.batchSize : null);
+  const initialCount = useRef(state.formData?.IDs?.length);
   const [unlockDangerousJobs, setUnlockDangerousJobs] = useState(false);
   
   // Get the configured maximum batch jobs limit from UI settings, default to 100
@@ -35,15 +37,18 @@ const InputOptions = ({ itemLabel = "images" }) => {
 
   const totalImages = state.formData?.IDs?.length || 0;
   const [selectedJobCount, setSelectedJobCount] = useState(() => {
+    if (preservedBatchSize.current) return Math.ceil(totalImages / preservedBatchSize.current);
     return totalImages > 0 ? getDefaultJobCount(totalImages) : 2;
   });
   
-  const batchSize = calculateBatchSizeFromJobCount(totalImages, selectedJobCount);
+  const batchSize = preservedBatchSize.current || calculateBatchSizeFromJobCount(totalImages, selectedJobCount);
   const slurmOnline = state.slurmStatus === "online";
 
   // Update selected job count when IDs change
   useEffect(() => {
     const currentTotalImages = state.formData?.IDs?.length || 0;
+    if (preservedBatchSize.current && initialCount.current === currentTotalImages) return;
+    preservedBatchSize.current = null;
     if (currentTotalImages > 0) {
       const optimalJobCount = getDefaultJobCount(currentTotalImages);
       if (optimalJobCount !== selectedJobCount || totalImages !== currentTotalImages) {
@@ -56,7 +61,7 @@ const InputOptions = ({ itemLabel = "images" }) => {
     // Update the global form data with batch settings
     const currentTotalImages = state.formData?.IDs?.length || 0;
     const calculatedBatchCount = batchEnabled && currentTotalImages > 0 ? selectedJobCount : 1;
-    const calculatedBatchSize = calculateBatchSizeFromJobCount(currentTotalImages, selectedJobCount);
+    const calculatedBatchSize = preservedBatchSize.current || calculateBatchSizeFromJobCount(currentTotalImages, selectedJobCount);
     
     updateState({ 
       formData: { 
@@ -82,6 +87,7 @@ const InputOptions = ({ itemLabel = "images" }) => {
   };
 
   const handleJobCountChange = (jobCount) => {
+    preservedBatchSize.current = null;
     setSelectedJobCount(jobCount);
   };
 

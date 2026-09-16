@@ -262,11 +262,13 @@ const WorkflowInput = () => {
     const currentDatasetIds = state.inputDatasets?.map((ds) => ds.index) || [];
 
     // Remove images of datasets not in inputDatasets
-    const filteredImages = Object.entries(state.omeroFileTreeData)
+    const filteredImages = Object.entries(state.omeroFileTreeData || {})
       .filter(([key]) => currentDatasetIds.includes(key))
       .flatMap(([, datasetNode]) => datasetNode.children || []);
 
-    updateState({ images: filteredImages });
+    const images = [...new Map([...(state.historicalInputImages || []), ...filteredImages]
+      .map(image => [image.id, image])).values()];
+    updateState({ images });
 
     // Load images for datasets missing children in omeroFileTreeData
     state.inputDatasets?.forEach((dataset) => {
@@ -279,7 +281,7 @@ const WorkflowInput = () => {
         }); // Fetch only if not already loaded
       }
     });
-  }, [state.inputDatasets]);
+  }, [state.inputDatasets, state.historicalInputImages]);
 
   // Load thumbnails and sync image selection when images list changes
   useEffect(() => {
@@ -450,7 +452,7 @@ const WorkflowInput = () => {
           IDs: selectedImageIds,
           Data_Type: "Image", // Backend expects "Image" (case sensitive)
           plateMode: false,
-          useZarrFormat: shouldUseZarr, // Use admin-configured ZARR setting
+          useZarrFormat: shouldUseZarr || state.formData.useZarrFormat,
         },
       });
     }

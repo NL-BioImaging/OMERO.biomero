@@ -4,7 +4,7 @@ import { useAppContext } from "../../AppContext";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
-  const [selectedVersion, setSelectedVersion] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState(state.formData?.version || "");
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const ghURL = state.selectedWorkflow?.githubUrl;
@@ -67,11 +67,7 @@ const WorkflowForm = () => {
     }
   }, [configuredVersion, availableVersions, latestVersion, selectedVersion]);
 
-  if (!workflowMetadata) {
-    return <div>Loading workflow...</div>;
-  }
-
-  const defaultValues = workflowMetadata.inputs.reduce((acc, input) => {
+  const defaultValues = (workflowMetadata?.inputs || []).reduce((acc, input) => {
     const defaultValue = input["default-value"];
     const choices = input["value-choices"] || [];
 
@@ -90,7 +86,7 @@ const WorkflowForm = () => {
   }, {});
 
   useEffect(() => {
-    if (selectedVersion) {
+    if (selectedVersion && workflowMetadata) {
       const mergedFormData = {
         ...defaultValues,
         ...state.formData,
@@ -121,7 +117,7 @@ const WorkflowForm = () => {
         formData: mergedFormData
       });
     }
-  }, [selectedVersion]);
+  }, [selectedVersion, workflowMetadata]);
 
   // Force ZARR format when workflow requires it (plate workflows or admin-configured ZARR workflows)
   useEffect(() => {
@@ -140,6 +136,10 @@ const WorkflowForm = () => {
       }
     }
   }, [workflowName, state.config, workflowMetadata]);
+
+  if (!workflowMetadata) {
+    return <div>Loading workflow...</div>;
+  }
 
   const handleInputChange = (id, value) => {
     updateState({

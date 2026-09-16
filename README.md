@@ -78,6 +78,33 @@ Reads remain backward compatible with deployments that only have
 
 ## Development
 
+### Reusing previous workflow settings
+
+In the Run panel, choose **Previous runs** without selecting data first. Search
+by workflow name or paste a workflow UUID. The newest matching run is opened
+for inspection automatically.
+
+- **Run again** loads the original Image or Plate selection.
+- **Use settings on selected data** keeps the current selection instead.
+- **Load previous settings…** in either workflow dialog opens the same picker.
+
+Both actions open the normal workflow dialog for review; neither submits a job.
+The recorded workflow version must still be installed. Missing original inputs
+prevent Run again, but do not prevent applying settings to other accessible data.
+Output destinations and attachments must be reviewed. ROI clearing and deletion
+of label images are always off when loading history.
+
+History currently includes only the signed-in user's runs in the active group.
+It reads the existing workflow-progress index and replays the recorded workflow
+and task aggregates; it does not rely on OMERO key/value annotations or write to
+the tracking database. Reuse supports runs containing one scientific workflow
+with recorded Image or Plate inputs. Older incomplete records or multi-workflow
+pipelines display an explanation instead of guessing settings.
+
+This is a new execution through the existing submission path, not recovery of an
+old job or a guarantee of identical results. Sharing and durable rerun lineage
+are not included in this first implementation.
+
 The following instructions assume Ubuntu OS.
 For development, we use [NL-BIOMERO](https://github.com/NL-BioImaging/NL-BIOMERO) - dockerized OMERO setup.
 

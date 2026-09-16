@@ -19,6 +19,7 @@ import {
   Tabs,
   Tab,
   Icon,
+  Callout,
 } from "@blueprintjs/core";
 import { FaDocker } from "react-icons/fa6";
 import WorkflowForm from "./WorkflowForm";
@@ -28,6 +29,8 @@ import InputOptions from "./InputOptions";
 import PlateWorkflowDialog from "./plate/PlateWorkflowDialog";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "./WorkflowFileInputStep";
 import { getWorkflowModes, isWorkflowAvailableInTab } from "../workflowModes";
+import PreviousRuns from "./PreviousRuns";
+import { prepareHistoryRun } from "../runHistory";
 
 const DescriptionWithToggle = ({ description }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -81,6 +84,9 @@ const RunPanel = ({ onWorkflowError }) => {
   const { state, updateState, toaster, runWorkflowData, apiLoading } = useAppContext();
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyReview, setHistoryReview] = useState(null);
+  const [dialogRevision, setDialogRevision] = useState(0);
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
   const [isFileInputNextDisabled, setIsFileInputNextDisabled] = useState(false);
@@ -268,12 +274,15 @@ const RunPanel = ({ onWorkflowError }) => {
 
   // Handle workflow click
   const handleWorkflowClick = (workflow) => {
+    setHistoryReview(null);
+    setDialogRevision(value => value + 1);
     // Dual-mode workflows use the dialog associated with the card's active tab.
     const workflowMode = activeWorkflowTab === "plates" ? "plates" : "images";
     
     // Set selected workflow in the global state context
     updateState({
       selectedWorkflow: workflow, // Set selectedWorkflow in context
+      historicalInputImages: [],
       formData: {
         IDs: [], // Empty or default value
         Data_Type: "Image", // Backend expects "Image" (case sensitive)
@@ -283,6 +292,48 @@ const RunPanel = ({ onWorkflowError }) => {
     });
     setDialogOpen(true); // Open the dialog
   };
+
+  const historySelection = activeWorkflowTab === "plates"
+    ? { IDs: (state.workflowInputState?.selectedPlates || []).map(plate => plate.id), Data_Type: "Plate" }
+    : { IDs: state.workflowInputState?.selectedImageIds || [], Data_Type: "Image" };
+
+  const applyHistory = (detail, selection) => {
+    const workflow = state.workflows?.find(item => item.name === detail.workflow_name);
+    const { form, warnings } = prepareHistoryRun(detail, workflow,
+      workflowVersions[detail.workflow_name], selection);
+    if (!isWorkflowAvailableInTab(getModesForWorkflow(detail.workflow_name), form.workflowMode, isImporterEnabled)) {
+      throw new Error("This workflow is not available for this input type in the current setup.");
+    }
+    const updates = {
+      selectedWorkflow: workflow,
+      formData: { ...getWorkflowOutputDefaults(workflow), ...form },
+    };
+    if (!selection) {
+      updates.workflowInputState = {
+        ...state.workflowInputState,
+        selectedImageIds: form.Data_Type === "Image" ? form.IDs : [],
+        selectedPlates: form.Data_Type === "Plate" ? detail.inputs : [],
+      };
+      updates.inputDatasets = [];
+      updates.historicalInputImages = form.Data_Type === "Image" ? detail.inputs : [];
+      updates.images = updates.historicalInputImages;
+    }
+    updateState(updates);
+    setActiveWorkflowTab(form.workflowMode);
+    setHistoryReview({ workflow_id: detail.workflow_id, warnings });
+    setHistoryOpen(false);
+    setDialogRevision(value => value + 1);
+    setDialogOpen(true);
+  };
+
+  const historyButton = <Button minimal icon="history" onClick={() => setHistoryOpen(true)}>
+    Load previous settings…
+  </Button>;
+
+  const historyNotice = historyReview && <Callout intent="primary" className="mb-3">
+    Settings loaded from {historyReview.workflow_id}. Review before running.
+    {historyReview.warnings.map(warning => <p key={warning}>{warning}</p>)}
+  </Callout>;
 
   const handleFinalSubmit = (workflow) => {
     updateState({ workflowStatusTooltipShown: true });
@@ -359,7 +410,11 @@ const RunPanel = ({ onWorkflowError }) => {
 
   return (
     <div>
+      <PreviousRuns key={state.user?.active_group_id} isOpen={historyOpen} onClose={() => setHistoryOpen(false)}
+        onApply={applyHistory} selection={historySelection} />
       <div className="p-4">
+        <Button icon="history" className="mb-3" onClick={() => setHistoryOpen(true)}>Previous runs</Button>
+        {historyNotice}
         {/* Unified Workflow Search */}
         <div className="mb-4">
           <InputGroup
@@ -639,6 +694,9 @@ const RunPanel = ({ onWorkflowError }) => {
         if (isPlateMode && isImporterEnabled) {
           return (
             <PlateWorkflowDialog
+              key={dialogRevision}
+              historyButton={historyButton}
+              historyNotice={historyNotice}
               workflow={state.selectedWorkflow}
               dialogOpen={dialogOpen}
               setDialogOpen={setDialogOpen}
@@ -651,13 +709,14 @@ const RunPanel = ({ onWorkflowError }) => {
         // Use existing MultistepDialog for image workflows (or plate workflows when importer is disabled)
         return (
         <MultistepDialog
+          key={dialogRevision}
           isOpen={dialogOpen}
           onClose={() => {
             setDialogOpen(false);
             setCustomStepIndex(0); // Reset step index on close
           }}
           initialStepIndex={0}
-          title={beautifyName(state.selectedWorkflow.name)}
+          title={<span>{beautifyName(state.selectedWorkflow.name)} {historyButton}</span>}
           onChange={handleStepChange}
           navigationPosition={"top"}
           icon="cog"
@@ -677,11 +736,14 @@ const RunPanel = ({ onWorkflowError }) => {
             title="Input Data"
             className="min-h-[75vh]"
             panel={
+              <>
+              {historyNotice}
               <WorkflowInput
                 onSelectionChange={(selectedImages) => {
                   setIsNextDisabled(selectedImages.length === 0);
                 }}
               />
+              </>
             }
             nextButtonProps={{
               disabled: isNextDisabled,

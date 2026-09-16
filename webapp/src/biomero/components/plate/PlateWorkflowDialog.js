@@ -17,7 +17,9 @@ const PlateWorkflowDialog = ({
   dialogOpen, 
   setDialogOpen, 
   onWorkflowError, 
-  onFinalSubmit 
+  onFinalSubmit,
+  historyButton,
+  historyNotice,
 }) => {
   const { state, runWorkflowData } = useAppContext();
   const [isNextDisabled, setIsNextDisabled] = useState(true);
@@ -58,7 +60,7 @@ const PlateWorkflowDialog = ({
         setDialogOpen(false);
       }}
       initialStepIndex={0}
-      title={`Run Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`}
+      title={<span>Run Plate Workflow: {beautifyName(workflow?.name || 'Unknown')} {historyButton}</span>}
       navigationPosition="top"
       icon="lab-test"
       className="w-[calc(100vw-20vw)]"
@@ -74,11 +76,14 @@ const PlateWorkflowDialog = ({
         title="Select Plate"
         className="min-h-[75vh]"
         panel={
+          <>
+          {historyNotice}
           <PlateWorkflowInput
             onSelectionChange={(hasSelection) => {
               setIsNextDisabled(!hasSelection);
             }}
           />
+          </>
         }
         nextButtonProps={{
           disabled: isNextDisabled,

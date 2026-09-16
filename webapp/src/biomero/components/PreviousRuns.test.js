@@ -121,7 +121,7 @@ test("failed run can show recorded partial outputs without claiming success", as
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs: [{ type: "Plate", id: 99, name: "Partial result" }] });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const output = await screen.findByRole("link", { name: "Plate: Partial result (99)" });
+  const output = await screen.findByRole("link", { name: "Partial result (99)" });
   expect(output).toHaveAttribute("href", "/webclient/?show=plate-99");
   expect(screen.getAllByText("FAILED")).toHaveLength(2);
 });
@@ -137,4 +137,16 @@ test("failed runs without outputs hide the output section and use the correct UU
 test("duration is calculated from recorded start and end, never guessed", () => {
   expect(durationLabel("2026-09-16T10:00:00Z", "2026-09-16T14:13:00Z")).toBe("4h 13m");
   expect(durationLabel("2026-09-16T10:00:00Z", null)).toBeNull();
+});
+
+test("many inputs start compact and can be expanded beyond six", async () => {
+  const inputs = Array.from({ length: 9 }, (_, i) => ({ id: i + 1, name: `Source ${i + 1}` }));
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, inputs, form: { ...detail.form, IDs: inputs.map(item => item.id) } });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  await screen.findByRole("link", { name: "Source 1 (1)" });
+  expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "+8 more" }));
+  expect(screen.getByRole("link", { name: "Source 9 (9)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+  expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
 });

@@ -17,6 +17,27 @@ export const durationLabel = (started, ended) => {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
+function DataLinks({ objects, type }) {
+  const [expanded, setExpanded] = useState(false);
+  return <div className="mt-2">
+    <div className="flex flex-wrap gap-1 max-h-32 overflow-auto">
+      {(expanded ? objects : objects.slice(0, 1)).map(object => {
+        const kind = object.type || type;
+        return <a key={`${kind}-${object.id}`} className="max-w-full" title={`Open full ${kind.toLowerCase()}: ${object.name} (${object.id})`}
+          href={objectUrl(kind, object.id)} target="_blank" rel="noopener noreferrer">
+          <Tag minimal intent="primary" className="max-w-full" icon={kind === "Plate" ? "grid-view" : "media"}>
+            <span className="inline-block max-w-full truncate align-middle">{object.name} ({object.id})</span>
+          </Tag>
+        </a>;
+      })}
+    </div>
+    {objects.length > 1 && <Button minimal small intent="primary" icon={expanded ? "chevron-up" : "chevron-down"}
+      aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
+      {expanded ? "Show fewer" : `+${objects.length - 1} more`}
+    </Button>}
+  </div>;
+}
+
 export default function PreviousRuns({ isOpen = true, onApply, selection, embedded = false, workflowName = "", searchQuery, onTotal }) {
   const [localQuery, setQuery] = useState(workflowName);
   const query = searchQuery ?? localQuery;
@@ -147,29 +168,25 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
         <Tag minimal icon="stopwatch">Duration: {durationLabel(detail.started, detail.ended)}</Tag>
       </Tooltip>}
       {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
-      {detail.form.IDs.length > 0 && <>
-      <section aria-label="Input data" className="my-3">
+      <div className={!embedded && detail.outputs?.length > 0 ? "grid grid-cols-1 xl:grid-cols-2 gap-4 my-3" : "my-3"}>
+      {detail.form.IDs.length > 0 && <section aria-label="Input data" className="min-w-0">
         <strong>Input data</strong> <Tag minimal round>{detail.form.IDs.length} {detail.form.Data_Type}{detail.form.IDs.length === 1 ? "" : "s"}</Tag>
-        <div className="flex flex-col gap-1 mt-2">{detail.inputs.slice(0, 6).map(input =>
-          <a key={input.id} title={`Open full ${detail.form.Data_Type.toLowerCase()}`} href={objectUrl(detail.form.Data_Type, input.id)} target="_blank" rel="noopener noreferrer">
-            <Icon icon={detail.form.Data_Type === "Plate" ? "grid-view" : "media"} /> {input.name} ({input.id})
-          </a>)}</div>
-        {detail.inputs.length > 6 && <span className="bp5-text-muted text-xs">Showing the first 6 inputs.</span>}
+        <DataLinks key={`inputs-${selectedId}`} objects={detail.inputs} type={detail.form.Data_Type} />
         {!embedded && detail.inputs[0] && <HistoryDataPreview key={`input-${selectedId}`} type={detail.form.Data_Type} id={detail.inputs[0].id} />}
-      </section>
-      </>}
-      {!embedded && (detail.outputs?.length > 0 || page.runs.find(run => run.workflow_id === selectedId)?.status !== "FAILED") && <section aria-label="Output data" className="my-3">
-        <strong><Icon icon="arrow-right" /> Output data</strong>
-        {(detail.outputs || []).map(output => <div key={`${output.type}-${output.id}`}>
-          <a href={objectUrl(output.type, output.id)} target="_blank" rel="noopener noreferrer">{output.type}: {output.name} ({output.id})</a>
-        </div>)}
-        {!detail.outputs?.length && <p className="bp5-text-muted text-sm">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</p>}
+      </section>}
+      {!embedded && detail.outputs?.length > 0 && <section aria-label="Output data" className="min-w-0">
+        <strong><Icon icon="arrow-right" /> Output data</strong> <Tag minimal round>{detail.outputs.length}{detail.outputs_more ? "+" : ""} objects</Tag>
+        <DataLinks key={`outputs-${selectedId}`} objects={detail.outputs} />
         {detail.outputs?.[0] && <HistoryDataPreview key={`output-${selectedId}`} type={detail.outputs[0].type} id={detail.outputs[0].id} />}
-        <div className="text-right mt-2"><a href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer">
+      </section>}
+      </div>
+      {!embedded && <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">
+        {!detail.outputs?.length && page.runs.find(run => run.workflow_id === selectedId)?.status !== "FAILED" &&
+          <span className="bp5-text-muted">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</span>}
+        <a href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer">
           <Icon icon="search" /> Search workflow results in OMERO
         </a>
-        </div>
-      </section>}
+      </div>}
       {!detail.inputs_available && <Callout intent="warning" compact className="mb-2">Some original inputs are missing or inaccessible.</Callout>}
       <Button minimal fill alignText="left" icon="properties" rightIcon={settingsOpen ? "chevron-up" : "chevron-down"}
         aria-expanded={settingsOpen} aria-controls="history-recorded-settings" onClick={() => setSettingsOpen(value => !value)}>Recorded settings</Button>

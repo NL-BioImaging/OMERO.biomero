@@ -1,4 +1,4 @@
-import { prepareHistoryRun } from "./runHistory";
+import { prepareHistoryRun, historyParametersUnchanged, historyContext } from "./runHistory";
 
 const workflow = { name: "segment", metadata: { inputs: [{ id: "diameter", type: "Number" }] } };
 const versions = { available_versions: ["v1"] };
@@ -30,4 +30,18 @@ test("missing inputs allow reuse but not rerun", () => {
   const missing = { ...detail, inputs_available: false };
   expect(() => prepareHistoryRun(missing, workflow, versions)).toThrow("inaccessible");
   expect(prepareHistoryRun(missing, workflow, versions, { IDs: [20], Data_Type: "Plate" }).form.IDs).toEqual([20]);
+});
+
+test("UI control fields are not reported as removed workflow parameters", () => {
+  const result = prepareHistoryRun({ ...detail, form: { ...detail.form, Format: "ZARR", plateMode: true } }, workflow, versions);
+  expect(result.warnings.some(w => /Format|plateMode/.test(w))).toBe(false);
+});
+
+test("unchanged parameters require all configured values and version to match", () => {
+  const original = historyContext(detail, detail.form, [], "rerun");
+  expect(historyParametersUnchanged(original, { ...detail.form, IDs: [99] }, workflow.metadata)).toBe(true);
+  expect(historyParametersUnchanged(original, { ...detail.form, diameter: "12" }, workflow.metadata)).toBe(true);
+  expect(historyParametersUnchanged(original, { ...detail.form, diameter: 13 }, workflow.metadata)).toBe(false);
+  expect(historyParametersUnchanged(original, { ...detail.form, version: "v2" }, workflow.metadata)).toBe(false);
+  expect(historyParametersUnchanged(original, detail.form, { inputs: [{ id: "newParameter" }] })).toBe(false);
 });

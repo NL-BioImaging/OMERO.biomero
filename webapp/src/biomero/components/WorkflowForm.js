@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout, Divider, Tooltip, Icon, Collapse, Button } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
+import { HistoryFieldCue } from "./HistoryFeedback";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
@@ -176,7 +177,7 @@ const WorkflowForm = () => {
               return (
                 <FormGroup
                   key={id}
-                  label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                   labelFor={id}
                   helperText="Format is locked to ZARR for admin-configured workflows"
                 >
@@ -200,7 +201,7 @@ const WorkflowForm = () => {
               return (
                 <FormGroup
                   key={id}
-                  label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                   labelFor={id}
                   helperText={description || ""}
                 >
@@ -220,7 +221,7 @@ const WorkflowForm = () => {
             return (
               <FormGroup
                 key={id}
-                label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                 labelFor={id}
                 helperText={description || ""}
               >
@@ -236,7 +237,7 @@ const WorkflowForm = () => {
             return (
               <FormGroup
                 key={id}
-                label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                 labelFor={id}
                 helperText={description || ""}
               >
@@ -277,7 +278,7 @@ const WorkflowForm = () => {
             return (
               <FormGroup
                 key={id}
-                label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                 labelFor={id}
                 helperText={description || ""}
               >
@@ -323,7 +324,7 @@ const WorkflowForm = () => {
             return (
               <FormGroup
                 key={id}
-                label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                 labelFor={id}
                 helperText={description || ""}
               >
@@ -368,7 +369,7 @@ const WorkflowForm = () => {
             return (
               <FormGroup
                 key={id}
-                label={name}
+                  label={<span>{name} <HistoryFieldCue field={id} /></span>}
                 labelFor={id}
                 helperText={description || ""}
               >
@@ -417,13 +418,13 @@ const WorkflowForm = () => {
     <form>
       <h2>{workflowMetadata.name || workflowMetadata.workflow}</h2>
 
-      <Callout intent={Intent.PRIMARY} icon="info-sign" className="mb-4">
+      {!state.historyRun && <Callout intent={Intent.PRIMARY} icon="info-sign" className="mb-4">
         Review the workflow parameters before launch. Most fields start with sensible defaults, so in many cases you only need to confirm the version and adjust only those settings relevant to your run.
-      </Callout>
+      </Callout>}
       
       {/* Version Selection */}
       <FormGroup
-        label="Workflow Version"
+        label={<span>Workflow Version <HistoryFieldCue field="version" /></span>}
         labelInfo="(required)"
         helperText="Select the version to run on SLURM cluster"
       >

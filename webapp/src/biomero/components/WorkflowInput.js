@@ -555,9 +555,9 @@ const WorkflowInput = () => {
 
   return (
     <DialogBody className="flex flex-col min-h-[75vh]">
-      <Callout intent="primary" icon="info-sign" className="mb-4">
+      {!state.historyRun && <Callout intent="primary" icon="info-sign" className="mb-4">
         Choose the OMERO data this workflow should process. Start by selecting one or more datasets or plates, then review the images that will be included.
-      </Callout>
+      </Callout>}
 
       <div className="w-full">
         <H6 className="mb-2">

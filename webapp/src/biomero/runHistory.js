@@ -28,7 +28,7 @@ export function prepareHistoryRun(detail, workflow, versions, selection = null) 
     }
   }
   // Historical names removed from the descriptor must not become script inputs.
-  const controls = new Set(["IDs", "Data_Type", "workflowMode", "version", "receiveEmail",
+  const controls = new Set(["IDs", "Data_Type", "workflowMode", "plateMode", "Format", "version", "receiveEmail",
     "useZarrFormat", "omeZarrVersion", "importAsZip", "attachToOriginalImages", "uploadCsv",
     "attachFileOutputs", "fileOutputTarget", "createRois", "roiLabelPattern", "roiShape",
     "roiColor", "importPlateLabelPreview", "plateLabelPreviewName", "selectedDatasets",
@@ -44,4 +44,23 @@ export function prepareHistoryRun(detail, workflow, versions, selection = null) 
   form.deleteLabelImagesAfterRois = false;
   form.workflowMode = form.Data_Type === "Plate" ? "plates" : "images";
   return { form, warnings };
+}
+
+export const sameHistoryValue = (a, b) => {
+  if (Array.isArray(a) || Array.isArray(b)) return JSON.stringify(a) === JSON.stringify(b);
+  return a != null && b != null ? String(a) === String(b) : a === b;
+};
+
+export const historyParameterKeys = metadata => ["version", ...(metadata?.inputs || [])
+  .filter(input => !input["set-by-server"] && !input["output-dir-set"] && !input.id.startsWith("cytomine"))
+  .map(input => input.id)];
+
+export function historyContext(detail, form, warnings, mode) {
+  return { id: detail.workflow_id, workflow: detail.workflow_name, mode,
+    values: { ...form }, sourceOptions: { ...detail.form, ...detail.source_options }, warnings };
+}
+
+export function historyParametersUnchanged(history, params, metadata) {
+  return !!history && historyParameterKeys(metadata).every(key =>
+    Object.prototype.hasOwnProperty.call(history.values, key) && sameHistoryValue(history.values[key], params[key]));
 }

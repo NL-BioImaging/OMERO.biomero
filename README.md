@@ -96,6 +96,13 @@ prevent Run again, but do not prevent applying settings to other accessible data
 Output destinations and attachments must be reviewed. ROI clearing and deletion
 of label images are always off when loading history.
 
+The dialog header identifies the source run on every step. Parameter badges
+show which values were restored and which have since been modified. Output
+suggestions reflect options enabled in the source run; disabled suggestions
+are orange. Destructive options receive a review warning only if the source
+run enabled them. The submission confirmation identifies unchanged parameter
+sets without claiming that changed inputs or output destinations are identical.
+
 History currently includes only the signed-in user's runs in the active group.
 It reads the existing workflow-progress index and replays the recorded workflow
 and task aggregates; it does not rely on OMERO key/value annotations or write to

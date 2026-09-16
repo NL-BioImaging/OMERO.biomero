@@ -23,6 +23,7 @@ import {
 } from "./apiService";
 import { getDjangoConstants } from "./constants";
 import { transformStructure, extractGroups } from "./utils";
+import { historyParametersUnchanged } from "./biomero/runHistory";
 import { OverlayToaster, Position, Callout, Collapse, Divider, Icon } from "@blueprintjs/core";
 
 // Fields that are infrastructure/output config, not workflow-specific parameters
@@ -48,6 +49,7 @@ export const WorkflowSubmitToast = ({
   metadata,
   warnings = [],
   executionMode = "inline",
+  historyRun = null,
 }) => {
   const [openSection, setOpenSection] = React.useState(null);
   const toggle = (key) => setOpenSection((prev) => (prev === key ? null : key));
@@ -158,7 +160,7 @@ export const WorkflowSubmitToast = ({
       </SectionRow>
 
       {(wfParams.length > 0 || params.version) && (
-        <SectionRow label={`Parameters (${wfParams.length + (params.version ? 1 : 0)})`} sectionKey="params">
+        <SectionRow label={`Parameters (${wfParams.length + (params.version ? 1 : 0)})${historyParametersUnchanged(historyRun, params, metadata) ? ` — unchanged from ${historyRun.id}` : ""}`} sectionKey="params">
           {params.version && <div>• version: <strong>{params.version}</strong></div>}
           {wfParams.map(([k, v]) => (
             <div key={k}>• {k}: <strong>{String(v)}</strong></div>
@@ -436,7 +438,7 @@ export const AppProvider = ({ children }) => {
       toaster.show({
         intent: warnings.length ? "warning" : "success",
         icon: warnings.length ? "warning-sign" : "tick-circle",
-        message: <WorkflowSubmitToast workflowName={workflowName} startedAt={startedAt} params={effectiveParams} metadata={state.selectedWorkflow?.metadata} warnings={warnings} executionMode={response?.executionMode} />,
+        message: <WorkflowSubmitToast workflowName={workflowName} startedAt={startedAt} params={effectiveParams} metadata={state.selectedWorkflow?.metadata} warnings={warnings} executionMode={response?.executionMode} historyRun={state.historyRun} />,
         timeout: 0,
       });
     } catch (err) {

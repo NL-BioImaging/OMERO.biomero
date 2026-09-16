@@ -9,6 +9,7 @@ import { useAppContext } from "../../../AppContext";
 import PlateWorkflowInput from "./PlateWorkflowInput";
 import PlateWorkflowOutput from "./PlateWorkflowOutput";
 import WorkflowConfiguration from "../WorkflowConfiguration";
+import { HistoryDialogTitle } from "../HistoryFeedback";
 import InputOptions from "../InputOptions";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "../WorkflowFileInputStep";
 
@@ -18,7 +19,6 @@ const PlateWorkflowDialog = ({
   setDialogOpen, 
   onWorkflowError, 
   onFinalSubmit,
-  historyNotice,
 }) => {
   const { state, runWorkflowData } = useAppContext();
   const [isNextDisabled, setIsNextDisabled] = useState(true);
@@ -59,7 +59,8 @@ const PlateWorkflowDialog = ({
         setDialogOpen(false);
       }}
       initialStepIndex={0}
-      title={`Run Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`}
+      title={<HistoryDialogTitle title={`Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`} />}
+      style={state.historyRun ? { border: "1px solid #2d72d2" } : undefined}
       navigationPosition="top"
       icon="lab-test"
       className="w-[calc(100vw-20vw)]"
@@ -76,7 +77,6 @@ const PlateWorkflowDialog = ({
         className="min-h-[75vh]"
         panel={
           <>
-          {historyNotice}
           <PlateWorkflowInput
             onSelectionChange={(hasSelection) => {
               setIsNextDisabled(!hasSelection);

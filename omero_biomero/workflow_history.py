@@ -131,11 +131,13 @@ def run_configuration(run, tasks):
     form.update(enableRename=bool(pattern and pattern != wf.NO),
                 renamePattern=pattern if pattern and pattern != wf.NO else '')
     batch_size = source.get(workflow_batched.BATCH_SIZE)
+    source_options = dict(form)
+    source_options['clearExistingRois'] = bool(output.get(wf.ROI_CLEAR_EXISTING, output.get(results.ROI_CLEAR_EXISTING, False)))
+    source_options['deleteLabelImagesAfterRois'] = bool(output.get(wf.ROI_DELETE_LABEL_IMAGES, output.get(results.ROI_DELETE_LABEL_IMAGES, False)))
     form.update(batchEnabled=bool(batch_size), batchSize=batch_size or 1,
                 clearExistingRois=False, deleteLabelImagesAfterRois=False)
     return {'workflow_id': str(run.id), 'workflow_name': name, 'form': form,
-            'warnings': ['Review output destinations and file attachments before submitting. '
-                         'ROI clearing and label deletion are not enabled automatically.']}
+            'source_options': source_options, 'warnings': []}
 
 
 def _owned(run, conn):

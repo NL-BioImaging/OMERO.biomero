@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Alignment, Card, FormGroup, HTMLSelect, InputGroup, Switch, SwitchCard, Callout, Tooltip, Icon, Divider, Tag } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
+import { HistoryOutputCue, HistoryDestructiveWarning } from "./HistoryFeedback";
 import DatasetSelectWithPopover from "./DatasetSelectWithPopover.js";
 
 const MAX_SUGGESTED_DATASET_NAME_LENGTH = 64;
@@ -579,7 +580,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
   return (
     <form>
       {/* ── Intro ────────────────────────────────────── */}
-      <Callout intent="primary" icon="info-sign" className="mb-4">
+      {!state.historyRun && <Callout intent="primary" icon="info-sign" className="mb-4">
         <span className="text-sm">
           Choose how your workflow results are imported back into OMERO.
             You must select <strong>at least one output option</strong> below.
@@ -587,7 +588,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
             <Tag minimal round intent="primary" className="px-1">Suggested</Tag>
               options are recommended based on this workflow's declared outputs.
         </span>
-      </Callout>
+      </Callout>}
 
 
       {plateMode && !isImporterEnabled && (
@@ -648,7 +649,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
               "media",
               `Add (mask) image results to a ${containerType}`,
               `import viewable images into an OMERO ${containerType}`,
-              renderDefaultCue(
+              state.historyRun ? <HistoryOutputCue field={plateMode ? "selectedScreens" : "selectedDatasets"} /> : renderDefaultCue(
                 _suggested,
                 outputHints.imageLabel || containerType,
                 _currentValue,
@@ -684,7 +685,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
                 Type a new {containerType} name and press Enter, or pick an existing one from the menu.
               </Callout>
               )}
-            {renderDefaultHelperCallout(
+            {!state.historyRun && renderDefaultHelperCallout(
               _suggested,
               _currentValue
             )}
@@ -707,7 +708,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
                     "grid-view",
                     "Create a Plate mask preview",
                     "show one segmentation layer across the Plate",
-                    outputHints.hasLabelImageOutput
+                    state.historyRun ? <HistoryOutputCue field="importPlateLabelPreview" /> : outputHints.hasLabelImageOutput
                       ? <Tag minimal round intent="primary">Label output detected</Tag>
                       : null
                   )}
@@ -761,7 +762,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
                   "polygon-filter",
                   "Create ROIs on original images",
                   "convert imported label images after import",
-                  outputHints.hasLabelImageOutput
+                  state.historyRun ? <HistoryOutputCue field="createRois" /> : outputHints.hasLabelImageOutput
                     ? <Tag minimal round intent="primary">Label output detected</Tag>
                     : null
                 )}
@@ -842,7 +843,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
             </FormGroup>
 
             <FormGroup
-              label="Imported label images"
+              label={<span>Imported label images <HistoryOutputCue field="deleteLabelImagesAfterRois" /></span>}
               labelFor="roi-label-image-retention"
               helperText="Workflow files in .analyzed are preserved."
               className="mt-2 mb-0"
@@ -869,13 +870,15 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
               className="mt-2 mb-0"
             >
               <Switch
-                label="Clear existing ROIs on original images"
+                label={<span>Clear existing ROIs on original images <HistoryOutputCue field="clearExistingRois" /></span>}
                 checked={!!state.formData.clearExistingRois}
                 onChange={(e) => handleInputChange("clearExistingRois", e.target.checked)}
                 className="mb-0"
               />
             </FormGroup>
 
+            <HistoryDestructiveWarning field="clearExistingRois" label="ROI clearing" />
+            <HistoryDestructiveWarning field="deleteLabelImagesAfterRois" label="Label deletion" />
             {state.formData.clearExistingRois && (
               <FormGroup
                 label="Only clear ROI names containing (optional)"
@@ -913,7 +916,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
                 "polygon-filter",
                 "Create ROIs on original images",
                 "optional postprocessing after label image import",
-                outputHints.hasLabelImageOutput
+                state.historyRun ? <HistoryOutputCue field="createRois" /> : outputHints.hasLabelImageOutput
                   ? <Tag minimal round intent="primary">Label output detected</Tag>
                   : null
               )}
@@ -940,7 +943,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
               <Card compact={true} selected className="mt-2">
                 <div className="flex items-center justify-between gap-3 mb-1">
                   <div className="min-w-0 flex-1">
-                    {renderCardTitle("edit", "Rename result images", "optional naming pattern for imported images")}
+                    {renderCardTitle("edit", "Rename result images", "optional naming pattern for imported images", <HistoryOutputCue field="enableRename" />)}
                   </div>
                   <Switch
                     checked={true}
@@ -1014,7 +1017,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
                 className="mt-2"
                 compact={true}
               >
-                {renderCardTitle("edit", "Rename result images", "optional naming pattern for imported images")}
+                {renderCardTitle("edit", "Rename result images", "optional naming pattern for imported images", <HistoryOutputCue field="enableRename" />)}
               </SwitchCard>
             );
           })()}
@@ -1036,9 +1039,9 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
               "th-derived",
               "Measurement Tables",
               "csv results as OMERO.tables",
-              renderDefaultCue(outputHints.uploadCsv, outputHints.measurementLabel, state.formData.uploadCsv, outputHints.measurementLabelFull)
+              state.historyRun ? <HistoryOutputCue field="uploadCsv" /> : renderDefaultCue(outputHints.uploadCsv, outputHints.measurementLabel, state.formData.uploadCsv, outputHints.measurementLabelFull)
             )}
-            {renderDefaultHelperCallout(outputHints.uploadCsv, state.formData.uploadCsv)}
+            {!state.historyRun && renderDefaultHelperCallout(outputHints.uploadCsv, state.formData.uploadCsv)}
           </SwitchCard>
         );
       })()}
@@ -1057,9 +1060,9 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
               "paperclip",
               "Individual file annotations",
               "attach non-image non-csv output files",
-              renderDefaultCue(outputHints.attachFileOutputs, outputHints.fileAnnotationLabel, state.formData.attachFileOutputs, outputHints.fileAnnotationLabelFull)
+              state.historyRun ? <HistoryOutputCue field="attachFileOutputs" /> : renderDefaultCue(outputHints.attachFileOutputs, outputHints.fileAnnotationLabel, state.formData.attachFileOutputs, outputHints.fileAnnotationLabelFull)
             )}
-            {renderDefaultHelperCallout(outputHints.attachFileOutputs, state.formData.attachFileOutputs)}
+            {!state.historyRun && renderDefaultHelperCallout(outputHints.attachFileOutputs, state.formData.attachFileOutputs)}
             {_checked && (
               <FormGroup
                 label="File annotation destination"
@@ -1095,7 +1098,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
               "flow-branch",
               "Attach (mask) image results to input images",
               "keep provenance on the original inputs",
-               null
+               <HistoryOutputCue field="attachToOriginalImages" />
             )}
             {hasImageOutputDuplication && (
               <Callout intent="warning" compact minimal className="mt-2">
@@ -1115,7 +1118,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
         onChange={(e) => handleInputChange("importAsZip", e.target.checked)}
         className="mt-2"
       >
-        {renderCardTitle("archive", "Bulk ZIP archive", "single downloadable archive of all results")}
+        {renderCardTitle("archive", "Bulk ZIP archive", "single downloadable archive of all results", <HistoryOutputCue field="importAsZip" />)}
         {hasOtherOutputsAlongWithZip && (
           <Callout intent="warning" compact minimal className="mt-2">
             Other output options are also active — the zip will contain all those files too, duplicating storage.
@@ -1134,7 +1137,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
         onChange={(e) => handleInputChange("receiveEmail", e.target.checked)}
         className="mt-2"
       >
-        {renderCardTitle("envelope", "Email on completion", "SLURM completion or failure notice")}
+        {renderCardTitle("envelope", "Email on completion", "SLURM completion or failure notice", <HistoryOutputCue field="receiveEmail" />)}
       </SwitchCard>
     </form>
   );

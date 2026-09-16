@@ -38,6 +38,19 @@ def test_ambiguous_pipeline_is_not_guessed():
         history.run_configuration(run, tasks)
 
 
+@pytest.mark.parametrize('enabled', [False, True])
+def test_destructive_source_options_are_preserved_only_as_advice(enabled):
+    run, tasks = fixture()
+    tasks[0].params[history.wf.ROI_CLEAR_EXISTING] = enabled
+    tasks[0].params[history.wf.ROI_DELETE_LABEL_IMAGES] = enabled
+    result = history.run_configuration(run, tasks)
+    assert result['source_options']['clearExistingRois'] is enabled
+    assert result['source_options']['deleteLabelImagesAfterRois'] is enabled
+    assert result['form']['clearExistingRois'] is False
+    assert result['form']['deleteLabelImagesAfterRois'] is False
+    assert result['warnings'] == []
+
+
 def test_detail_checks_owner_before_loading_tasks():
     run, _ = fixture()
     run.user = 99

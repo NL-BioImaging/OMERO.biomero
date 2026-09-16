@@ -19,7 +19,6 @@ import {
   Tabs,
   Tab,
   Icon,
-  Callout,
 } from "@blueprintjs/core";
 import { FaDocker } from "react-icons/fa6";
 import WorkflowConfiguration from "./WorkflowConfiguration";
@@ -30,7 +29,8 @@ import PlateWorkflowDialog from "./plate/PlateWorkflowDialog";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "./WorkflowFileInputStep";
 import { getWorkflowModes, isWorkflowAvailableInTab } from "../workflowModes";
 import PreviousRuns from "./PreviousRuns";
-import { prepareHistoryRun } from "../runHistory";
+import { prepareHistoryRun, historyContext } from "../runHistory";
+import { HistoryDialogTitle } from "./HistoryFeedback";
 
 const DescriptionWithToggle = ({ description }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -85,7 +85,6 @@ const RunPanel = ({ onWorkflowError }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyReview, setHistoryReview] = useState(null);
   const [dialogRevision, setDialogRevision] = useState(0);
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
@@ -274,7 +273,6 @@ const RunPanel = ({ onWorkflowError }) => {
 
   // Handle workflow click
   const handleWorkflowClick = (workflow) => {
-    setHistoryReview(null);
     setDialogRevision(value => value + 1);
     // Dual-mode workflows use the dialog associated with the card's active tab.
     const workflowMode = activeWorkflowTab === "plates" ? "plates" : "images";
@@ -282,6 +280,7 @@ const RunPanel = ({ onWorkflowError }) => {
     // Set selected workflow in the global state context
     updateState({
       selectedWorkflow: workflow, // Set selectedWorkflow in context
+      historyRun: null,
       historicalInputImages: [],
       formData: {
         IDs: [], // Empty or default value
@@ -305,6 +304,7 @@ const RunPanel = ({ onWorkflowError }) => {
       throw new Error("This workflow is not available for this input type in the current setup.");
     }
     const updates = {
+      historyRun: historyContext(detail, form, warnings, selection ? "reuse" : "rerun"),
       selectedWorkflow: workflow,
       formData: { ...getWorkflowOutputDefaults(workflow), ...form },
     };
@@ -320,16 +320,10 @@ const RunPanel = ({ onWorkflowError }) => {
     }
     updateState(updates);
     setActiveWorkflowTab(form.workflowMode);
-    setHistoryReview({ workflow_id: detail.workflow_id, warnings });
     setHistoryOpen(false);
     setDialogRevision(value => value + 1);
     setDialogOpen(true);
   };
-
-  const historyNotice = historyReview && <Callout intent="primary" className="mb-3">
-    Settings loaded from {historyReview.workflow_id}. Review before running.
-    {historyReview.warnings.map(warning => <p key={warning}>{warning}</p>)}
-  </Callout>;
 
   const handleFinalSubmit = (workflow) => {
     updateState({ workflowStatusTooltipShown: true });
@@ -410,7 +404,6 @@ const RunPanel = ({ onWorkflowError }) => {
         onApply={applyHistory} selection={historySelection} />
       <div className="p-4">
         <Button icon="history" className="mb-3" onClick={() => setHistoryOpen(true)}>Previous runs</Button>
-        {historyNotice}
         {/* Unified Workflow Search */}
         <div className="mb-4">
           <InputGroup
@@ -691,7 +684,6 @@ const RunPanel = ({ onWorkflowError }) => {
           return (
             <PlateWorkflowDialog
               key={dialogRevision}
-              historyNotice={historyNotice}
               workflow={state.selectedWorkflow}
               dialogOpen={dialogOpen}
               setDialogOpen={setDialogOpen}
@@ -711,7 +703,8 @@ const RunPanel = ({ onWorkflowError }) => {
             setCustomStepIndex(0); // Reset step index on close
           }}
           initialStepIndex={0}
-          title={beautifyName(state.selectedWorkflow.name)}
+          title={<HistoryDialogTitle title={beautifyName(state.selectedWorkflow.name)} />}
+          style={state.historyRun ? { border: "1px solid #2d72d2" } : undefined}
           onChange={handleStepChange}
           navigationPosition={"top"}
           icon="cog"
@@ -732,7 +725,6 @@ const RunPanel = ({ onWorkflowError }) => {
             className="min-h-[75vh]"
             panel={
               <>
-              {historyNotice}
               <WorkflowInput
                 onSelectionChange={(selectedImages) => {
                   setIsNextDisabled(selectedImages.length === 0);

@@ -29,6 +29,7 @@ import PlateWorkflowDialog from "./plate/PlateWorkflowDialog";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "./WorkflowFileInputStep";
 import { getWorkflowModes, isWorkflowAvailableInTab } from "../workflowModes";
 import PreviousRuns from "./PreviousRuns";
+import { fetchWorkflowHistory } from "../../apiService";
 import { prepareHistoryRun, historyContext } from "../runHistory";
 import { HistoryDialogTitle } from "./HistoryFeedback";
 
@@ -83,12 +84,25 @@ const DescriptionWithToggle = ({ description }) => {
 const RunPanel = ({ onWorkflowError }) => {
   const { state, updateState, toaster, runWorkflowData, apiLoading } = useAppContext();
   const [searchTerm, setSearchTerm] = useState("");
+  const [historyCount, setHistoryCount] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogRevision, setDialogRevision] = useState(0);
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
   const [isFileInputNextDisabled, setIsFileInputNextDisabled] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState("images"); // "images" or "plates"
+  useEffect(() => {
+    // Keep the history badge searchable even before opening its tab.
+    if (activeWorkflowTab === "history") return;
+    const controller = new AbortController();
+    setHistoryCount(null);
+    const timer = setTimeout(() => {
+      fetchWorkflowHistory(searchTerm, 0, controller.signal).then(result => {
+        if (!controller.signal.aborted) setHistoryCount(result.total ?? null);
+      }).catch(() => { /* History failure must not block launching new workflows. */ });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [activeWorkflowTab, searchTerm, state.user?.active_group_id]);
   const [customStepIndex, setCustomStepIndex] = useState(0); // Track current step for custom navigation
 
   // Get workflow versions from SLURM status
@@ -304,14 +318,14 @@ const RunPanel = ({ onWorkflowError }) => {
       selectedWorkflow: workflow,
       formData: { ...getWorkflowOutputDefaults(workflow), ...form },
     };
-    if (!selection) {
+    if (!selection || !selection.IDs.length) {
       updates.workflowInputState = {
         ...state.workflowInputState,
         selectedImageIds: form.Data_Type === "Image" ? form.IDs : [],
-        selectedPlates: form.Data_Type === "Plate" ? detail.inputs : [],
+        selectedPlates: !selection && form.Data_Type === "Plate" ? detail.inputs : [],
       };
       updates.inputDatasets = [];
-      updates.historicalInputImages = form.Data_Type === "Image" ? detail.inputs : [];
+      updates.historicalInputImages = !selection && form.Data_Type === "Image" ? detail.inputs : [];
       updates.images = updates.historicalInputImages;
     }
     updateState(updates);
@@ -426,7 +440,7 @@ const RunPanel = ({ onWorkflowError }) => {
           >
             <Tab
               id="images"
-              title="Image Workflows"
+              title={<span><Icon icon="media" /> Image Workflows</span>}
               tagContent={imageWorkflowCount}
               tagProps={{
                 round: true,
@@ -436,7 +450,7 @@ const RunPanel = ({ onWorkflowError }) => {
             {isImporterEnabled && (
               <Tab
                 id="plates"
-                title="Plate Workflows"
+                title={<span><Icon icon="grid-view" /> Plate Workflows</span>}
                 tagContent={plateWorkflowCount}
                 tagProps={{
                   round: true,
@@ -444,7 +458,8 @@ const RunPanel = ({ onWorkflowError }) => {
                 }}
               />
             )}
-            <Tab id="history" title={<span><Icon icon="history" /> Previous runs</span>} />
+            <Tab id="history" title={<span><Icon icon="history" /> Previous runs</span>}
+              tagContent={historyCount ?? "…"} tagProps={{ round: true, intent: historyCount === 0 ? "danger" : undefined }} />
           </Tabs>
           
           {/* Active Tab Description */}
@@ -466,7 +481,7 @@ const RunPanel = ({ onWorkflowError }) => {
         </div>
 
         {activeWorkflowTab === "history" ? (
-          <PreviousRuns key={`${state.user?.active_group_id}:${searchTerm}`} searchQuery={searchTerm} onApply={applyHistory} />
+          <PreviousRuns key={`${state.user?.active_group_id}:${searchTerm}`} searchQuery={searchTerm} onApply={applyHistory} onTotal={setHistoryCount} />
         ) : filteredWorkflows?.length > 0 ? (
           // Only render grid after SLURM status is determined to prevent height jumping
           state.slurmStatus ? (

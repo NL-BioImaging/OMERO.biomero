@@ -11,7 +11,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from eventsourcing.application import AggregateNotFoundError
 from omeroweb.webclient.decorators import login_required
-from sqlalchemy import select, or_, cast, String
+from sqlalchemy import select, or_, cast, String, func
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +155,31 @@ def _inputs(conn, config):
             for object_id in form['IDs'] if object_id in visible]
 
 
+def _outputs(conn, config):
+    """Bounded, permission-filtered provenance links, not inferred destinations."""
+    from omero.sys import ParametersI
+    outputs = []
+    for kind in ('Plate', 'Dataset', 'Image'):
+        params = ParametersI()
+        params.addString('uuid', config['workflow_id'])
+        params.page(0, 7)
+        exclude = ''
+        if kind == config['form']['Data_Type']:
+            params.addLongList('inputs', config['form']['IDs'])
+            exclude = 'AND obj.id NOT IN (:inputs) '
+        rows = conn.getQueryService().projection(
+            f'SELECT DISTINCT obj.id, obj.name FROM {kind} obj '
+            'JOIN obj.annotationLinks link JOIN link.child ann JOIN ann.mapValue mv '
+            "WHERE TYPE(ann) = MapAnnotation AND mv.name = 'Workflow_ID' "
+            'AND mv.value = :uuid ' + exclude + 'ORDER BY obj.id', params, conn.SERVICE_OPTS)
+        for row in rows:
+            object_id = row[0].val
+            if kind == config['form']['Data_Type'] and object_id in config['form']['IDs']:
+                continue
+            outputs.append({'id': object_id, 'name': row[1].val, 'type': kind})
+    return outputs[:6], len(outputs) > 6
+
+
 @login_required()
 @require_GET
 def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
@@ -166,6 +191,13 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
             config = run_configuration(run, [tracker.repository.get(i) for i in run.tasks])
             config['inputs'] = _inputs(conn, config)
             config['inputs_available'] = len(config['inputs']) == len(config['form']['IDs'])
+            # A missing annotation or failed result lookup must not block reuse.
+            try:
+                config['outputs'], config['outputs_more'] = _outputs(conn, config)
+            except Exception:
+                logger.exception('Could not read workflow result links')
+                config['outputs'] = []
+                config['outputs_unavailable'] = True
             return JsonResponse(config)
     except AggregateNotFoundError:
         return JsonResponse({'error': 'Run not found.'}, status=404)
@@ -195,16 +227,18 @@ def workflow_history_list(request, conn=None, **kwargs):
             table.c.main_task_name.icontains(query, autoescape=True),
             table.c.name.icontains(query, autoescape=True),
             cast(table.c.workflow_id, String).icontains(query, autoescape=True)))
+    count = select(func.count()).select_from(statement.subquery())
     statement = statement.order_by(table.c.start_time.desc(), table.c.workflow_id.desc())
     try:
         with history_tracker() as tracker:
             with tracker.factory.datastore.engine.connect() as db:
+                total = db.execute(count).scalar_one()
                 rows = list(db.execute(statement.offset(offset).limit(21)).mappings())
             items = [{'workflow_id': str(row['workflow_id']),
                       'workflow_name': row['main_task_name'] or row['name'],
                       'status': row['status'], 'started': row['start_time'],
                       'name': row['name']} for row in rows[:20]]
-        return JsonResponse({'runs': items, 'has_more': len(rows) > 20, 'offset': offset})
+        return JsonResponse({'runs': items, 'total': total, 'has_more': len(rows) > 20, 'offset': offset})
     except Exception:
         logger.exception('Could not list workflow history')
         return JsonResponse({'error': 'Workflow history is unavailable.'}, status=503)

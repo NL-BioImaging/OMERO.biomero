@@ -95,6 +95,15 @@ def test_list_is_scoped_and_sorted_in_database():
     import json
     data = json.loads(response.content)
     assert len(data['runs']) == 2
+    assert data['total'] == 2
+    with patch.object(history, 'history_tracker') as factory:
+        factory.return_value.__enter__.return_value = tracker
+        response = history.workflow_history_list(RequestFactory().get('/history/', {'q': 'seg', 'offset': 1}), conn=conn)
+        filtered = json.loads(response.content)
+        assert filtered['total'] == 2
+        assert len(filtered['runs']) == 1
+        response = history.workflow_history_list(RequestFactory().get('/history/', {'q': 'missing'}), conn=conn)
+        assert json.loads(response.content)['total'] == 0
     assert data['runs'][0]['started'].startswith('2026-01-02')
     engine.dispose()
 
@@ -104,6 +113,22 @@ def test_backend_failure_does_not_expose_connection_details():
         response = history.workflow_history_list(RequestFactory().get('/history/'), conn=Mock())
     assert response.status_code == 503
     assert b'secret' not in response.content
+
+
+def test_result_links_are_bounded_and_exclude_input_objects():
+    conn = Mock()
+    row = lambda i: [SimpleNamespace(val=i), SimpleNamespace(val=f'result {i}')]
+    conn.getQueryService.return_value.projection.side_effect = [
+        [row(15), row(99)], [], [row(i) for i in range(200, 207)]]
+    config = {'workflow_id': str(uuid4()), 'form': {'Data_Type': 'Plate', 'IDs': [15]}}
+    with patch('omero.sys.ParametersI') as parameters:
+        outputs, more = history._outputs(conn, config)
+        assert len(outputs) == 6
+        assert more
+        assert outputs[0] == {'id': 99, 'name': 'result 99', 'type': 'Plate'}
+        parameters.return_value.addLongList.assert_called_once_with('inputs', [15])
+        assert parameters.return_value.page.call_count == 3
+    assert all(output['id'] != 15 for output in outputs)
 
 
 def test_inline_run_reads_original_transfer_inputs_and_output_options():

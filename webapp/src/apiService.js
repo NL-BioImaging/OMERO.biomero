@@ -468,11 +468,11 @@ export const importUploadedFile = async (
   });
 };
 
-export const fetchPlateGridData = async (plateId) => {
+export const fetchPlateGridData = async (plateId, signal) => {
   try {
     // Use the same endpoint as OMERO webclient for plate grid data
     const response = await fetch(
-      `${window.location.origin}/webgateway/plate/${plateId}/0/`
+      `${window.location.origin}/webgateway/plate/${plateId}/0/`, { signal }
     );
     const text = await response.text();
     

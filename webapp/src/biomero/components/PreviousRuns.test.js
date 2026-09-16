@@ -5,6 +5,8 @@ import PreviousRuns from "./PreviousRuns";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 
 jest.mock("../../apiService", () => ({ fetchWorkflowHistory: jest.fn(), fetchWorkflowHistoryDetail: jest.fn() }));
+jest.mock("./HistoryDataPreview", () => ({ __esModule: true, default: () => null,
+  objectUrl: (type, id) => `/webclient/?show=${type.toLowerCase()}-${id}` }));
 const run = { workflow_id: "abc", workflow_name: "segment", started: "2026-09-15T15:00:00Z", status: "DONE" };
 const detail = { ...run, inputs_available: true, inputs: [{ id: 15, name: "Plate A" }],
   form: { IDs: [15], Data_Type: "Plate", version: "v1" } };
@@ -17,7 +19,7 @@ beforeEach(() => {
 test("opens newest run directly and only applies when requested", async () => {
   const apply = jest.fn();
   render(<PreviousRuns isOpen onClose={jest.fn()} onApply={apply} />);
-  const button = await screen.findByRole("button", { name: "Run again" });
+  const button = await screen.findByRole("button", { name: "Run again on same data" });
   expect(apply).not.toHaveBeenCalled();
   expect(screen.getByText(/Plate A/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
@@ -81,9 +83,16 @@ test("empty selection hides reuse instead of offering a disabled action", async 
   expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
 });
 
-test("standalone entry only offers rerun even if a selection is supplied", async () => {
-  render(<PreviousRuns isOpen onApply={jest.fn()} selection={{ IDs: [25], Data_Type: "Plate" }} />);
-  await screen.findByRole("button", { name: "Run again" });
+test("different-data action restores settings with empty inputs, not stale selection", async () => {
+  const apply = jest.fn();
+  const total = jest.fn();
+  fetchWorkflowHistory.mockResolvedValue({ runs: [run], total: 56, has_more: false });
+  render(<PreviousRuns isOpen onApply={apply} onTotal={total} selection={{ IDs: [25], Data_Type: "Plate" }} />);
+  await screen.findByRole("button", { name: "Run again on same data" });
+  expect(screen.getByText("1 of 56")).toBeInTheDocument();
+  expect(total).toHaveBeenCalledWith(56);
+  fireEvent.click(screen.getByRole("button", { name: "Run on different data" }));
+  expect(apply).toHaveBeenCalledWith(detail, { Data_Type: "Plate", IDs: [] });
   expect(screen.queryByRole("button", { name: "Use settings on selected data" })).not.toBeInTheDocument();
 });
 
@@ -98,11 +107,20 @@ test("load more appends runs and preserves selected details", async () => {
   fetchWorkflowHistory.mockResolvedValueOnce({ runs: [run], has_more: true })
     .mockResolvedValueOnce({ runs: [{ ...run, workflow_id: "second", workflow_name: "older" }], has_more: false });
   render(<PreviousRuns onApply={jest.fn()} />);
-  await screen.findByRole("button", { name: "Run again" });
+  await screen.findByRole("button", { name: "Run again on same data" });
   fireEvent.click(screen.getByRole("button", { name: "Load more runs" }));
   await waitFor(() => expect(fetchWorkflowHistory).toHaveBeenCalledWith("", 20, expect.anything()));
   await screen.findByRole("button", { name: /older/ });
   expect(screen.getByRole("button", { pressed: true })).toHaveTextContent("segment");
   expect(fetchWorkflowHistoryDetail).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole("button", { name: "Load more runs" })).not.toBeInTheDocument();
+});
+
+test("failed run can show recorded partial outputs without claiming success", async () => {
+  fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs: [{ type: "Plate", id: 99, name: "Partial result" }] });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  const output = await screen.findByRole("link", { name: "Plate: Partial result (99)" });
+  expect(output).toHaveAttribute("href", "/webclient/?show=plate-99");
+  expect(screen.getAllByText("FAILED")).toHaveLength(2);
 });

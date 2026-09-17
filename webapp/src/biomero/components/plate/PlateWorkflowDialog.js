@@ -8,7 +8,8 @@ import {
 import { useAppContext } from "../../../AppContext";
 import PlateWorkflowInput from "./PlateWorkflowInput";
 import PlateWorkflowOutput from "./PlateWorkflowOutput";
-import WorkflowForm from "../WorkflowForm";
+import WorkflowConfiguration from "../WorkflowConfiguration";
+import { HistoryDialogTitle } from "../HistoryFeedback";
 import InputOptions from "../InputOptions";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "../WorkflowFileInputStep";
 
@@ -17,12 +18,13 @@ const PlateWorkflowDialog = ({
   dialogOpen, 
   setDialogOpen, 
   onWorkflowError, 
-  onFinalSubmit 
+  onFinalSubmit,
 }) => {
   const { state, runWorkflowData } = useAppContext();
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(true);
   const [isFileInputNextDisabled, setIsFileInputNextDisabled] = useState(false);
+  const [isConfigurationNextDisabled, setIsConfigurationNextDisabled] = useState(false);
 
   // Utility to beautify names
   const beautifyName = (name) => {
@@ -58,7 +60,8 @@ const PlateWorkflowDialog = ({
         setDialogOpen(false);
       }}
       initialStepIndex={0}
-      title={`Run Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`}
+      title={<HistoryDialogTitle title={`Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`} />}
+      style={state.historyRun ? { border: "1px solid #2d72d2" } : undefined}
       navigationPosition="top"
       icon="lab-test"
       className="w-[calc(100vw-20vw)]"
@@ -74,11 +77,13 @@ const PlateWorkflowDialog = ({
         title="Select Plate"
         className="min-h-[75vh]"
         panel={
+          <>
           <PlateWorkflowInput
             onSelectionChange={(hasSelection) => {
               setIsNextDisabled(!hasSelection);
             }}
           />
+          </>
         }
         nextButtonProps={{
           disabled: isNextDisabled,
@@ -118,9 +123,10 @@ const PlateWorkflowDialog = ({
         panel={
           <DialogBody>
             <H6>{workflow?.description}</H6>
-            <WorkflowForm />
+            <WorkflowConfiguration onNavigationBlockedChange={setIsConfigurationNextDisabled} />
           </DialogBody>
         }
+        nextButtonProps={{ disabled: isConfigurationNextDisabled }}
       />
 
       {/* Step 3: Output to Screen */}

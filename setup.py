@@ -55,6 +55,7 @@ setup(
         # Development integration only: restore released version ranges before publishing.
         "biomero @ git+https://github.com/NL-BioImaging/biomero.git@feature/remote-shallower",
         "configupdater>=3.2,<4",
+        "sqlalchemy>=2,<3",
         "biomero-importer[identity] @ git+https://github.com/NL-BioImaging/BIOMERO.importer.git@feature/remote-shallower",
         "convertleica-file-browser>=1.7.4,<2",
     ],

@@ -21,13 +21,17 @@ import {
   Icon,
 } from "@blueprintjs/core";
 import { FaDocker } from "react-icons/fa6";
-import WorkflowForm from "./WorkflowForm";
+import WorkflowConfiguration from "./WorkflowConfiguration";
 import WorkflowOutput from "./WorkflowOutput";
 import WorkflowInput from "./WorkflowInput";
 import InputOptions from "./InputOptions";
 import PlateWorkflowDialog from "./plate/PlateWorkflowDialog";
 import WorkflowFileInputStep, { getFileInputParams, isFileInputStepValid } from "./WorkflowFileInputStep";
 import { getWorkflowModes, isWorkflowAvailableInTab } from "../workflowModes";
+import PreviousRuns from "./PreviousRuns";
+import { fetchWorkflowHistory } from "../../apiService";
+import { prepareHistoryRun, historyContext } from "../runHistory";
+import { HistoryDialogTitle } from "./HistoryFeedback";
 
 const DescriptionWithToggle = ({ description }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -80,11 +84,26 @@ const DescriptionWithToggle = ({ description }) => {
 const RunPanel = ({ onWorkflowError }) => {
   const { state, updateState, toaster, runWorkflowData, apiLoading } = useAppContext();
   const [searchTerm, setSearchTerm] = useState("");
+  const [historyCount, setHistoryCount] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogRevision, setDialogRevision] = useState(0);
   const [isNextDisabled, setIsNextDisabled] = useState(true);
   const [isRunDisabled, setIsRunDisabled] = useState(false);
   const [isFileInputNextDisabled, setIsFileInputNextDisabled] = useState(false);
+  const [isConfigurationNextDisabled, setIsConfigurationNextDisabled] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState("images"); // "images" or "plates"
+  useEffect(() => {
+    // Keep the history badge searchable even before opening its tab.
+    if (activeWorkflowTab === "history") return;
+    const controller = new AbortController();
+    setHistoryCount(null);
+    const timer = setTimeout(() => {
+      fetchWorkflowHistory(searchTerm, 0, controller.signal).then(result => {
+        if (!controller.signal.aborted) setHistoryCount(result.total ?? null);
+      }).catch(() => { /* History failure must not block launching new workflows. */ });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [activeWorkflowTab, searchTerm, state.user?.active_group_id]);
   const [customStepIndex, setCustomStepIndex] = useState(0); // Track current step for custom navigation
 
   // Get workflow versions from SLURM status
@@ -250,6 +269,7 @@ const RunPanel = ({ onWorkflowError }) => {
     // Only auto-switch if there's a search term (user is actively filtering)
     if (!searchTerm) return;
     
+    if (activeWorkflowTab === "history") return;
     const currentTabCount = activeWorkflowTab === "images" ? imageWorkflowCount : plateWorkflowCount;
     const otherTabCount = activeWorkflowTab === "images" ? plateWorkflowCount : imageWorkflowCount;
     
@@ -268,12 +288,15 @@ const RunPanel = ({ onWorkflowError }) => {
 
   // Handle workflow click
   const handleWorkflowClick = (workflow) => {
+    setDialogRevision(value => value + 1);
     // Dual-mode workflows use the dialog associated with the card's active tab.
     const workflowMode = activeWorkflowTab === "plates" ? "plates" : "images";
     
     // Set selected workflow in the global state context
     updateState({
       selectedWorkflow: workflow, // Set selectedWorkflow in context
+      historyRun: null,
+      historicalInputImages: [],
       formData: {
         IDs: [], // Empty or default value
         Data_Type: "Image", // Backend expects "Image" (case sensitive)
@@ -282,6 +305,34 @@ const RunPanel = ({ onWorkflowError }) => {
       },
     });
     setDialogOpen(true); // Open the dialog
+  };
+
+  const applyHistory = (detail, selection) => {
+    const workflow = state.workflows?.find(item => item.name === detail.workflow_name);
+    const { form, warnings } = prepareHistoryRun(detail, workflow,
+      workflowVersions[detail.workflow_name], selection);
+    if (!isWorkflowAvailableInTab(getModesForWorkflow(detail.workflow_name), form.workflowMode, isImporterEnabled)) {
+      throw new Error("This workflow is not available for this input type in the current setup.");
+    }
+    const updates = {
+      historyRun: historyContext(detail, form, warnings, selection ? "reuse" : "rerun"),
+      selectedWorkflow: workflow,
+      formData: { ...getWorkflowOutputDefaults(workflow), ...form },
+    };
+    if (!selection || !selection.IDs.length) {
+      updates.workflowInputState = {
+        ...state.workflowInputState,
+        searchQuery: "",
+        selectedImageIds: form.Data_Type === "Image" ? form.IDs : [],
+        selectedPlates: !selection && form.Data_Type === "Plate" ? detail.inputs : [],
+      };
+      updates.inputDatasets = [];
+      updates.historicalInputImages = !selection && form.Data_Type === "Image" ? detail.inputs : [];
+      updates.images = updates.historicalInputImages;
+    }
+    updateState(updates);
+    setDialogRevision(value => value + 1);
+    setDialogOpen(true);
   };
 
   const handleFinalSubmit = (workflow) => {
@@ -364,7 +415,9 @@ const RunPanel = ({ onWorkflowError }) => {
         <div className="mb-4">
           <InputGroup
             leftIcon="search"
-            placeholder="Search workflows (segment, count, etc.)..."
+            placeholder={activeWorkflowTab === "history" ? "Search previous runs by workflow or UUID..." : "Search workflows (segment, count, etc.)..."}
+            aria-label={activeWorkflowTab === "history" ? "Search previous runs" : "Search workflows"}
+            maxLength={activeWorkflowTab === "history" ? 128 : undefined}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             rightElement={
@@ -389,7 +442,7 @@ const RunPanel = ({ onWorkflowError }) => {
           >
             <Tab
               id="images"
-              title="Image Workflows"
+              title={<span><Icon icon="media" /> Image Workflows</span>}
               tagContent={imageWorkflowCount}
               tagProps={{
                 round: true,
@@ -399,7 +452,7 @@ const RunPanel = ({ onWorkflowError }) => {
             {isImporterEnabled && (
               <Tab
                 id="plates"
-                title="Plate Workflows"
+                title={<span><Icon icon="grid-view" /> Plate Workflows</span>}
                 tagContent={plateWorkflowCount}
                 tagProps={{
                   round: true,
@@ -407,10 +460,15 @@ const RunPanel = ({ onWorkflowError }) => {
                 }}
               />
             )}
+            <Tab id="history" title={<span><Icon icon="history" /> Previous runs</span>}
+              tagContent={historyCount ?? "…"} tagProps={{ round: true, intent: historyCount === 0 ? "danger" : undefined }} />
           </Tabs>
           
           {/* Active Tab Description */}
           <div className="mt-2">
+            {activeWorkflowTab === "history" && <p className="text-sm bp5-text-muted">
+              Your runs in the active group, newest first. Inspect a run, then restore its data and settings for review.
+            </p>}
             {activeWorkflowTab === "images" && (
               <p className="text-sm text-gray-500">
                 For analyzing individual images from datasets or plates
@@ -424,7 +482,9 @@ const RunPanel = ({ onWorkflowError }) => {
           </div>
         </div>
 
-        {filteredWorkflows?.length > 0 ? (
+        {activeWorkflowTab === "history" ? (
+          <PreviousRuns key={`${state.user?.active_group_id}:${searchTerm}`} searchQuery={searchTerm} onApply={applyHistory} onTotal={setHistoryCount} />
+        ) : filteredWorkflows?.length > 0 ? (
           // Only render grid after SLURM status is determined to prevent height jumping
           state.slurmStatus ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -639,6 +699,7 @@ const RunPanel = ({ onWorkflowError }) => {
         if (isPlateMode && isImporterEnabled) {
           return (
             <PlateWorkflowDialog
+              key={dialogRevision}
               workflow={state.selectedWorkflow}
               dialogOpen={dialogOpen}
               setDialogOpen={setDialogOpen}
@@ -651,13 +712,15 @@ const RunPanel = ({ onWorkflowError }) => {
         // Use existing MultistepDialog for image workflows (or plate workflows when importer is disabled)
         return (
         <MultistepDialog
+          key={dialogRevision}
           isOpen={dialogOpen}
           onClose={() => {
             setDialogOpen(false);
             setCustomStepIndex(0); // Reset step index on close
           }}
           initialStepIndex={0}
-          title={beautifyName(state.selectedWorkflow.name)}
+          title={<HistoryDialogTitle title={beautifyName(state.selectedWorkflow.name)} />}
+          style={state.historyRun ? { border: "1px solid #2d72d2" } : undefined}
           onChange={handleStepChange}
           navigationPosition={"top"}
           icon="cog"
@@ -677,11 +740,13 @@ const RunPanel = ({ onWorkflowError }) => {
             title="Input Data"
             className="min-h-[75vh]"
             panel={
+              <>
               <WorkflowInput
                 onSelectionChange={(selectedImages) => {
                   setIsNextDisabled(selectedImages.length === 0);
                 }}
               />
+              </>
             }
             nextButtonProps={{
               disabled: isNextDisabled,
@@ -719,11 +784,12 @@ const RunPanel = ({ onWorkflowError }) => {
 
           <DialogStep
             id="step2"
-            title="Workflow Parameters"
+            title="Configure Workflow"
+            nextButtonProps={{ disabled: isConfigurationNextDisabled }}
             panel={
               <DialogBody>
                 <H6>{state.selectedWorkflow.description}</H6>
-                <WorkflowForm />
+                <WorkflowConfiguration onNavigationBlockedChange={setIsConfigurationNextDisabled} />
               </DialogBody>
             }
           />

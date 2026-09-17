@@ -28,12 +28,20 @@ export const apiRequest = async (
     });
     return response.data;
   } catch (error) {
-    console.error("API Request Error in apiService:", error);
+    if (!axios.isCancel(error)) console.error("API Request Error in apiService:", error);
     throw error;
   }
 };
 
 // Specific API calls
+export const fetchWorkflowHistory = (query = "", offset = 0, signal) =>
+  apiRequest(getDjangoConstants().urls.workflow_history, "GET", null,
+    { params: { q: query, offset }, signal });
+
+export const fetchWorkflowHistoryDetail = (id, signal) =>
+  apiRequest(`${getDjangoConstants().urls.workflow_history}${encodeURIComponent(id)}/`,
+    "GET", null, { signal });
+
 export const fetchomeroFileTreeData = async () => {
   const { user, urls } = getDjangoConstants();
   const params = {
@@ -460,11 +468,11 @@ export const importUploadedFile = async (
   });
 };
 
-export const fetchPlateGridData = async (plateId) => {
+export const fetchPlateGridData = async (plateId, signal) => {
   try {
     // Use the same endpoint as OMERO webclient for plate grid data
     const response = await fetch(
-      `${window.location.origin}/webgateway/plate/${plateId}/0/`
+      `${window.location.origin}/webgateway/plate/${plateId}/0/`, { signal }
     );
     const text = await response.text();
     
@@ -482,7 +490,7 @@ export const fetchPlateGridData = async (plateId) => {
     
     return plateData;
   } catch (error) {
-    console.error("Error fetching plate grid data:", error);
+    if (error.name !== "AbortError") console.error("Error fetching plate grid data:", error);
     throw error;
   }
 };

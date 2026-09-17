@@ -162,7 +162,7 @@ Then you can run the tests using:
 python manage.py test
 ```
 
-**Note**: All dependencies (including `biomero-importer>=1.0.0b5`) are automatically installed from setup.py when you install with `-e .`
+**Note**: All dependencies, including BIOMERO core and the importer with identity support, are automatically installed from the version ranges in `setup.py` when you install with `-e .`.
 
 ### Setup and development of the plugin frontend
 

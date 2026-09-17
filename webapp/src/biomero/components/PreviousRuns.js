@@ -214,8 +214,8 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
       {detail.outputs?.length > 0 && <section aria-label="Output data" className="min-w-0">
         <strong><Icon icon="arrow-right" /> Output data</strong> <Tag minimal round>{detail.outputs_more ? `Preview: first ${detail.outputs.length}` : `${detail.outputs.length} objects`}</Tag>
         <DataLinks key={`outputs-${selectedId}`} objects={detail.outputs} preview={detail.outputs_more} />
-        {detail.outputs_more && <div className="bp5-text-muted text-xs mt-1">More results are available. Open OMERO below for the full list.</div>}
         {detail.outputs?.[0] && <HistoryDataPreview key={`output-${selectedId}`} type={detail.outputs[0].type} id={detail.outputs[0].id} />}
+        {detail.outputs_more && <div className="bp5-text-muted text-xs mt-1">More results are available. Open OMERO below for the full list.</div>}
       </section>}
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">

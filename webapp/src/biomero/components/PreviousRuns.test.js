@@ -5,7 +5,7 @@ import PreviousRuns, { durationLabel, batchListLabel } from "./PreviousRuns";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 
 jest.mock("../../apiService", () => ({ fetchWorkflowHistory: jest.fn(), fetchWorkflowHistoryDetail: jest.fn() }));
-jest.mock("./HistoryDataPreview", () => ({ __esModule: true, default: () => null,
+jest.mock("./HistoryDataPreview", () => ({ __esModule: true, default: ({ id }) => <div data-testid={`preview-${id}`} />,
   workflowSearchUrl: id => `/webclient/search/?search_query=${id}`,
   objectUrl: (type, id) => `/webclient/?show=${type.toLowerCase()}-${id}` }));
 const run = { workflow_id: "abc", workflow_name: "segment", started: "2026-09-15T15:00:00Z", status: "DONE" };
@@ -181,6 +181,8 @@ test("bounded results are explicitly a preview, not an incomplete full list", as
     outputs: Array.from({ length: 6 }, (_, i) => ({ type: "Image", id: i, name: `Result ${i}` })) });
   render(<PreviousRuns onApply={jest.fn()} />);
   await screen.findByText("Preview: first 6");
+  const note = screen.getByText("More results are available. Open OMERO below for the full list.");
+  expect(screen.getByTestId("preview-0").compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("button", { name: "Show preview (6)" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "View all results in OMERO" })).toBeInTheDocument();
 });

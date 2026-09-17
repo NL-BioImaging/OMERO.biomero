@@ -57,6 +57,7 @@ export const getDjangoConstants = () => {
   };
 
   const ui = {
+    shallow_zarr_enabled: WEBCLIENT.UI.BIOMERO_SHALLOW_ZARR_ENABLED === true,
     importer_enabled: WEBCLIENT.UI.IMPORTER_ENABLED,
     analyzer_enabled: WEBCLIENT.UI.ANALYZER_ENABLED,
     uploader_allowed_file_extensions:

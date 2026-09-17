@@ -137,8 +137,14 @@ const SettingsForm = () => {
     return validateMaxBatchJobs(settingsForm?.UI?.max_batch_jobs);
   };
   
+  const remoteShallowEnabled = !["false", "0", "no", "off"].includes(
+    String(settingsForm?.SLURM?.remote_shallow_zarr ?? "true").trim().toLowerCase());
+  const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
+  const invalidShallowWorkers = state.ui?.shallow_zarr_enabled && remoteShallowEnabled &&
+    workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
+
   const hasValidationErrors = () => {
-    return getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
+    return invalidShallowWorkers || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
   };
 
   const validateModelFields = (models, scriptRepo, slurm) => {
@@ -790,11 +796,13 @@ const SettingsForm = () => {
   ) => (
     <FormGroup
       label={label}
+      labelFor={field}
       helperText={explanation}
       intent={intent}
     >
       <div className="flex items-center space-x-2">
         <InputGroup
+          id={field}
           value={value || ""}
           onChange={(e) => handleInputChange(field, e.target.value)}
           readOnly={!editMode[field]}
@@ -1285,6 +1293,46 @@ const SettingsForm = () => {
           </Button>
         </CollapsibleSection>
       </CollapsibleSection>
+      {state.ui?.shallow_zarr_enabled && (
+        <CollapsibleSection title="Shallow Zarr">
+          <FormGroup helperText={<>
+            Shallow eligible Zarr results on Slurm before transfer. Enabled by default;
+            opt out to shallow locally in the importer and avoid additional Slurm compute costs.
+            <EnvVarNote vars={["BIOMERO_REMOTE_SHALLOW_ZARR"]} />
+            Keep the worker and importer settings aligned. Environment overrides must
+            be changed in the deployment, not in this form.
+          </>}>
+            <Switch
+              label="Remote shallowing"
+              checked={remoteShallowEnabled}
+              onChange={(e) => handleInputChange("SLURM.remote_shallow_zarr", e.target.checked ? "true" : "false")}
+            />
+          </FormGroup>
+          {remoteShallowEnabled && <>
+            <p className="bp5-text-muted">
+              Image and tool version must match the importer trust configuration.
+              Run Slurm Init after changing the image. Keep the original image available
+              until outstanding jobs finish. The helper requests no GPU.
+            </p>
+            {invalidShallowWorkers && <p role="alert">Shallower workers must be a positive integer.</p>}
+            {[
+              ["image", "Shallower image", "cellularimagingcf/biomero-shallower:0.1.0", "Versioned container reference; an immutable digest is supported."],
+              ["version", "Shallower tool version", "0.1.0", "Tool version expected in the helper receipt."],
+              ["workers", "Shallower workers", "1", "Positive integer; also sets CPUs per task. Default: 1."],
+              ["partition", "Shallower partition", "", "Leave blank to inherit slurm_default_partition, then sbatch_partition, then the scheduler default."],
+              ["mem", "Shallower memory", "", "Leave blank to inherit global sbatch_mem, then the scheduler default."],
+              ["time", "Shallower time limit", "", "Leave blank to inherit global sbatch_time, then the scheduler default."],
+            ].map(([key, label, placeholder, description]) => (
+              <React.Fragment key={key}>
+                {renderEditableField(label, `SLURM.remote_shallower_${key}`,
+                  settingsForm.SLURM?.[`remote_shallower_${key}`], placeholder,
+                  <>{description}<EnvVarNote vars={[`BIOMERO_REMOTE_SHALLOWER_${key.toUpperCase()}`]} /></>)}
+              </React.Fragment>
+            ))}
+          </>}
+        </CollapsibleSection>
+      )}
+
       <CollapsibleSection title={<span className="inline-flex items-center gap-1">UI Settings <RuntimeIcon /></span>} errorCount={getMaxBatchJobsError() ? 1 : 0}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">

@@ -52,9 +52,10 @@ setup(
     install_requires=[
         "omero-web>=5.31.0,<6",
         "pyjwt>=2.12.1,<3",
-        "biomero>=2.9.0b6,<3",
+        # Development integration only: restore released version ranges before publishing.
+        "biomero @ git+https://github.com/NL-BioImaging/biomero.git@feature/remote-shallower",
         "configupdater>=3.2,<4",
-        "biomero-importer>=1.5.0b4,<2",
+        "biomero-importer[identity] @ git+https://github.com/NL-BioImaging/BIOMERO.importer.git@feature/remote-shallower",
         "convertleica-file-browser>=1.7.4,<2",
     ],
     python_requires=">=3.12",

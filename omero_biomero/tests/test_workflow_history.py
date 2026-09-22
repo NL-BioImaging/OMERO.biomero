@@ -31,6 +31,57 @@ def test_configuration_restores_selected_workflow_only():
     assert not result['form']['clearExistingRois']
 
 
+@pytest.mark.parametrize('kind,field,id_field', [
+    ('Screen', 'selectedScreens', 'selectedScreenId'),
+    ('Dataset', 'selectedDatasets', 'selectedDatasetId'),
+])
+def test_destination_restored_from_unique_provenance_not_name(kind, field, id_field):
+    config = {'workflow_id': str(uuid4()), 'warnings': [],
+              'form': {field: ['Original name']}}
+    conn = Mock()
+    conn.getQueryService.return_value.projection.return_value = [[SimpleNamespace(val=51)]]
+    obj = conn.getObject.return_value
+    obj.getId.return_value = 51
+    obj.getName.return_value = 'Renamed destination'
+    obj.canLink.return_value = True
+    history._restore_destinations(conn, config)
+    assert config['form'][field] == ['Renamed destination']
+    assert config['form'][id_field] == 51
+    conn.getObject.assert_called_once_with(kind, 51)
+    query, params, _ = conn.getQueryService.return_value.projection.call_args.args
+    assert 'mv.value = :uuid' in query
+    assert 'obj.name' not in query
+    assert params.map['uuid'].val == config['workflow_id']
+
+
+@pytest.mark.parametrize('count', [0, 2])
+def test_missing_or_ambiguous_destination_requires_selection(count):
+    config = {'workflow_id': str(uuid4()), 'warnings': [],
+              'form': {'selectedScreens': ['Results']}}
+    conn = Mock()
+    conn.getQueryService.return_value.projection.return_value = [
+        [SimpleNamespace(val=i)] for i in range(count)]
+    history._restore_destinations(conn, config)
+    assert config['form']['selectedScreens'] == []
+    assert config['form']['selectedScreenId'] is None
+    assert len(config['warnings']) == 1
+    conn.getObject.assert_not_called()
+
+
+@pytest.mark.parametrize('accessible', [False, True])
+def test_recorded_destination_id_wins_and_requires_link_permission(accessible):
+    config = {'workflow_id': str(uuid4()), 'warnings': [],
+              'form': {'selectedDatasets': ['Results'], 'selectedDatasetId': 51}}
+    conn = Mock()
+    obj = conn.getObject.return_value
+    obj.canLink.return_value = accessible
+    obj.getId.return_value = 51
+    obj.getName.return_value = 'Results'
+    history._restore_destinations(conn, config)
+    assert config['form']['selectedDatasetId'] == (51 if accessible else None)
+    conn.getQueryService.assert_not_called()
+
+
 def test_ambiguous_pipeline_is_not_guessed():
     run, tasks = fixture()
     tasks[0].params['workflows'] = ['segment', 'measure']

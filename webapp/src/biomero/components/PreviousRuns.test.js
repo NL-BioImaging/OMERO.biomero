@@ -144,7 +144,7 @@ test("failed runs without outputs hide the output section and use the correct UU
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED" });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const link = await screen.findByRole("link", { name: "abc" });
+  const link = await screen.findByRole("link", { name: "Search workflow UUID in OMERO" });
   expect(link).toHaveAttribute("href", "/webclient/search/?search_query=abc");
   expect(screen.queryByRole("region", { name: "Output data" })).not.toBeInTheDocument();
 });
@@ -181,8 +181,8 @@ test("bounded results are explicitly a preview, not an incomplete full list", as
     outputs: Array.from({ length: 6 }, (_, i) => ({ type: "Image", id: i, name: `Result ${i}` })) });
   render(<PreviousRuns onApply={jest.fn()} />);
   await screen.findByText("Preview: first 6");
-  const note = screen.getByText("More results are available. Open OMERO below for the full list.");
-  expect(screen.getByTestId("preview-0").compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByTestId("preview-0")).not.toBeInTheDocument();
+  expect(screen.getByTestId("preview-15")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Show preview (6)" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "View all results in OMERO" })).toBeInTheDocument();
 });

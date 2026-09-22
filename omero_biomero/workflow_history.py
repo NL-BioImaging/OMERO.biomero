@@ -127,6 +127,9 @@ def run_configuration(run, tasks):
                                 ('selectedScreens', wf.OUTPUT_NEW_SCREEN)]:
         value = output.get(recorded)
         form[frontend] = [value] if value and value != wf.NO else []
+    for field, key in [('selectedDatasetId', results.OUTPUT_ATTACH_NEW_DATASET_ID),
+                       ('selectedScreenId', results.OUTPUT_ATTACH_NEW_SCREEN_ID)]:
+        form[field] = output.get(key) or None
     pattern = output.get(wf.OUTPUT_RENAME)
     form.update(enableRename=bool(pattern and pattern != wf.NO),
                 renamePattern=pattern if pattern and pattern != wf.NO else '')
@@ -181,6 +184,48 @@ def _outputs(conn, config):
     return outputs[:6], len(outputs) > 6
 
 
+def _restore_destinations(conn, config):
+    """Resolve containers by recorded ID or result provenance, never name alone."""
+    from omero.sys import ParametersI
+    for kind, child_kind, field, id_field in (
+        ('Dataset', 'Image', 'selectedDatasets', 'selectedDatasetId'),
+        ('Screen', 'Plate', 'selectedScreens', 'selectedScreenId'),
+    ):
+        names = config['form'].get(field, [])
+        if not names:
+            continue
+        selected = None
+        try:
+            recorded_id = config['form'].get(id_field)
+            if recorded_id:
+                selected = conn.getObject(kind, int(recorded_id))
+            else:
+                params = ParametersI()
+                params.addString('uuid', config['workflow_id'])
+                params.page(0, 2)
+                rows = conn.getQueryService().projection(
+                    f'SELECT DISTINCT obj.id FROM {kind} obj '
+                    f'JOIN obj.{child_kind.lower()}Links parentLink '
+                    'JOIN parentLink.child child JOIN child.annotationLinks link '
+                    'JOIN link.child ann JOIN ann.mapValue mv '
+                    "WHERE TYPE(ann) = MapAnnotation AND (mv.name = 'Workflow_ID' OR "
+                    "(ann.ns = 'biomero/workflow/batch' AND mv.name = 'Batch_Supervisor_Workflow_ID')) "
+                    'AND mv.value = :uuid ORDER BY obj.id', params, conn.SERVICE_OPTS)
+                if len(rows) == 1:
+                    selected = conn.getObject(kind, rows[0][0].val)
+            if selected and selected.canLink():
+                config['form'][field] = [selected.getName()]
+                config['form'][id_field] = selected.getId()
+                continue
+        except Exception:
+            logger.exception('Could not restore workflow %s destination', kind)
+        config['form'][field] = []
+        config['form'][id_field] = None
+        config['warnings'].append(
+            f'The previous {kind.lower()} destination could not be uniquely restored. '
+            'Choose an output destination before submitting.')
+
+
 def _batch_children(tracker, parent, tasks):
     links = [(UUID(str(t.params['child_workflow_id'])), int(t.params['batch_index']) + 1)
              for t in tasks if isinstance(t.params, dict)
@@ -225,6 +270,7 @@ def _batch_context(tracker, run, tasks, config, conn):
         parent_config = run_configuration(parent, parent_tasks)
         parent_config['inputs'] = _inputs(conn, parent_config)
         parent_config['inputs_available'] = len(parent_config['inputs']) == len(parent_config['form']['IDs'])
+        _restore_destinations(conn, parent_config)
         launcher = next(t for t in parent_tasks if t.task_name.endswith('SLURM_Run_Workflow_Batched.py'))
         config['batch'] = {'role': 'child', 'parent_id': str(parent.id),
                            'index': int(child.params['batch_index']) + 1,
@@ -269,6 +315,7 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
             config['inputs'] = _inputs(conn, config) if config['form']['IDs'] else []
             config['inputs_available'] = len(config['inputs']) == len(config['form']['IDs'])
             _batch_context(tracker, run, tasks, config, conn)
+            _restore_destinations(conn, config)
             # A missing annotation or failed result lookup must not block reuse.
             try:
                 config['outputs'], config['outputs_more'] = _outputs(conn, config)

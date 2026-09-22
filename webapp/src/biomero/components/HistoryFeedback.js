@@ -16,7 +16,7 @@ export function WorkflowStepIntro({ children, step = "settings" }) {
   return <Callout intent="primary" icon={history ? "history" : "info-sign"} className="mb-4">
     {history ? <>
       {history.mode === "rerun" ? "Rerunning workflow from " : "Reusing settings from "}
-      <span className="break-all">{history.id}</span>. Review {step} before submitting.
+      <Tooltip content={`Workflow ${history.id}`}><span>{history.sourceLabel || "a previous run"}</span></Tooltip>. Review {step} before submitting.
     </> : children}
   </Callout>;
 }
@@ -57,6 +57,6 @@ export function HistoryDestructiveWarning({ field, label }) {
   const history = state.historyRun;
   if (!history?.sourceOptions[field] || state.formData[field]) return null;
   return <Callout intent="warning" compact className="mt-2">
-    {label} was enabled in run {history.id}. It was left off for review; enable it explicitly if needed.
+    {label} was enabled in the previous run. It was left off for review; enable it explicitly if needed.
   </Callout>;
 }

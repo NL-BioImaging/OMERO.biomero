@@ -37,6 +37,15 @@ test("UI control fields are not reported as removed workflow parameters", () => 
   expect(result.warnings.some(w => /Format|plateMode/.test(w))).toBe(false);
 });
 
+test("preserves resolved destination IDs and uses original input names for feedback", () => {
+  const source = { ...detail, inputs: [{ id: 15, name: "Experiment A" }, { id: 16, name: "Experiment B" }],
+    form: { ...detail.form, selectedScreens: ["Results"], selectedScreenId: 51 } };
+  const { form, warnings } = prepareHistoryRun(source, workflow, versions);
+  expect(form.selectedScreenId).toBe(51);
+  expect(warnings.some(w => w.includes("selectedScreenId"))).toBe(false);
+  expect(historyContext(source, form, warnings, "reuse").sourceLabel).toBe("Plate Experiment A and 1 more");
+});
+
 test("unchanged parameters require all configured values and version to match", () => {
   const original = historyContext(detail, detail.form, [], "rerun");
   expect(historyParametersUnchanged(original, { ...detail.form, IDs: [99] }, workflow.metadata)).toBe(true);

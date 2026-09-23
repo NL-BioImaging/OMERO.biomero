@@ -60,17 +60,19 @@ export default function HistoryObjectList({ objects, type, output = false, hasMo
       if (!controller.signal.aborted) { request.current = null; setLoading(false); }
     }
   };
-  return <section aria-label={output ? "Output data" : "Input data"} className="min-w-0">
+  return <section aria-label={output ? "Output data" : "Input data"} className="flex flex-col min-w-0">
     {!hideHeading && <div className="flex items-center gap-2 mb-2">
       <H6 className="!m-0">{output ? "Output data" : "Input data"}</H6>
       <Tag minimal round>{output ? `${items.length}${more ? "+" : ""}` : total ?? items.length}</Tag>
     </div>}
-    <ul className="list-none m-0 p-0 max-h-64 overflow-y-auto overflow-x-hidden">
+    <ul className="list-none m-0 p-0 w-full max-h-64 overflow-y-auto overflow-x-hidden">
       {items.slice(0, visible).map(object => <ObjectLink key={`${object.type || type}:${object.id}`} object={object} type={object.type || type} />)}
     </ul>
     {error && <div role="alert" className="bp5-text-muted text-xs">Could not load more results.</div>}
-    {(visible < items.length || more) && <Button minimal small intent="primary" icon="more" loading={loading}
-      onClick={showMore}>{error ? "Retry outputs" : `Show more ${label}`}</Button>}
-    {visible > 5 && <Button minimal small icon="chevron-up" onClick={() => setVisible(5)}>Show fewer {label}</Button>}
+    {(visible < items.length || more || visible > 5) && <div className="flex flex-wrap gap-2 mt-2">
+      {(visible < items.length || more) && <Button minimal small intent="primary" icon="more" loading={loading}
+        onClick={showMore}>{error ? "Retry outputs" : `Show more ${label}`}</Button>}
+      {visible > 5 && <Button minimal small icon="chevron-up" onClick={() => setVisible(5)}>Show fewer {label}</Button>}
+    </div>}
   </section>;
 }

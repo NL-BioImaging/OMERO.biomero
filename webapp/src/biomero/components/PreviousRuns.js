@@ -21,9 +21,9 @@ export const durationLabel = (started, ended) => {
 function RunDataTabs({ detail }) {
   const [outputCount, setOutputCount] = useState(`${detail.outputs?.length || 0}${detail.outputs_more ? "+" : ""}`);
   return <Tabs id="history-data" defaultSelectedTabId={detail.form.IDs.length ? "inputs" : "outputs"}>
-    {detail.form.IDs.length > 0 && <Tab id="inputs" title={<>Input data <Tag minimal round>{detail.form.IDs.length}</Tag></>}
+    {detail.form.IDs.length > 0 && <Tab id="inputs" title="Input data" tagContent={detail.form.IDs.length} tagProps={{ round: true }}
       panel={<HistoryObjectList objects={detail.inputs} type={detail.form.Data_Type} hideHeading total={detail.form.IDs.length} />} />}
-    {detail.outputs?.length > 0 && <Tab id="outputs" title={<>Output data <Tag minimal round>{outputCount}</Tag></>}
+    {detail.outputs?.length > 0 && <Tab id="outputs" title="Output data" tagContent={outputCount} tagProps={{ round: true }}
       panel={<HistoryObjectList objects={detail.outputs} output hideHeading hasMore={detail.outputs_more}
         workflowId={detail.workflow_id} onCount={setOutputCount} />} />}
   </Tabs>;

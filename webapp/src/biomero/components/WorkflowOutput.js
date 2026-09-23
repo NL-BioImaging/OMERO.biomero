@@ -73,6 +73,9 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
   const autoFilledForPlateId = useRef(null);
   const isImporterEnabled = !plateMode || (window.WEBCLIENT?.UI?.IMPORTER_ENABLED || false);
   const isShallowZarrEnabled = window.WEBCLIENT?.UI?.BIOMERO_SHALLOW_ZARR_ENABLED || false;
+  const allowPlateLabelPreview = String(
+    state.config?.UI?.allow_plate_label_preview || "false"
+  ).toLowerCase() === "true";
   const findParentScreen = (plateId, treeData) => {
     if (!plateId || !treeData) return null;
     const plateKey = `plate-${plateId}`;
@@ -696,7 +699,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
       {/* Optional mask-result presentation */}
       <div className="ml-4 pl-3 border-l border-gray-200">
         {plateMode ? (
-          (selectedContainers?.length ?? 0) > 0 && isImporterEnabled && isShallowZarrEnabled ? (
+          allowPlateLabelPreview && (selectedContainers?.length ?? 0) > 0 && isImporterEnabled && isShallowZarrEnabled ? (
             <Card
               compact={true}
               selected={!!state.formData.importPlateLabelPreview}

@@ -1341,6 +1341,14 @@ const SettingsForm = () => {
             </div>
           </div>
         </div>
+        <H6>Workflow Result Options</H6>
+        <Switch
+          checked={settingsForm.UI?.allow_plate_label_preview === "true"}
+          label="Allow users to create a separate Plate mask preview"
+          onChange={(e) =>
+            handleInputChange("UI.allow_plate_label_preview", e.target.checked ? "true" : "false")
+          }
+        />
         <H6>Batch Processing Limits</H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">

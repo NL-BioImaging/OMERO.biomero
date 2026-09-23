@@ -110,6 +110,9 @@ class AnalyzerViewsTests(TestCase):
         ), patch(
             "omero_biomero.analyzer_views.prepare_workflow_parameters",
             lambda *a, **k: params_in,
+        ), patch(
+            "omero_biomero.analyzer_views.plate_label_preview_allowed",
+            return_value=True,
         ):
             view = _raw("run_workflow_script")
             payload = {"workflow_name": "wfA", "params": params_in}
@@ -159,6 +162,9 @@ class AnalyzerViewsTests(TestCase):
         )
         with patch.dict(
             "os.environ", {"BIOMERO_SHALLOW_ZARR": "false"}
+        ), patch(
+            "omero_biomero.analyzer_views.plate_label_preview_allowed",
+            return_value=True,
         ):
             response = view(request, conn=MagicMock())
 
@@ -167,6 +173,22 @@ class AnalyzerViewsTests(TestCase):
             "requires BIOMERO_SHALLOW_ZARR=true",
             response.content.decode(),
         )
+
+    def test_run_workflow_rejects_plate_preview_when_admin_disables_it(self):
+        view = _raw("run_workflow_script")
+        payload = {
+            "workflow_name": "wfA",
+            "params": {"importPlateLabelPreview": True},
+        }
+        request = SimpleNamespace(method="POST", body=json.dumps(payload).encode())
+        with patch(
+            "omero_biomero.analyzer_views.plate_label_preview_allowed",
+            return_value=False,
+        ):
+            response = view(request, conn=MagicMock())
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("disabled by the administrator", response.content.decode())
 
     def test_run_workflow_missing_roi_script_downgrades_to_warning(self):
         from biomero.constants import workflow

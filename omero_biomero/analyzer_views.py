@@ -19,6 +19,18 @@ from .utils import parse_bool_env
 
 logger = logging.getLogger(__name__)
 
+
+def plate_label_preview_allowed():
+    """Return the administrator-managed UI policy; missing stays disabled."""
+    try:
+        config = SlurmClient.load_config()
+        return config.getboolean(
+            "UI", "allow_plate_label_preview", fallback=False
+        )
+    except Exception as exc:
+        logger.warning("Could not read Plate label preview policy: %s", exc)
+        return False
+
 def get_roi_script_capability(script_service, scripts=None):
     """Ask OMERO whether the optional Labels2Rois script is installed."""
     scripts = scripts if scripts is not None else script_service.getScripts()
@@ -61,12 +73,12 @@ def run_workflow_script(request, conn=None, **kwargs):
             )
             else "inline"
         )
-        if (
-            params.get("importPlateLabelPreview", False)
-            and not parse_bool_env(
-                os.environ.get("BIOMERO_SHALLOW_ZARR"), default=False
-            )
-        ):
+        if params.get("importPlateLabelPreview", False) and not plate_label_preview_allowed():
+            return JsonResponse({
+                "error": "Plate mask previews are disabled by the administrator"
+            }, status=400)
+        if (params.get("importPlateLabelPreview", False) and not parse_bool_env(
+                os.environ.get("BIOMERO_SHALLOW_ZARR"), default=False)):
             return JsonResponse({
                 "error": (
                     "Plate mask preview requires BIOMERO_SHALLOW_ZARR=true"

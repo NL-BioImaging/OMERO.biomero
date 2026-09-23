@@ -414,6 +414,7 @@ describe("WorkflowOutput image-pathway destination suggestions", () => {
     };
     const context = {
       state: {
+        config: { UI: { allow_plate_label_preview: "true" } },
         formData: {
           ...baseFormData,
           plateMode: true,

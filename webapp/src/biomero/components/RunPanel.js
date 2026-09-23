@@ -483,7 +483,8 @@ const RunPanel = ({ onWorkflowError }) => {
         </div>
 
         {activeWorkflowTab === "history" ? (
-          <PreviousRuns key={`${state.user?.active_group_id}:${searchTerm}`} searchQuery={searchTerm} onApply={applyHistory} onTotal={setHistoryCount} />
+          <PreviousRuns key={`${state.user?.active_group_id}:${searchTerm}`} searchQuery={searchTerm} onWorkflowFilter={setSearchTerm}
+            workflows={state.workflows} onApply={applyHistory} onTotal={setHistoryCount} />
         ) : filteredWorkflows?.length > 0 ? (
           // Only render grid after SLURM status is determined to prevent height jumping
           state.slurmStatus ? (

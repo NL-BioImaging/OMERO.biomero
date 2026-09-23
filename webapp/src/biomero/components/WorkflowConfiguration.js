@@ -39,7 +39,7 @@ export default function WorkflowConfiguration({ onNavigationBlockedChange }) {
         </Callout>
         {state.historyRun && <WorkflowStepIntro step="the source run and settings" />}
         <PreviousRuns embedded isOpen={tab === "previous-runs"} workflowName={workflow.name}
-          selection={selection} onApply={apply} />
+          workflows={state.workflows} selection={selection} onApply={apply} />
       </>} />
     </Tabs>
   </>;

@@ -2,12 +2,14 @@
 from contextlib import contextmanager
 import logging
 import os
+import re
 from uuid import UUID
 
 from biomero import SlurmClient, WorkflowTracker
 from biomero.constants import workflow as wf, results, transfer, workflow_batched, slurm_env
 from biomero.database import WorkflowProgressView
 from django.http import JsonResponse
+from django.urls import reverse, NoReverseMatch
 from django.views.decorators.http import require_GET
 from eventsourcing.application import AggregateNotFoundError
 from omeroweb.webclient.decorators import login_required
@@ -158,18 +160,24 @@ def _inputs(conn, config):
             for object_id in form['IDs'] if object_id in visible]
 
 
-def _outputs(conn, config):
+def _outputs(conn, config, after=None, limit=5):
     """Bounded, permission-filtered provenance links, not inferred destinations."""
     from omero.sys import ParametersI
     outputs = []
-    for kind in ('Plate', 'Dataset', 'Image'):
+    kinds = ('Plate', 'Dataset', 'Image')
+    for kind in kinds:
+        if after and kinds.index(kind) < kinds.index(after[0]):
+            continue
         params = ParametersI()
         params.addString('uuid', config['workflow_id'])
-        params.page(0, 7)
+        params.page(0, limit + 1 - len(outputs))
         exclude = ''
+        if after and kind == after[0]:
+            params.addLong('after', after[1])
+            exclude += 'AND obj.id > :after '
         if kind == config['form']['Data_Type']:
             params.addLongs('inputs', config['form']['IDs'])
-            exclude = 'AND obj.id NOT IN (:inputs) '
+            exclude += 'AND obj.id NOT IN (:inputs) '
         rows = conn.getQueryService().projection(
             f'SELECT DISTINCT obj.id, obj.name FROM {kind} obj '
             'JOIN obj.annotationLinks link JOIN link.child ann JOIN ann.mapValue mv '
@@ -181,7 +189,72 @@ def _outputs(conn, config):
             if kind == config['form']['Data_Type'] and object_id in config['form']['IDs']:
                 continue
             outputs.append({'id': object_id, 'name': row[1].val, 'type': kind})
-    return outputs[:6], len(outputs) > 6
+        if len(outputs) > limit:
+            break
+    return outputs[:limit], len(outputs) > limit
+
+
+def _viewer_links(conn, objects, default_type=None):
+    """Use readable per-object provenance, never a workflow-format guess."""
+    from omero.sys import ParametersI
+    try:
+        viewer = reverse('biomero_zarr_viewer_index')
+    except NoReverseMatch:
+        return  # Viewer is optional; don't offer broken links when absent.
+    for kind in ('Plate', 'Image'):
+        selected = {obj['id']: obj for obj in objects
+                    if obj.get('type', default_type) == kind}
+        if not selected:
+            continue
+        params = ParametersI()
+        params.addLongs('ids', list(selected))
+        try:
+            rows = conn.getQueryService().projection(
+                f'SELECT DISTINCT obj.id, mv.value FROM {kind} obj '
+                'JOIN obj.annotationLinks link JOIN link.child ann JOIN ann.mapValue mv '
+                "WHERE obj.id IN (:ids) AND TYPE(ann) = MapAnnotation "
+                "AND ann.ns = 'biomero.import' AND mv.name IN ('Imported_from', 'Filepath')",
+                params, conn.SERVICE_OPTS)
+            for row in rows:
+                if row[0].val in selected and re.search(r'\.zarr(?:[/\\]|$)', row[1].val or '', re.I):
+                    selected[row[0].val]['viewer_url'] = f'{viewer}?{kind.lower()}={row[0].val}'
+        except Exception:
+            logger.exception('Could not determine history Zarr viewer links')
+
+
+@login_required()
+@require_GET
+def workflow_history_outputs(request, workflow_id, conn=None, **kwargs):
+    """Keyset-paginated result objects, scoped exactly like run detail."""
+    after = None
+    cursor = request.GET.get('cursor')
+    if cursor:
+        try:
+            kind, raw_id = cursor.split(':')
+            object_id = int(raw_id)
+            if kind not in ('Plate', 'Dataset', 'Image') or not 0 <= object_id <= 2**63 - 1:
+                raise ValueError()
+            after = (kind, object_id)
+        except (ValueError, TypeError):
+            return JsonResponse({'error': 'Invalid result cursor.'}, status=400)
+    try:
+        with history_tracker() as tracker:
+            run = tracker.repository.get(UUID(str(workflow_id)))
+            if not _owned(run, conn):
+                return JsonResponse({'error': 'Run not found.'}, status=404)
+            tasks = [tracker.repository.get(i) for i in run.tasks]
+            try:
+                config = run_configuration(run, tasks)
+            except HistoryConfigurationError:
+                config = {'workflow_id': str(run.id), 'form': {'Data_Type': None, 'IDs': []}}
+            objects, more = _outputs(conn, config, after=after, limit=20)
+            _viewer_links(conn, objects)
+            return JsonResponse({'objects': objects, 'has_more': more})
+    except AggregateNotFoundError:
+        return JsonResponse({'error': 'Run not found.'}, status=404)
+    except Exception:
+        logger.exception('Could not load workflow results page')
+        return JsonResponse({'error': 'Result links are unavailable.'}, status=503)
 
 
 def _restore_destinations(conn, config):
@@ -314,11 +387,13 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
                     break
             config['inputs'] = _inputs(conn, config) if config['form']['IDs'] else []
             config['inputs_available'] = len(config['inputs']) == len(config['form']['IDs'])
+            _viewer_links(conn, config['inputs'], config['form']['Data_Type'])
             _batch_context(tracker, run, tasks, config, conn)
             _restore_destinations(conn, config)
             # A missing annotation or failed result lookup must not block reuse.
             try:
                 config['outputs'], config['outputs_more'] = _outputs(conn, config)
+                _viewer_links(conn, config['outputs'])
             except Exception:
                 logger.exception('Could not read workflow result links')
                 config['outputs'] = []

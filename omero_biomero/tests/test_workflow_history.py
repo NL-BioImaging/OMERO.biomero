@@ -197,7 +197,7 @@ def test_result_links_are_bounded_and_exclude_input_objects():
     from omero.sys import ParametersI
     with patch('omero.sys.ParametersI', wraps=ParametersI) as parameters:
         outputs, more = history._outputs(conn, config)
-        assert len(outputs) == 6
+        assert len(outputs) == 5
         assert more
         assert outputs[0] == {'id': 99, 'name': 'result 99', 'type': 'Plate'}
         assert parameters.call_count == 3
@@ -207,6 +207,90 @@ def test_result_links_are_bounded_and_exclude_input_objects():
     query = conn.getQueryService.return_value.projection.call_args_list[0].args[0]
     assert "Batch_Supervisor_Workflow_ID" in query
     assert "biomero/workflow/batch" in query
+
+
+def test_result_cursor_crosses_types_and_limits_each_query():
+    conn = Mock()
+    row = lambda i: [SimpleNamespace(val=i), SimpleNamespace(val=f'result {i}')]
+    conn.getQueryService.return_value.projection.side_effect = [[row(99)], [row(200), row(201)]]
+    config = {'workflow_id': str(uuid4()), 'form': {'Data_Type': 'Image', 'IDs': [15]}}
+    outputs, more = history._outputs(conn, config, after=('Dataset', 98), limit=2)
+    assert [(obj['type'], obj['id']) for obj in outputs] == [('Dataset', 99), ('Image', 200)]
+    assert more
+    calls = conn.getQueryService.return_value.projection.call_args_list
+    assert len(calls) == 2
+    assert 'obj.id > :after' in calls[0].args[0]
+    assert calls[0].args[1].map['after'].val == 98
+    assert 'obj.id > :after' not in calls[1].args[0]
+    assert 'obj.id NOT IN (:inputs)' in calls[1].args[0]
+
+
+@pytest.mark.parametrize('cursor', ['Bad:1', 'Image:-1', 'Image:bad', 'Image:1:2'])
+def test_invalid_result_cursor_does_not_open_tracking_database(cursor):
+    with patch.object(history, 'history_tracker') as tracker:
+        response = history.workflow_history_outputs(RequestFactory().get('/results/', {'cursor': cursor}),
+                                                    workflow_id=uuid4(), conn=Mock())
+    assert response.status_code == 400
+    tracker.assert_not_called()
+
+
+def test_results_page_rechecks_run_owner():
+    run, _ = fixture()
+    run.user = 99
+    tracker = Mock()
+    tracker.repository.get.return_value = run
+    conn = Mock()
+    conn.getEventContext.return_value = SimpleNamespace(userId=1, groupId=2)
+    with patch.object(history, 'history_tracker') as factory:
+        factory.return_value.__enter__.return_value = tracker
+        response = history.workflow_history_outputs(RequestFactory().get('/results/'), workflow_id=run.id, conn=conn)
+    assert response.status_code == 404
+    conn.getQueryService.assert_not_called()
+
+
+def test_results_page_returns_next_results_for_owned_run():
+    import json
+    run, tasks = fixture()
+    run.tasks = [uuid4()]
+    tracker = Mock()
+    tracker.repository.get.side_effect = [run, tasks[0]]
+    conn = Mock()
+    conn.getEventContext.return_value = SimpleNamespace(userId=1, groupId=2)
+    objects = [{'type': 'Image', 'id': 30, 'name': 'result'}]
+    with patch.object(history, 'history_tracker') as factory, \
+            patch.object(history, '_outputs', return_value=(objects, False)) as outputs, \
+            patch.object(history, '_viewer_links'):
+        factory.return_value.__enter__.return_value = tracker
+        response = history.workflow_history_outputs(RequestFactory().get('/results/', {'cursor': 'Plate:9'}),
+                                                    workflow_id=run.id, conn=conn)
+    assert response.status_code == 200
+    assert json.loads(response.content) == {'objects': objects, 'has_more': False}
+    assert outputs.call_args.kwargs == {'after': ('Plate', 9), 'limit': 20}
+
+
+def test_viewer_links_use_object_provenance_and_do_not_expose_storage_paths():
+    conn = Mock()
+    objects = [{'id': 1, 'type': 'Plate'}, {'id': 2, 'type': 'Plate'}, {'id': 3, 'type': 'Dataset'}]
+    conn.getQueryService.return_value.projection.return_value = [
+        [SimpleNamespace(val=1), SimpleNamespace(val='/private/processed/plate.ome.zarr')],
+        [SimpleNamespace(val=2), SimpleNamespace(val='/private/input.tif')],
+    ]
+    with patch.object(history, 'reverse', return_value='/biomero_zarr_viewer/'):
+        history._viewer_links(conn, objects)
+    assert objects[0]['viewer_url'] == '/biomero_zarr_viewer/?plate=1'
+    assert 'viewer_url' not in objects[1]
+    assert 'viewer_url' not in objects[2]
+    assert '/private' not in str(objects)
+    query = conn.getQueryService.return_value.projection.call_args.args[0]
+    assert "'Imported_from', 'Filepath'" in query
+    assert "ann.ns = 'biomero.import'" in query
+
+
+def test_viewer_absent_does_not_offer_dead_links_or_query_annotations():
+    conn = Mock()
+    with patch.object(history, 'reverse', side_effect=history.NoReverseMatch):
+        history._viewer_links(conn, [{'id': 1, 'type': 'Image'}])
+    conn.getQueryService.assert_not_called()
 
 
 def test_child_reuse_disables_batching_and_retains_whole_parent_configuration():

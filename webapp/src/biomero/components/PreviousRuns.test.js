@@ -176,14 +176,15 @@ test("parent navigation shows off-page status and expandable child statuses", as
   await waitFor(() => expect(fetchWorkflowHistoryDetail).toHaveBeenCalledWith("child-4", expect.anything()));
 });
 
-test("bounded results are explicitly a preview, not an incomplete full list", async () => {
+test("results show five links without eager thumbnails or a preview foldout", async () => {
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs_more: true,
     outputs: Array.from({ length: 6 }, (_, i) => ({ type: "Image", id: i, name: `Result ${i}` })) });
   render(<PreviousRuns onApply={jest.fn()} />);
-  await screen.findByText("Preview: first 6");
+  await screen.findByRole("link", { name: "Result 4 (4)" });
   expect(screen.queryByTestId("preview-0")).not.toBeInTheDocument();
-  expect(screen.getByTestId("preview-15")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Show preview (6)" })).toBeInTheDocument();
+  expect(screen.queryByTestId("preview-15")).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Result 5 (5)" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Show more outputs" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "View all results in OMERO" })).toBeInTheDocument();
 });
 
@@ -211,8 +212,18 @@ test("many inputs start compact and can be expanded beyond six", async () => {
   render(<PreviousRuns onApply={jest.fn()} />);
   await screen.findByRole("link", { name: "Source 1 (1)" });
   expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "+8 more" }));
+  expect(screen.getByRole("link", { name: "Source 5 (5)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show more inputs" }));
   expect(screen.getByRole("link", { name: "Source 9 (9)" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+  fireEvent.click(screen.getByRole("button", { name: "Show fewer inputs" }));
   expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
+});
+
+test("header is a heading and filters through the shared workflow search", async () => {
+  const filter = jest.fn();
+  render(<PreviousRuns onApply={jest.fn()} onWorkflowFilter={filter} />);
+  expect(await screen.findByRole("heading", { name: "segment", level: 4 })).toBeInTheDocument();
+  expect(screen.queryByText("v1")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Filter by segment" }));
+  expect(filter).toHaveBeenCalledWith("segment");
 });

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { useAppContext } from "../../AppContext";
 import { HistoryDialogTitle, WorkflowStepIntro, HistoryFieldCue, HistoryOutputCue, HistoryWarnings, HistoryDestructiveWarning } from "./HistoryFeedback";
@@ -14,15 +14,31 @@ beforeEach(() => {
 });
 
 test("dialog title identifies source; field cue changes after editing", () => {
-  const view = render(<><HistoryDialogTitle title="Plate Workflow: segment" /><HistoryFieldCue field="diameter" /></>);
-  expect(screen.getByText("Rerun: Plate Workflow: segment")).toBeInTheDocument();
-  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
+  const view = render(<><HistoryDialogTitle workflowType="Plate Workflow" workflowName="segment" /><HistoryFieldCue field="diameter" /></>);
+  expect(screen.getByText("Rerun:")).toBeInTheDocument();
+  // jsdom has no layout width, so Blueprint places the first crumb in overflow.
+  fireEvent.click(screen.getByRole("button", { name: "collapsed breadcrumbs" }));
+  expect(screen.getByRole("menuitem", { name: "Plate Workflow" })).toBeInTheDocument();
+  expect(screen.getByText("segment")).toBeInTheDocument();
+  expect(screen.getByText("old-uuid")).toHaveAttribute("title", "Workflow run old-uuid");
   expect(view.container.querySelector(".bp5-callout")).toBeNull();
   expect(screen.getByText("From previous run")).toBeInTheDocument();
   state.formData.diameter = 15;
   view.rerender(<HistoryFieldCue field="diameter" />);
   expect(screen.getByText("Modified")).toBeInTheDocument();
   expect(screen.queryByText("From previous run")).not.toBeInTheDocument();
+});
+
+test("fresh and reuse dialog titles use the same breadcrumb hierarchy", () => {
+  state.historyRun = null;
+  const view = render(<HistoryDialogTitle workflowType="Image Workflow" workflowName="cellexpansion" />);
+  expect(screen.getByText("Run:")).toBeInTheDocument();
+  expect(screen.getByText("Image Workflow")).toBeInTheDocument();
+  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
+  state.historyRun = { ...state.historyRun, id: "2433edab-rest", mode: "reuse" };
+  view.rerender(<HistoryDialogTitle workflowType="Image Workflow" workflowName="cellexpansion" />);
+  expect(screen.getByText("Reuse:")).toBeInTheDocument();
+  expect(screen.getByText("2433edab")).toBeInTheDocument();
 });
 
 test("step banner replaces normal guidance in the existing body location", () => {

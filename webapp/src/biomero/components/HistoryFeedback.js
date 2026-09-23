@@ -1,13 +1,22 @@
 import React from "react";
-import { Callout, Tag, Tooltip } from "@blueprintjs/core";
+import { Breadcrumb, Breadcrumbs, Callout, Tag, Tooltip } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
 import { sameHistoryValue } from "../runHistory";
 
-export function HistoryDialogTitle({ title }) {
+export function HistoryDialogTitle({ workflowType, workflowName }) {
   const { state } = useAppContext();
   const history = state.historyRun;
-  if (!history) return title;
-  return `${history.mode === "rerun" ? "Rerun" : "Reuse settings"}: ${title}`;
+  const action = history ? history.mode === "rerun" ? "Rerun" : "Reuse" : "Run";
+  const items = [{ text: workflowType }, { text: workflowName }];
+  if (history) items.push({ text: history.id.slice(0, 8), current: true });
+  return <div className="flex items-center gap-2 min-w-0">
+    <strong>{action}:</strong>
+    <Breadcrumbs minVisibleItems={2} items={items}
+      currentBreadcrumbRenderer={props => history ? <Breadcrumb {...props} text={undefined}>
+        <span className="font-mono" title={`Workflow run ${history.id}`}>{history.id.slice(0, 8)}</span>
+      </Breadcrumb> : <Breadcrumb {...props} />}
+      breadcrumbRenderer={props => <Breadcrumb {...props} />} />
+  </div>;
 }
 
 export function WorkflowStepIntro({ children, step = "settings" }) {

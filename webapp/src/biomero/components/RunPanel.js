@@ -720,7 +720,7 @@ const RunPanel = ({ onWorkflowError }) => {
             setCustomStepIndex(0); // Reset step index on close
           }}
           initialStepIndex={0}
-          title={<HistoryDialogTitle title={beautifyName(state.selectedWorkflow.name)} />}
+          title={<HistoryDialogTitle workflowType="Image Workflow" workflowName={beautifyName(state.selectedWorkflow.name)} />}
           style={state.historyRun ? { border: "1px solid #2d72d2" } : undefined}
           onChange={handleStepChange}
           navigationPosition={"top"}

@@ -60,7 +60,7 @@ const PlateWorkflowDialog = ({
         setDialogOpen(false);
       }}
       initialStepIndex={0}
-      title={<HistoryDialogTitle title={`Plate Workflow: ${beautifyName(workflow?.name || 'Unknown')}`} />}
+      title={<HistoryDialogTitle workflowType="Plate Workflow" workflowName={beautifyName(workflow?.name || 'Unknown')} />}
       style={state.historyRun ? { border: "1px solid #2d72d2" } : undefined}
       navigationPosition="top"
       icon="lab-test"

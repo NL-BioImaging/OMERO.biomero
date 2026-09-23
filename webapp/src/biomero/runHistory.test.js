@@ -37,6 +37,15 @@ test("UI control fields are not reported as removed workflow parameters", () => 
   expect(result.warnings.some(w => /Format|plateMode/.test(w))).toBe(false);
 });
 
+test("BIAFLOWS runtime parameters are removed silently", () => {
+  const runtime = { infolder: "/in", outfolder: "/out", gtfolder: "/gt", local: true, nmc: 1 };
+  const result = prepareHistoryRun({ ...detail, form: { ...detail.form, ...runtime } }, workflow, versions);
+  for (const key of Object.keys(runtime)) {
+    expect(result.form[key]).toBeUndefined();
+    expect(result.warnings.some(warning => warning.includes(key))).toBe(false);
+  }
+});
+
 test("preserves resolved destination IDs and uses original input names for feedback", () => {
   const source = { ...detail, inputs: [{ id: 15, name: "Experiment A" }, { id: 16, name: "Experiment B" }],
     form: { ...detail.form, selectedScreens: ["Results"], selectedScreenId: 51 } };

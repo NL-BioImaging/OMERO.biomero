@@ -34,10 +34,15 @@ export function prepareHistoryRun(detail, workflow, versions, selection = null) 
     "roiColor", "importPlateLabelPreview", "plateLabelPreviewName", "selectedDatasets",
     "selectedScreens", "selectedScreenId", "selectedDatasetId", "enableRename", "renamePattern", "batchEnabled", "batchSize",
     "clearExistingRois", "deleteLabelImagesAfterRois"]);
+  // BIAFLOWS injects these runtime paths and switches into every job. They are
+  // neither user settings nor valid workflow inputs when a run is restored.
+  const biaflowsRuntimeParameters = new Set(["infolder", "outfolder", "gtfolder", "local", "nmc"]);
   for (const key of Object.keys(form)) {
     if (!controls.has(key) && !inputs.some(input => input.id === key)) {
       delete form[key];
-      warnings.push(`Removed parameter: ${key}. It will not be submitted.`);
+      if (!biaflowsRuntimeParameters.has(key)) {
+        warnings.push(`Removed parameter: ${key}. It will not be submitted.`);
+      }
     }
   }
   form.clearExistingRois = false;

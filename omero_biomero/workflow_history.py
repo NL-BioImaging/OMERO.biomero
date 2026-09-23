@@ -1,5 +1,6 @@
 """Read-only history and translation into the existing workflow dialog format."""
 from contextlib import contextmanager
+from datetime import timezone
 import logging
 import os
 import re
@@ -16,6 +17,12 @@ from omeroweb.webclient.decorators import login_required
 from sqlalchemy import select, or_, cast, String, func
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_timestamp(value):
+    # WorkflowProgressView uses DateTime without timezone. Its writer stores
+    # event timestamps in UTC; retain that meaning when serializing to browsers.
+    return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
 
 
 class HistoryConfigurationError(ValueError):
@@ -436,7 +443,7 @@ def workflow_history_list(request, conn=None, **kwargs):
                 rows = list(db.execute(statement.offset(offset).limit(21)).mappings())
             items = [{'workflow_id': str(row['workflow_id']),
                       'workflow_name': row['main_task_name'] or row['name'],
-                      'status': row['status'], 'started': row['start_time'],
+                      'status': row['status'], 'started': _utc_timestamp(row['start_time']),
                       'name': row['name']} for row in rows[:20]]
         return JsonResponse({'runs': items, 'total': total, 'has_more': len(rows) > 20, 'offset': offset})
     except Exception:

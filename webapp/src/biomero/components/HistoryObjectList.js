@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button, H6, Icon, Tag, Tooltip } from "@blueprintjs/core";
+import { AnchorButton, Button, H6, Icon, Tag, Tooltip } from "@blueprintjs/core";
 import { fetchWorkflowHistoryOutputs } from "../../apiService";
 import HistoryDataPreview, { objectUrl } from "./HistoryDataPreview";
 
@@ -10,10 +10,10 @@ function ObjectLink({ object, type }) {
     target="_blank" rel="noopener noreferrer" aria-label={`${object.name} (${object.id})`}>
     {object.name}
   </a>;
-  return <li className="flex items-center gap-2 min-h-8">
+  return <li className="flex items-center gap-2 min-h-8 min-w-0 w-full">
     <Icon icon={type === "Plate" ? "grid-view" : type === "Image" ? "media" : "folder-close"} className="bp5-text-muted shrink-0" />
     <div className="min-w-0 flex-1">
-      {previewable ? <Tooltip className="block min-w-0" hoverOpenDelay={300}
+      {previewable ? <Tooltip className="!block min-w-0 w-full" hoverOpenDelay={300}
         onOpening={() => setPreviewOpen(true)} onClosed={() => setPreviewOpen(false)}
         content={<div className="max-w-xs">
           <div className="font-semibold break-words">{object.name} ({object.id})</div>
@@ -21,16 +21,14 @@ function ObjectLink({ object, type }) {
           <div className="text-xs">OMERO pixel preview · Open the object to inspect all results.</div>
         </div>}>{link}</Tooltip> : link}
     </div>
-    {object.viewer_url && <Tooltip content="Open in Zarr viewer">
-      <a className="bp5-button bp5-minimal bp5-small" href={object.viewer_url}
-        target="_blank" rel="noopener noreferrer" aria-label={`Open ${object.name} in Zarr viewer`}>
-        <Icon icon="layers" />
-      </a>
+    {object.viewer_url && <Tooltip className="shrink-0" content="Open in Zarr viewer">
+      <AnchorButton outlined small intent="primary" icon="layers" href={object.viewer_url}
+        target="_blank" rel="noopener noreferrer" aria-label={`Open ${object.name} in Zarr viewer`} />
     </Tooltip>}
   </li>;
 }
 
-export default function HistoryObjectList({ objects, type, output = false, hasMore = false, workflowId, total }) {
+export default function HistoryObjectList({ objects, type, output = false, hasMore = false, workflowId, total, hideHeading = false, onCount }) {
   const [items, setItems] = useState(objects);
   const [more, setMore] = useState(hasMore);
   const [visible, setVisible] = useState(5);
@@ -38,6 +36,7 @@ export default function HistoryObjectList({ objects, type, output = false, hasMo
   const [error, setError] = useState(false);
   const request = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
+  useEffect(() => { onCount?.(`${items.length}${more ? "+" : ""}`); }, [items.length, more, onCount]);
   const label = output ? "outputs" : "inputs";
   const showMore = async () => {
     if (request.current) return;
@@ -62,11 +61,11 @@ export default function HistoryObjectList({ objects, type, output = false, hasMo
     }
   };
   return <section aria-label={output ? "Output data" : "Input data"} className="min-w-0">
-    <div className="flex items-center gap-2 mb-2">
+    {!hideHeading && <div className="flex items-center gap-2 mb-2">
       <H6 className="!m-0">{output ? "Output data" : "Input data"}</H6>
       <Tag minimal round>{output ? `${items.length}${more ? "+" : ""}` : total ?? items.length}</Tag>
-    </div>
-    <ul className="list-none m-0 p-0 max-h-64 overflow-auto">
+    </div>}
+    <ul className="list-none m-0 p-0 max-h-64 overflow-y-auto overflow-x-hidden">
       {items.slice(0, visible).map(object => <ObjectLink key={`${object.type || type}:${object.id}`} object={object} type={object.type || type} />)}
     </ul>
     {error && <div role="alert" className="bp5-text-muted text-xs">Could not load more results.</div>}

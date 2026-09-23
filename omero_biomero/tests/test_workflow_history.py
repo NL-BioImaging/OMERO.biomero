@@ -178,7 +178,16 @@ def test_list_is_scoped_and_sorted_in_database():
         response = history.workflow_history_list(RequestFactory().get('/history/', {'q': 'missing'}), conn=conn)
         assert json.loads(response.content)['total'] == 0
     assert data['runs'][0]['started'].startswith('2026-01-02')
+    assert data['runs'][0]['started'].endswith('Z')
     engine.dispose()
+
+
+def test_projection_timestamp_retains_utc_meaning_and_aware_offsets():
+    naive = datetime.datetime(2026, 9, 16, 16, 47, 38)
+    aware = naive.replace(tzinfo=datetime.timezone.utc)
+    assert history._utc_timestamp(naive) == aware
+    assert history._utc_timestamp(aware) is aware
+    assert history._utc_timestamp(None) is None
 
 
 def test_backend_failure_does_not_expose_connection_details():

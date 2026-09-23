@@ -42,6 +42,7 @@ test("embedded reuse keeps apply above I/O and settings and shows recorded resul
     batch: { role: "child", parent_id: "parent", index: 2, total: 2 } });
   render(<PreviousRuns embedded onApply={jest.fn()} selection={{ IDs: [25], Data_Type: "Plate" }} />);
   const apply = await screen.findByRole("button", { name: "Use settings on selected data" });
+  fireEvent.click(screen.getByRole("tab", { name: /Output data/ }));
   const output = screen.getByRole("link", { name: "Result plate (99)" });
   const settings = screen.getByRole("button", { name: "Recorded settings" });
   expect(apply.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -135,6 +136,7 @@ test("failed run can show recorded partial outputs without claiming success", as
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED", outputs: [{ type: "Plate", id: 99, name: "Partial result" }] });
   render(<PreviousRuns onApply={jest.fn()} />);
+  fireEvent.click(await screen.findByRole("tab", { name: /Output data/ }));
   const output = await screen.findByRole("link", { name: "Partial result (99)" });
   expect(output).toHaveAttribute("href", "/webclient/?show=plate-99");
   expect(screen.getAllByText("FAILED")).toHaveLength(2);
@@ -144,7 +146,7 @@ test("failed runs without outputs hide the output section and use the correct UU
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED" });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const link = await screen.findByRole("link", { name: "Search workflow UUID in OMERO" });
+  const link = await screen.findByRole("link", { name: "abc" });
   expect(link).toHaveAttribute("href", "/webclient/search/?search_query=abc");
   expect(screen.queryByRole("region", { name: "Output data" })).not.toBeInTheDocument();
 });
@@ -180,6 +182,7 @@ test("results show five links without eager thumbnails or a preview foldout", as
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs_more: true,
     outputs: Array.from({ length: 6 }, (_, i) => ({ type: "Image", id: i, name: `Result ${i}` })) });
   render(<PreviousRuns onApply={jest.fn()} />);
+  fireEvent.click(await screen.findByRole("tab", { name: /Output data/ }));
   await screen.findByRole("link", { name: "Result 4 (4)" });
   expect(screen.queryByTestId("preview-0")).not.toBeInTheDocument();
   expect(screen.queryByTestId("preview-15")).not.toBeInTheDocument();
@@ -219,11 +222,25 @@ test("many inputs start compact and can be expanded beyond six", async () => {
   expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
 });
 
-test("header is a heading and filters through the shared workflow search", async () => {
+test("workflow breadcrumb filters through the shared workflow search", async () => {
   const filter = jest.fn();
   render(<PreviousRuns onApply={jest.fn()} onWorkflowFilter={filter} />);
-  expect(await screen.findByRole("heading", { name: "segment", level: 4 })).toBeInTheDocument();
+  expect(await screen.findByRole("navigation", { name: "Workflow and run" })).toBeInTheDocument();
   expect(screen.queryByText("v1")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Filter by segment" }));
+  // jsdom has no layout width, so Blueprint moves the first crumb into overflow.
+  fireEvent.click(screen.getByRole("button", { name: "collapsed breadcrumbs" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "segment" }));
   expect(filter).toHaveBeenCalledWith("segment");
+});
+
+test("start time tooltip explains start, end and duration", async () => {
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, ended: "2026-09-15T15:08:00Z" });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  await screen.findByRole("navigation", { name: "Workflow and run" });
+  const times = screen.getAllByText(new Date(detail.started).toLocaleString());
+  expect(times).toHaveLength(2);
+  fireEvent.focus(times[1]);
+  await screen.findByText(/Started:/);
+  expect(screen.getByText(/Ended:/)).toBeInTheDocument();
+  expect(screen.getByText("Duration: 8m")).toBeInTheDocument();
 });

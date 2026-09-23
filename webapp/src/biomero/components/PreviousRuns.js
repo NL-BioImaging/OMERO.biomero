@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Button, ButtonGroup, Callout, Card, Collapse, H4, HTMLTable, Icon, InputGroup, NonIdealState, Spinner, Tag, Tooltip } from "@blueprintjs/core";
+import { Breadcrumb, Breadcrumbs, Button, ButtonGroup, Callout, Card, Collapse, Divider, HTMLTable, Icon, InputGroup, NonIdealState, Spinner, Tab, Tabs, Tag, Tooltip } from "@blueprintjs/core";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
 import { workflowSearchUrl } from "./HistoryDataPreview";
 import HistoryObjectList from "./HistoryObjectList";
@@ -17,6 +17,17 @@ export const durationLabel = (started, ended) => {
   const minutes = Math.floor(seconds / 60);
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
+
+function RunDataTabs({ detail }) {
+  const [outputCount, setOutputCount] = useState(`${detail.outputs?.length || 0}${detail.outputs_more ? "+" : ""}`);
+  return <Tabs id="history-data" defaultSelectedTabId={detail.form.IDs.length ? "inputs" : "outputs"}>
+    {detail.form.IDs.length > 0 && <Tab id="inputs" title={<>Input data <Tag minimal round>{detail.form.IDs.length}</Tag></>}
+      panel={<HistoryObjectList objects={detail.inputs} type={detail.form.Data_Type} hideHeading total={detail.form.IDs.length} />} />}
+    {detail.outputs?.length > 0 && <Tab id="outputs" title={<>Output data <Tag minimal round>{outputCount}</Tag></>}
+      panel={<HistoryObjectList objects={detail.outputs} output hideHeading hasMore={detail.outputs_more}
+        workflowId={detail.workflow_id} onCount={setOutputCount} />} />}
+  </Tabs>;
+}
 
 export function batchListLabel(name) {
   const child = name?.match(/\(batch (\d+)\/(\d+)\)$/i);
@@ -121,6 +132,12 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     catch (error) { setError(error.message); }
   };
   const workflowDescription = workflows?.find(workflow => workflow.name === detail?.workflow_name)?.description;
+  const timing = detail && <div>
+    <div>Started: {startedLabel(detail.started)}</div>
+    <div>Ended: {detail.ended ? startedLabel(detail.ended) : "Not recorded"}</div>
+    <div>Duration: {durationLabel(detail.started, detail.ended) || "Not available"}</div>
+    <div className="text-xs">Times shown in your local timezone.</div>
+  </div>;
   const content = <div className="flex flex-col gap-3">
     {searchQuery === undefined && <div className="flex items-center gap-2">
       <InputGroup fill leftIcon="search" aria-label="Search previous runs" placeholder="Search workflow or paste workflow UUID"
@@ -164,31 +181,32 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     <section aria-label="Selected run details" className="min-w-0">
     {detailLoading && <Spinner size={24} aria-label="Loading run details" />}
     {detail && <Card compact className={embedded ? "max-h-[55vh] overflow-auto" : undefined}>
-      <header className="border-b border-gray-200 pb-3 mb-4">
-      <div className="flex items-start gap-2">
-        <Tooltip content={`Show runs of ${detail.workflow_name}`}>
-          <Button minimal icon="filter" aria-label={`Filter by ${detail.workflow_name}`}
-            onClick={() => { if (onWorkflowFilter) onWorkflowFilter(detail.workflow_name); else { setQuery(detail.workflow_name); setOffset(0); } }} />
-        </Tooltip>
-        <Tooltip className="min-w-0" content={<div className="max-w-sm">
+      <header className="min-w-0 mb-3">
+      <nav aria-label="Workflow and run">
+        <Breadcrumbs minVisibleItems={1} items={[
+          { text: detail.workflow_name, icon: "lab-test", href: "#", onClick: event => {
+            event.preventDefault();
+            if (onWorkflowFilter) onWorkflowFilter(detail.workflow_name);
+            else { setQuery(detail.workflow_name); setOffset(0); }
+          } },
+          { text: detail.workflow_id.slice(0, 8), current: true, href: workflowSearchUrl(detail.workflow_id), target: "_blank", rel: "noopener noreferrer" },
+        ]} breadcrumbRenderer={props => <Tooltip content={props.current ? `Workflow run ${detail.workflow_id}` : <div className="max-w-sm">
           <strong>{detail.workflow_name} · {detail.form.version || "Version not recorded"}</strong>
           {workflowDescription && <p className="mt-2 mb-0">{workflowDescription}</p>}
+          <p className="mt-2 mb-0">Show runs of this workflow</p>
         </div>}>
-          <H4 tabIndex={0} className="!mb-0 break-words">{detail.workflow_name}</H4>
-        </Tooltip>
-        <Tooltip className="ml-auto" content={`Workflow ${detail.workflow_id}`}>
-          <a className="bp5-button bp5-minimal bp5-small" aria-label="Search workflow UUID in OMERO" href={workflowSearchUrl(detail.workflow_id)}
-            target="_blank" rel="noopener noreferrer"><Icon icon="link" /></a>
-        </Tooltip>
-      </div>
+          <Breadcrumb {...props} className={props.current ? "font-mono" : "!text-lg font-semibold"} />
+        </Tooltip>} />
+      </nav>
       {[{ ...page.runs.find(run => run.workflow_id === selectedId), ...detail }].map(run => <div key={run.workflow_id} className="flex flex-wrap items-center gap-3 mt-2 text-xs bp5-text-muted">
         <Tag minimal intent={statusIntent(run.status)}>{run.status}</Tag>
-        <span><Icon icon="time" size={12} /> {startedLabel(run.started)}</span>
-        {durationLabel(detail.started, detail.ended) && <Tooltip content={`Duration; ended ${startedLabel(detail.ended)}`}>
-          <span><Icon icon="stopwatch" size={12} /> {durationLabel(detail.started, detail.ended)}</span>
+        <Tooltip content={timing}><span tabIndex={0}><Icon icon="time" size={12} /> {startedLabel(run.started)}</span></Tooltip>
+        {durationLabel(detail.started, detail.ended) && <Tooltip content={timing}>
+          <span tabIndex={0}><Icon icon="stopwatch" size={12} /> {durationLabel(detail.started, detail.ended)}</span>
         </Tooltip>}
       </div>)}
       </header>
+      <Divider className="!mx-0 !mb-3" />
       {embedded && !!selection?.IDs?.length && <div className="sticky top-0 z-10 bg-white py-2 mb-2">
         <Tooltip content="Keep your selected data and output choices, and load this run's settings for review.">
           <Button intent="primary" disabled={!!detail.rerun_error} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
@@ -196,12 +214,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
       </div>}
       {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
       {detail.batch && <BatchNavigation key={selectedId} batch={detail.batch} selectedId={selectedId} onSelect={setSelectedId} />}
-      <div className={detail.outputs?.length > 0 ? "grid grid-cols-1 sm:grid-cols-2 gap-4 my-3" : "my-3"}>
-      {detail.form.IDs.length > 0 && <HistoryObjectList key={`inputs-${selectedId}`} objects={detail.inputs}
-        type={detail.form.Data_Type} total={detail.form.IDs.length} />}
-      {detail.outputs?.length > 0 && <HistoryObjectList key={`outputs-${selectedId}`} objects={detail.outputs}
-        output hasMore={detail.outputs_more} workflowId={detail.workflow_id} />}
-      </div>
+      <RunDataTabs key={selectedId} detail={detail} />
       <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">
         {!detail.outputs?.length && (detail.status || page.runs.find(run => run.workflow_id === selectedId)?.status) !== "FAILED" &&
           <span className="bp5-text-muted">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</span>}

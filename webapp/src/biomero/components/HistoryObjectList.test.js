@@ -47,8 +47,9 @@ test("pending results are aborted on unmount and only evidenced Zarrs get viewer
   fetchWorkflowHistoryOutputs.mockImplementation(() => new Promise(() => {}));
   const view = render(<HistoryObjectList objects={[{ ...objects[0], viewer_url: "/biomero_zarr_viewer/?plate=1" }, ...objects.slice(1)]}
     output hasMore workflowId="run" />);
-  expect(screen.getByRole("link", { name: "Open Plate 1 in Zarr viewer" })).toHaveAttribute("href", "/biomero_zarr_viewer/?plate=1");
-  expect(screen.queryByRole("link", { name: "Open Plate 2 in Zarr viewer" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Open Plate 1 in Zarr viewer" })).toHaveAttribute("href", "/biomero_zarr_viewer/?plate=1");
+  expect(screen.getByRole("button", { name: "Open Plate 1 in Zarr viewer" })).toHaveClass("bp5-outlined", "bp5-intent-primary");
+  expect(screen.queryByRole("button", { name: "Open Plate 2 in Zarr viewer" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Show more outputs" }));
   const signal = fetchWorkflowHistoryOutputs.mock.calls[0][2];
   view.unmount();

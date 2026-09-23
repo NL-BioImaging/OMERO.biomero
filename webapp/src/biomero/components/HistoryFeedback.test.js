@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { useAppContext } from "../../AppContext";
 import { HistoryDialogTitle, WorkflowStepIntro, HistoryFieldCue, HistoryOutputCue, HistoryWarnings, HistoryDestructiveWarning } from "./HistoryFeedback";
@@ -14,9 +14,13 @@ beforeEach(() => {
 });
 
 test("dialog title identifies source; field cue changes after editing", () => {
-  const view = render(<><HistoryDialogTitle title="Plate Workflow: segment" /><HistoryFieldCue field="diameter" /></>);
-  expect(screen.getByText("Rerun: Plate Workflow: segment")).toBeInTheDocument();
-  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
+  const view = render(<><HistoryDialogTitle workflowType="Plate Workflow" workflowName="segment" /><HistoryFieldCue field="diameter" /></>);
+  expect(screen.getByText("Rerun:")).toBeInTheDocument();
+  // jsdom has no layout width, so Blueprint places the first crumb in overflow.
+  fireEvent.click(screen.getByRole("button", { name: "collapsed breadcrumbs" }));
+  expect(screen.getByRole("menuitem", { name: "Plate Workflow" })).toBeInTheDocument();
+  expect(screen.getByText("segment")).toBeInTheDocument();
+  expect(screen.getByText("old-uuid")).toHaveAttribute("title", "Workflow run old-uuid");
   expect(view.container.querySelector(".bp5-callout")).toBeNull();
   expect(screen.getByText("From previous run")).toBeInTheDocument();
   state.formData.diameter = 15;
@@ -25,14 +29,35 @@ test("dialog title identifies source; field cue changes after editing", () => {
   expect(screen.queryByText("From previous run")).not.toBeInTheDocument();
 });
 
+test("fresh and reuse dialog titles use the same breadcrumb hierarchy", () => {
+  state.historyRun = null;
+  const view = render(<HistoryDialogTitle workflowType="Image Workflow" workflowName="cellexpansion" />);
+  expect(screen.getByText("Run:")).toBeInTheDocument();
+  expect(screen.getByText("Image Workflow")).toBeInTheDocument();
+  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
+  state.historyRun = { ...state.historyRun, id: "2433edab-rest", mode: "reuse" };
+  view.rerender(<HistoryDialogTitle workflowType="Image Workflow" workflowName="cellexpansion" />);
+  expect(screen.getByText("Reuse:")).toBeInTheDocument();
+  expect(screen.getByText("2433edab")).toBeInTheDocument();
+});
+
 test("step banner replaces normal guidance in the existing body location", () => {
   const view = render(<WorkflowStepIntro step="the selected input plates">Normal plate guidance</WorkflowStepIntro>);
-  expect(screen.getByText("old-uuid")).toBeInTheDocument();
+  expect(screen.getByText("a previous run")).toBeInTheDocument();
+  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
   expect(screen.queryByText("Normal plate guidance")).not.toBeInTheDocument();
   expect(view.container.querySelectorAll(".bp5-callout")).toHaveLength(1);
   state.historyRun = null;
   view.rerender(<WorkflowStepIntro>Normal plate guidance</WorkflowStepIntro>);
   expect(screen.getByText("Normal plate guidance")).toBeInTheDocument();
+  expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
+});
+
+test("reuse banner names the source data rather than showing its workflow UUID", () => {
+  state.historyRun.sourceLabel = "Plate Experiment A";
+  state.historyRun.mode = "reuse";
+  render(<WorkflowStepIntro />);
+  expect(screen.getByText("Plate Experiment A")).toBeInTheDocument();
   expect(screen.queryByText("old-uuid")).not.toBeInTheDocument();
 });
 
@@ -44,12 +69,12 @@ test("warnings and disabled source suggestions are orange, not informational", (
 
 test("destructive warning appears only for an originally enabled option that is still off", () => {
   const view = render(<HistoryDestructiveWarning field="clearExistingRois" label="ROI clearing" />);
-  expect(screen.getByText(/was enabled in run/)).toBeInTheDocument();
+  expect(screen.getByText(/was enabled in the previous run/)).toBeInTheDocument();
   state.formData.clearExistingRois = true;
   view.rerender(<HistoryDestructiveWarning field="clearExistingRois" label="ROI clearing" />);
-  expect(screen.queryByText(/was enabled in run/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/was enabled in the previous run/)).not.toBeInTheDocument();
   state.formData.clearExistingRois = false;
   state.historyRun.sourceOptions.clearExistingRois = false;
   view.rerender(<HistoryDestructiveWarning field="clearExistingRois" label="ROI clearing" />);
-  expect(screen.queryByText(/was enabled in run/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/was enabled in the previous run/)).not.toBeInTheDocument();
 });

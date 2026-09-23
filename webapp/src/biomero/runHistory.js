@@ -32,12 +32,17 @@ export function prepareHistoryRun(detail, workflow, versions, selection = null) 
     "useZarrFormat", "omeZarrVersion", "importAsZip", "attachToOriginalImages", "uploadCsv",
     "attachFileOutputs", "fileOutputTarget", "createRois", "roiLabelPattern", "roiShape",
     "roiColor", "importPlateLabelPreview", "plateLabelPreviewName", "selectedDatasets",
-    "selectedScreens", "enableRename", "renamePattern", "batchEnabled", "batchSize",
+    "selectedScreens", "selectedScreenId", "selectedDatasetId", "enableRename", "renamePattern", "batchEnabled", "batchSize",
     "clearExistingRois", "deleteLabelImagesAfterRois"]);
+  // BIAFLOWS injects these runtime paths and switches into every job. They are
+  // neither user settings nor valid workflow inputs when a run is restored.
+  const biaflowsRuntimeParameters = new Set(["infolder", "outfolder", "gtfolder", "local", "nmc"]);
   for (const key of Object.keys(form)) {
     if (!controls.has(key) && !inputs.some(input => input.id === key)) {
       delete form[key];
-      warnings.push(`Removed parameter: ${key}. It will not be submitted.`);
+      if (!biaflowsRuntimeParameters.has(key)) {
+        warnings.push(`Removed parameter: ${key}. It will not be submitted.`);
+      }
     }
   }
   form.clearExistingRois = false;
@@ -56,7 +61,13 @@ export const historyParameterKeys = metadata => ["version", ...(metadata?.inputs
   .map(input => input.id)];
 
 export function historyContext(detail, form, warnings, mode) {
+  const inputs = detail.inputs || [];
+  const first = inputs[0];
+  const sourceLabel = first
+    ? `${detail.form.Data_Type} ${first.name || first.data || first.id}${inputs.length > 1 ? ` and ${inputs.length - 1} more` : ""}`
+    : "a previous run";
   return { id: detail.workflow_id, workflow: detail.workflow_name, mode,
+    sourceLabel,
     values: { ...form }, sourceOptions: { ...detail.form, ...detail.source_options }, warnings };
 }
 

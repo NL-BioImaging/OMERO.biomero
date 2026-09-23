@@ -1,19 +1,28 @@
 """Read-only history and translation into the existing workflow dialog format."""
 from contextlib import contextmanager
+from datetime import timezone
 import logging
 import os
+import re
 from uuid import UUID
 
 from biomero import SlurmClient, WorkflowTracker
 from biomero.constants import workflow as wf, results, transfer, workflow_batched, slurm_env
 from biomero.database import WorkflowProgressView
 from django.http import JsonResponse
+from django.urls import reverse, NoReverseMatch
 from django.views.decorators.http import require_GET
 from eventsourcing.application import AggregateNotFoundError
 from omeroweb.webclient.decorators import login_required
 from sqlalchemy import select, or_, cast, String, func
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_timestamp(value):
+    # WorkflowProgressView uses DateTime without timezone. Its writer stores
+    # event timestamps in UTC; retain that meaning when serializing to browsers.
+    return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
 
 
 class HistoryConfigurationError(ValueError):
@@ -52,8 +61,10 @@ def run_configuration(run, tasks):
     names = launcher.get('workflows') or list(dict.fromkeys(
         t.task_name for t in tasks
         if not t.task_name.startswith(('_', 'CONVERT_')) and not t.task_name.endswith('.py')))
-    if len(names) != 1:
-        raise HistoryConfigurationError('History reuse requires a single workflow in the run.')
+    if not names:
+        raise HistoryConfigurationError('No analysis workflow settings were recorded for this run, so they cannot be reused.')
+    if len(names) > 1:
+        raise HistoryConfigurationError('This run contains multiple analysis workflows. Reusing settings is currently supported for a single workflow only.')
     name = names[0]
     analysis = next((t for t in tasks if t.task_name == name), None)
     version = launcher.get(f'{name}_Version') or (analysis.task_version if analysis else None)
@@ -127,6 +138,9 @@ def run_configuration(run, tasks):
                                 ('selectedScreens', wf.OUTPUT_NEW_SCREEN)]:
         value = output.get(recorded)
         form[frontend] = [value] if value and value != wf.NO else []
+    for field, key in [('selectedDatasetId', results.OUTPUT_ATTACH_NEW_DATASET_ID),
+                       ('selectedScreenId', results.OUTPUT_ATTACH_NEW_SCREEN_ID)]:
+        form[field] = output.get(key) or None
     pattern = output.get(wf.OUTPUT_RENAME)
     form.update(enableRename=bool(pattern and pattern != wf.NO),
                 renamePattern=pattern if pattern and pattern != wf.NO else '')
@@ -155,18 +169,24 @@ def _inputs(conn, config):
             for object_id in form['IDs'] if object_id in visible]
 
 
-def _outputs(conn, config):
+def _outputs(conn, config, after=None, limit=5):
     """Bounded, permission-filtered provenance links, not inferred destinations."""
     from omero.sys import ParametersI
     outputs = []
-    for kind in ('Plate', 'Dataset', 'Image'):
+    kinds = ('Plate', 'Dataset', 'Image')
+    for kind in kinds:
+        if after and kinds.index(kind) < kinds.index(after[0]):
+            continue
         params = ParametersI()
         params.addString('uuid', config['workflow_id'])
-        params.page(0, 7)
+        params.page(0, limit + 1 - len(outputs))
         exclude = ''
+        if after and kind == after[0]:
+            params.addLong('after', after[1])
+            exclude += 'AND obj.id > :after '
         if kind == config['form']['Data_Type']:
             params.addLongs('inputs', config['form']['IDs'])
-            exclude = 'AND obj.id NOT IN (:inputs) '
+            exclude += 'AND obj.id NOT IN (:inputs) '
         rows = conn.getQueryService().projection(
             f'SELECT DISTINCT obj.id, obj.name FROM {kind} obj '
             'JOIN obj.annotationLinks link JOIN link.child ann JOIN ann.mapValue mv '
@@ -178,7 +198,114 @@ def _outputs(conn, config):
             if kind == config['form']['Data_Type'] and object_id in config['form']['IDs']:
                 continue
             outputs.append({'id': object_id, 'name': row[1].val, 'type': kind})
-    return outputs[:6], len(outputs) > 6
+        if len(outputs) > limit:
+            break
+    return outputs[:limit], len(outputs) > limit
+
+
+def _viewer_links(conn, objects, default_type=None):
+    """Use readable per-object provenance, never a workflow-format guess."""
+    from omero.sys import ParametersI
+    try:
+        viewer = reverse('biomero_zarr_viewer_index')
+    except NoReverseMatch:
+        return  # Viewer is optional; don't offer broken links when absent.
+    for kind in ('Plate', 'Image'):
+        selected = {obj['id']: obj for obj in objects
+                    if obj.get('type', default_type) == kind}
+        if not selected:
+            continue
+        params = ParametersI()
+        params.addLongs('ids', list(selected))
+        try:
+            rows = conn.getQueryService().projection(
+                f'SELECT DISTINCT obj.id, mv.value FROM {kind} obj '
+                'JOIN obj.annotationLinks link JOIN link.child ann JOIN ann.mapValue mv '
+                "WHERE obj.id IN (:ids) AND TYPE(ann) = MapAnnotation "
+                "AND ann.ns = 'biomero.import' AND mv.name IN ('Imported_from', 'Filepath')",
+                params, conn.SERVICE_OPTS)
+            for row in rows:
+                if row[0].val in selected and re.search(r'\.zarr(?:[/\\]|$)', row[1].val or '', re.I):
+                    selected[row[0].val]['viewer_url'] = f'{viewer}?{kind.lower()}={row[0].val}'
+        except Exception:
+            logger.exception('Could not determine history Zarr viewer links')
+
+
+@login_required()
+@require_GET
+def workflow_history_outputs(request, workflow_id, conn=None, **kwargs):
+    """Keyset-paginated result objects, scoped exactly like run detail."""
+    after = None
+    cursor = request.GET.get('cursor')
+    if cursor:
+        try:
+            kind, raw_id = cursor.split(':')
+            object_id = int(raw_id)
+            if kind not in ('Plate', 'Dataset', 'Image') or not 0 <= object_id <= 2**63 - 1:
+                raise ValueError()
+            after = (kind, object_id)
+        except (ValueError, TypeError):
+            return JsonResponse({'error': 'Invalid result cursor.'}, status=400)
+    try:
+        with history_tracker() as tracker:
+            run = tracker.repository.get(UUID(str(workflow_id)))
+            if not _owned(run, conn):
+                return JsonResponse({'error': 'Run not found.'}, status=404)
+            tasks = [tracker.repository.get(i) for i in run.tasks]
+            try:
+                config = run_configuration(run, tasks)
+            except HistoryConfigurationError:
+                config = {'workflow_id': str(run.id), 'form': {'Data_Type': None, 'IDs': []}}
+            objects, more = _outputs(conn, config, after=after, limit=20)
+            _viewer_links(conn, objects)
+            return JsonResponse({'objects': objects, 'has_more': more})
+    except AggregateNotFoundError:
+        return JsonResponse({'error': 'Run not found.'}, status=404)
+    except Exception:
+        logger.exception('Could not load workflow results page')
+        return JsonResponse({'error': 'Result links are unavailable.'}, status=503)
+
+
+def _restore_destinations(conn, config):
+    """Resolve containers by recorded ID or result provenance, never name alone."""
+    from omero.sys import ParametersI
+    for kind, child_kind, field, id_field in (
+        ('Dataset', 'Image', 'selectedDatasets', 'selectedDatasetId'),
+        ('Screen', 'Plate', 'selectedScreens', 'selectedScreenId'),
+    ):
+        names = config['form'].get(field, [])
+        if not names:
+            continue
+        selected = None
+        try:
+            recorded_id = config['form'].get(id_field)
+            if recorded_id:
+                selected = conn.getObject(kind, int(recorded_id))
+            else:
+                params = ParametersI()
+                params.addString('uuid', config['workflow_id'])
+                params.page(0, 2)
+                rows = conn.getQueryService().projection(
+                    f'SELECT DISTINCT obj.id FROM {kind} obj '
+                    f'JOIN obj.{child_kind.lower()}Links parentLink '
+                    'JOIN parentLink.child child JOIN child.annotationLinks link '
+                    'JOIN link.child ann JOIN ann.mapValue mv '
+                    "WHERE TYPE(ann) = MapAnnotation AND (mv.name = 'Workflow_ID' OR "
+                    "(ann.ns = 'biomero/workflow/batch' AND mv.name = 'Batch_Supervisor_Workflow_ID')) "
+                    'AND mv.value = :uuid ORDER BY obj.id', params, conn.SERVICE_OPTS)
+                if len(rows) == 1:
+                    selected = conn.getObject(kind, rows[0][0].val)
+            if selected and selected.canLink():
+                config['form'][field] = [selected.getName()]
+                config['form'][id_field] = selected.getId()
+                continue
+        except Exception:
+            logger.exception('Could not restore workflow %s destination', kind)
+        config['form'][field] = []
+        config['form'][id_field] = None
+        config['warnings'].append(
+            f'The previous {kind.lower()} destination could not be uniquely restored. '
+            'Choose an output destination before submitting.')
 
 
 def _batch_children(tracker, parent, tasks):
@@ -209,12 +336,13 @@ def _batch_context(tracker, run, tasks, config, conn):
     table = WorkflowProgressView.__table__
     # Older child launchers have no back-reference. Narrow the candidate set in
     # SQL, then verify the relationship from the parent's recorded task params.
-    statement = select(table.c.workflow_id).where(
+    statement = select(table.c.workflow_id, table.c.status).where(
         table.c.user == run.user, table.c.group == run.group,
         table.c.name.endswith('(Batched)')).order_by(table.c.start_time.desc()).limit(100)
     with tracker.factory.datastore.engine.connect() as db:
-        candidates = list(db.execute(statement).scalars())
-    for parent_id in candidates:
+        candidates = list(db.execute(statement).mappings())
+    for candidate in candidates:
+        parent_id = candidate['workflow_id']
         parent = tracker.repository.get(parent_id)
         if not _owned(parent, conn):
             continue
@@ -223,8 +351,10 @@ def _batch_context(tracker, run, tasks, config, conn):
         if child is None:
             continue
         parent_config = run_configuration(parent, parent_tasks)
+        parent_config['status'] = candidate['status']
         parent_config['inputs'] = _inputs(conn, parent_config)
         parent_config['inputs_available'] = len(parent_config['inputs']) == len(parent_config['form']['IDs'])
+        _restore_destinations(conn, parent_config)
         launcher = next(t for t in parent_tasks if t.task_name.endswith('SLURM_Run_Workflow_Batched.py'))
         config['batch'] = {'role': 'child', 'parent_id': str(parent.id),
                            'index': int(child.params['batch_index']) + 1,
@@ -268,10 +398,13 @@ def workflow_history_detail(request, workflow_id, conn=None, **kwargs):
                     break
             config['inputs'] = _inputs(conn, config) if config['form']['IDs'] else []
             config['inputs_available'] = len(config['inputs']) == len(config['form']['IDs'])
+            _viewer_links(conn, config['inputs'], config['form']['Data_Type'])
             _batch_context(tracker, run, tasks, config, conn)
+            _restore_destinations(conn, config)
             # A missing annotation or failed result lookup must not block reuse.
             try:
                 config['outputs'], config['outputs_more'] = _outputs(conn, config)
+                _viewer_links(conn, config['outputs'])
             except Exception:
                 logger.exception('Could not read workflow result links')
                 config['outputs'] = []
@@ -314,7 +447,7 @@ def workflow_history_list(request, conn=None, **kwargs):
                 rows = list(db.execute(statement.offset(offset).limit(21)).mappings())
             items = [{'workflow_id': str(row['workflow_id']),
                       'workflow_name': row['main_task_name'] or row['name'],
-                      'status': row['status'], 'started': row['start_time'],
+                      'status': row['status'], 'started': _utc_timestamp(row['start_time']),
                       'name': row['name']} for row in rows[:20]]
         return JsonResponse({'runs': items, 'total': total, 'has_more': len(rows) > 20, 'offset': offset})
     except Exception:

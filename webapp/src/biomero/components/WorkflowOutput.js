@@ -346,6 +346,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
 
   useEffect(() => {
     if (plateMode) return;
+    if (state.historyRun) return;
     if (autoFilledDatasets.current) return;
     const destination = getSuggestedDatasetDestination(
       state.inputDatasets,
@@ -370,6 +371,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
   }, [
     state.inputDatasets,
     state.selectedWorkflow?.name,
+    state.historyRun,
     plateMode,
     state.formData,
     updateState,
@@ -378,6 +380,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
   // Plate-mode: auto-fill the parent screen once per plate ID
   useEffect(() => {
     if (!plateMode) return;
+    if (state.historyRun) return;
     const plateIds = state.formData?.IDs || [];
     if (plateIds.length === 0 || !state.formData?.plateMode || !state.omeroFileTreeData) return;
     const autoFillKey = plateIds.join(",");
@@ -404,7 +407,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
       });
     }
   // NOTE: selectedScreens intentionally omitted — including it causes bounce-back when user clears.
-  }, [plateMode, state.formData?.IDs, state.formData?.plateMode, state.omeroFileTreeData]);
+  }, [plateMode, state.formData?.IDs, state.formData?.plateMode, state.omeroFileTreeData, state.historyRun]);
 
   const validateRenamePattern = (pattern) => {
     

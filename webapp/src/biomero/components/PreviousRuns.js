@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Button, Callout, Card, Collapse, HTMLTable, Icon, InputGroup, NonIdealState, Spinner, Tag, Tooltip } from "@blueprintjs/core";
+import { Breadcrumb, Breadcrumbs, Button, ButtonGroup, Callout, Card, Collapse, Divider, HTMLTable, Icon, InputGroup, Menu, MenuItem, NonIdealState, Popover, Spinner, Tab, Tabs, Tag, Tooltip } from "@blueprintjs/core";
 import { fetchWorkflowHistory, fetchWorkflowHistoryDetail } from "../../apiService";
-import HistoryDataPreview, { objectUrl, workflowSearchUrl } from "./HistoryDataPreview";
+import { workflowSearchUrl } from "./HistoryDataPreview";
+import HistoryObjectList from "./HistoryObjectList";
 
 const statusIntent = status => ({ DONE: "success", FAILED: "danger", CANCELLED: "warning" }[status] || "primary");
 const startedLabel = value => {
@@ -17,25 +18,15 @@ export const durationLabel = (started, ended) => {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
-function DataLinks({ objects, type, preview = false }) {
-  const [expanded, setExpanded] = useState(false);
-  return <div className="mt-2">
-    <div className="flex flex-wrap gap-1 max-h-32 overflow-auto">
-      {(expanded ? objects : objects.slice(0, 1)).map(object => {
-        const kind = object.type || type;
-        return <a key={`${kind}-${object.id}`} className="max-w-full" title={`Open full ${kind.toLowerCase()}: ${object.name} (${object.id})`}
-          href={objectUrl(kind, object.id)} target="_blank" rel="noopener noreferrer">
-          <Tag minimal intent="primary" className="max-w-full" icon={kind === "Plate" ? "grid-view" : "media"}>
-            <span className="inline-block max-w-full truncate align-middle">{object.name} ({object.id})</span>
-          </Tag>
-        </a>;
-      })}
-    </div>
-    {objects.length > 1 && <Button minimal small intent="primary" icon={expanded ? "chevron-up" : "chevron-down"}
-      aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
-      {expanded ? "Show fewer" : preview ? `Show preview (${objects.length})` : `+${objects.length - 1} more`}
-    </Button>}
-  </div>;
+function RunDataTabs({ detail }) {
+  const [outputCount, setOutputCount] = useState(`${detail.outputs?.length || 0}${detail.outputs_more ? "+" : ""}`);
+  return <Tabs id="history-data" defaultSelectedTabId={detail.form.IDs.length ? "inputs" : "outputs"}>
+    {detail.form.IDs.length > 0 && <Tab id="inputs" title="Input data" tagContent={detail.form.IDs.length} tagProps={{ round: true }}
+      panel={<HistoryObjectList objects={detail.inputs} type={detail.form.Data_Type} hideHeading total={detail.form.IDs.length} />} />}
+    {detail.outputs?.length > 0 && <Tab id="outputs" title="Output data" tagContent={outputCount} tagProps={{ round: true }}
+      panel={<HistoryObjectList objects={detail.outputs} output hideHeading hasMore={detail.outputs_more}
+        workflowId={detail.workflow_id} onCount={setOutputCount} />} />}
+  </Tabs>;
 }
 
 export function batchListLabel(name) {
@@ -43,29 +34,24 @@ export function batchListLabel(name) {
   return child ? `Batch ${child[1]}/${child[2]}` : name?.endsWith("(Batched)") ? "Whole run" : null;
 }
 
-function BatchNavigation({ batch, selectedId, onSelect }) {
-  const [expanded, setExpanded] = useState(false);
+function BatchSelector({ batch, selectedId, onSelect, parentStatus }) {
+  const [open, setOpen] = useState(false);
   const children = batch.children || [];
-  return <Callout compact icon="layers" intent="primary" className="my-2">
-    <div className="flex flex-wrap items-center gap-2">
-      <strong>{batch.role === "child" ? `Batch ${batch.index} of ${batch.total}` : `Whole run · ${batch.total} batches`}</strong>
-      {batch.role === "child" && <Button outlined small intent="primary" icon="layers" onClick={() => onSelect(batch.parent_id)}>View whole run</Button>}
-    </div>
-    {batch.role === "child" && <div className="text-xs mt-1">Rerun all original images, or only the images in this batch.</div>}
-    <div className="flex flex-wrap gap-2 mt-2 max-h-40 overflow-auto">
-      {(expanded ? children : children.slice(0, 4)).map(child => <Tooltip key={child.workflow_id} content={`Open batch ${child.index} · ${child.workflow_id}`}>
-        <Button small outlined={child.workflow_id !== selectedId} active={child.workflow_id === selectedId}
-          intent={statusIntent(child.status)} onClick={() => onSelect(child.workflow_id)}>
-          Batch {child.index} · {child.status}
-        </Button>
-      </Tooltip>)}
-    </div>
-    {children.length > 4 && <Button minimal small intent="primary" icon={expanded ? "chevron-up" : "chevron-down"}
-      aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>{expanded ? "Show fewer batches" : `Show all ${children.length} batches`}</Button>}
-  </Callout>;
+  const select = id => { setOpen(false); onSelect(id); };
+  return <Popover isOpen={open} onInteraction={setOpen} placement="bottom-start" content={
+    <Menu aria-label="Batches in this run" className="max-h-64 overflow-y-auto">
+      <MenuItem text="Whole run" icon="diagram-tree" active={batch.role === "parent"}
+        label={parentStatus || "Status unavailable"} onClick={() => select(batch.parent_id || selectedId)} />
+      {children.map(child => <MenuItem key={child.workflow_id} text={`Batch ${child.index}`}
+        icon={child.workflow_id === selectedId ? "tick" : "dot"} active={child.workflow_id === selectedId}
+        label={child.status} intent={statusIntent(child.status)} onClick={() => select(child.workflow_id)} />)}
+    </Menu>}>
+    <Button outlined small icon="diagram-tree" rightIcon="chevron-down" aria-label="Choose whole run or batch"
+      title={selectedId} text={batch.role === "child" ? `Batch ${batch.index} of ${batch.total}` : `Whole run · ${batch.total} batches`} />
+  </Popover>;
 }
 
-export default function PreviousRuns({ isOpen = true, onApply, selection, embedded = false, workflowName = "", searchQuery, onTotal }) {
+export default function PreviousRuns({ isOpen = true, onApply, selection, embedded = false, workflowName = "", searchQuery, onTotal, onWorkflowFilter, workflows = [] }) {
   const [localQuery, setQuery] = useState(workflowName);
   const query = searchQuery ?? localQuery;
   const [offset, setOffset] = useState(0);
@@ -111,6 +97,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     if (!isOpen || !selectedId) return;
     const controller = new AbortController();
     setDetail(null);
+    setSettingsOpen(false);
     setDetailLoading(true);
     setError("");
     fetchWorkflowHistoryDetail(selectedId, controller.signal).then(result => {
@@ -140,6 +127,13 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     try { onApply(source, differentData ? { Data_Type: source.form.Data_Type, IDs: [], batchEnabled: false, batchSize: 1 } : useSelection ? selection : null); }
     catch (error) { setError(error.message); }
   };
+  const workflowDescription = workflows?.find(workflow => workflow.name === detail?.workflow_name)?.description;
+  const timing = detail && <div>
+    <div>Started: {startedLabel(detail.started)}</div>
+    <div>Ended: {detail.ended ? startedLabel(detail.ended) : "Not recorded"}</div>
+    <div>Duration: {durationLabel(detail.started, detail.ended) || "Not available"}</div>
+    <div className="text-xs">Times shown in your local timezone.</div>
+  </div>;
   const content = <div className="flex flex-col gap-3">
     {searchQuery === undefined && <div className="flex items-center gap-2">
       <InputGroup fill leftIcon="search" aria-label="Search previous runs" placeholder="Search workflow or paste workflow UUID"
@@ -167,9 +161,9 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
             <div className="flex items-center justify-between gap-3 py-1">
               <div className="min-w-0"><div className="font-semibold truncate">{run.workflow_name}</div>
                 <div className="text-xs">{startedLabel(run.started)}</div>
-                {!embedded && <div className="text-xs font-mono break-all">{run.workflow_id}</div>}</div>
+                </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {batchListLabel(run.name) && <Tag minimal round icon="layers">{batchListLabel(run.name)}</Tag>}
+                {batchListLabel(run.name) && <Tag minimal round icon="diagram-tree">{batchListLabel(run.name)}</Tag>}
                 <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
               </div>
             </div>
@@ -182,53 +176,62 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
     </section>
     <section aria-label="Selected run details" className="min-w-0">
     {detailLoading && <Spinner size={24} aria-label="Loading run details" />}
-    {detail && <Card compact className={embedded ? "max-h-[55vh] overflow-auto" : undefined}>
-      <div className="flex flex-wrap items-center gap-2 mb-2"><Icon icon="lab-test" intent="primary" />
-        <strong>{detail.workflow_name}</strong><Tag minimal round intent="primary">{detail.form.version}</Tag>
-        <Tooltip className="ml-auto" content="Search this workflow UUID in OMERO">
-          <a className="text-xs font-mono break-all" href={workflowSearchUrl(detail.workflow_id)}
-            target="_blank" rel="noopener noreferrer">{detail.workflow_id}</a>
-        </Tooltip>
-      </div>
+    {detail && <Card key={detail.workflow_id} compact className={embedded ? "max-h-[55vh] overflow-auto" : undefined}>
+      <header className="min-w-0 mb-3">
+      <nav aria-label="Workflow and run">
+        <Breadcrumbs minVisibleItems={1} items={[
+          { text: detail.workflow_name, icon: "lab-test", href: "#", onClick: event => {
+            event.preventDefault();
+            if (onWorkflowFilter) onWorkflowFilter(detail.workflow_name);
+            else { setQuery(detail.workflow_name); setOffset(0); }
+          } },
+          ...(detail.batch?.role === "child" ? [{ text: "Whole run", title: detail.batch.parent_id,
+            onClick: () => setSelectedId(detail.batch.parent_id) }] : []),
+          { text: detail.workflow_id.slice(0, 8), current: true, title: detail.workflow_id },
+        ]} currentBreadcrumbRenderer={props => detail.batch ?
+          <BatchSelector batch={detail.batch} selectedId={detail.workflow_id} onSelect={setSelectedId}
+            parentStatus={detail.batch.role === "parent" ? detail.status : detail.parent_run?.status} /> :
+          <Breadcrumb {...props} className="font-mono" />}
+        breadcrumbRenderer={props => props.title ? <Breadcrumb {...props} /> : <Tooltip hoverOpenDelay={300} content={<div className="max-w-sm">
+          <strong>{detail.workflow_name} · {detail.form.version || "Version not recorded"}</strong>
+          {workflowDescription && <p className="mt-2 mb-0">{workflowDescription}</p>}
+          <p className="mt-2 mb-0">Show runs of this workflow</p>
+        </div>}>
+          <Breadcrumb {...props} className={props.current ? "font-mono" : "!text-lg font-semibold"} />
+        </Tooltip>} />
+      </nav>
+      {[{ ...page.runs.find(run => run.workflow_id === selectedId), ...detail }].map(run => <div key={run.workflow_id} className="flex flex-wrap items-center gap-3 mt-2 text-xs bp5-text-muted">
+        <Tag minimal intent={statusIntent(run.status)}>{run.status}</Tag>
+        <Tooltip content={timing}><span tabIndex={0}><Icon icon="time" size={12} /> {startedLabel(run.started)}</span></Tooltip>
+        {durationLabel(detail.started, detail.ended) && <Tooltip content={timing}>
+          <span tabIndex={0}><Icon icon="stopwatch" size={12} /> {durationLabel(detail.started, detail.ended)}</span>
+        </Tooltip>}
+      </div>)}
+      </header>
+      <Divider className="!mx-0 !mb-3" />
       {embedded && !!selection?.IDs?.length && <div className="sticky top-0 z-10 bg-white py-2 mb-2">
         <Tooltip content="Keep your selected data and output choices, and load this run's settings for review.">
           <Button intent="primary" disabled={!!detail.rerun_error} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
         </Tooltip>
       </div>}
-      {[{ ...page.runs.find(run => run.workflow_id === selectedId), ...detail }].map(run => <div key={run.workflow_id} className="flex flex-wrap items-center gap-2 mb-3">
-        <Tag round intent={statusIntent(run.status)}>{run.status}</Tag>
-        <span className="text-sm"><Icon icon="time" size={12} /> {startedLabel(run.started)}</span>
-        {run.name && <span className="bp5-text-muted text-xs">{run.name}</span>}
-      </div>)}
-      {durationLabel(detail.started, detail.ended) && <Tooltip content={`Ended ${startedLabel(detail.ended)}`}>
-        <Tag minimal icon="stopwatch">Duration: {durationLabel(detail.started, detail.ended)}</Tag>
-      </Tooltip>}
       {detail.rerun_error && <Callout compact intent="warning" className="my-2">{detail.rerun_error}</Callout>}
-      {detail.batch && <BatchNavigation key={selectedId} batch={detail.batch} selectedId={selectedId} onSelect={setSelectedId} />}
-      <div className={detail.outputs?.length > 0 ? "grid grid-cols-1 sm:grid-cols-2 gap-4 my-3" : "my-3"}>
-      {detail.form.IDs.length > 0 && <section aria-label="Input data" className="min-w-0">
-        <strong>Input data</strong> <Tag minimal round>{detail.form.IDs.length} {detail.form.Data_Type}{detail.form.IDs.length === 1 ? "" : "s"}</Tag>
-        <DataLinks key={`inputs-${selectedId}`} objects={detail.inputs} type={detail.form.Data_Type} />
-        {detail.inputs[0] && <HistoryDataPreview key={`input-${selectedId}`} type={detail.form.Data_Type} id={detail.inputs[0].id} />}
-      </section>}
-      {detail.outputs?.length > 0 && <section aria-label="Output data" className="min-w-0">
-        <strong><Icon icon="arrow-right" /> Output data</strong> <Tag minimal round>{detail.outputs_more ? `Preview: first ${detail.outputs.length}` : `${detail.outputs.length} objects`}</Tag>
-        <DataLinks key={`outputs-${selectedId}`} objects={detail.outputs} preview={detail.outputs_more} />
-        {detail.outputs?.[0] && <HistoryDataPreview key={`output-${selectedId}`} type={detail.outputs[0].type} id={detail.outputs[0].id} />}
-        {detail.outputs_more && <div className="bp5-text-muted text-xs mt-1">More results are available. Open OMERO below for the full list.</div>}
-      </section>}
-      </div>
+      <RunDataTabs detail={detail} />
       <div className="flex flex-wrap items-center justify-end gap-2 my-2 text-xs">
         {!detail.outputs?.length && (detail.status || page.runs.find(run => run.workflow_id === selectedId)?.status) !== "FAILED" &&
           <span className="bp5-text-muted">{detail.outputs_unavailable ? "Result links are unavailable." : "No output objects found in recorded metadata."}</span>}
-        <a href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer">
-          <Icon icon="search" /> {detail.outputs_more ? "View all results in OMERO" : "Search workflow results in OMERO"}
-        </a>
+        <ButtonGroup minimal>
+          {!detail.rerun_error && <Tooltip content="Inspect the recorded settings">
+            <span><Button minimal icon="properties" aria-label="Recorded settings" active={settingsOpen}
+              aria-expanded={settingsOpen} aria-controls="history-recorded-settings" onClick={() => setSettingsOpen(value => !value)} /></span>
+          </Tooltip>}
+          <Tooltip content={detail.outputs_more ? "View all results in OMERO" : "Search workflow results in OMERO"}>
+            <a className="bp5-button bp5-minimal" aria-label={detail.outputs_more ? "View all results in OMERO" : "Search workflow results in OMERO"}
+              href={workflowSearchUrl(detail.workflow_id)} target="_blank" rel="noopener noreferrer"><Icon icon="search" /></a>
+          </Tooltip>
+        </ButtonGroup>
       </div>
       {!detail.inputs_available && <Callout intent="warning" compact className="mb-2">Some original inputs are missing or inaccessible.</Callout>}
-      <Button minimal fill alignText="left" icon="properties" rightIcon={settingsOpen ? "chevron-up" : "chevron-down"}
-        aria-expanded={settingsOpen} aria-controls="history-recorded-settings" onClick={() => setSettingsOpen(value => !value)}>Recorded settings</Button>
-      <Collapse isOpen={settingsOpen}>
+      <Collapse isOpen={settingsOpen && !detail.rerun_error}>
         <div id="history-recorded-settings" className="max-h-64 overflow-auto">
           <HTMLTable compact striped className="w-full text-xs"><thead><tr><th>Setting</th><th>Recorded value</th></tr></thead>
             <tbody>{Object.entries(detail.form).map(([key, value]) => <tr key={key}><th scope="row">{key}</th><td className="break-all">{typeof value === "object" ? JSON.stringify(value) : String(value)}</td></tr>)}</tbody>

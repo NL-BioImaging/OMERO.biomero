@@ -68,6 +68,19 @@ const baseFormData = {
 };
 
 describe("WorkflowOutput image-pathway destination suggestions", () => {
+  test("does not replace an unresolved historical destination with a suggested new dataset", () => {
+    const updateState = jest.fn();
+    useAppContext.mockReturnValue({ state: {
+      formData: baseFormData,
+      historyRun: { id: "previous", sourceOptions: {}, values: {} },
+      inputDatasets: [{ id: 42, data: "Plate A", category: "plates" }],
+      selectedWorkflow: { name: "cellpose", metadata: { outputs: [] } },
+      omeroFileTreeData: {},
+    }, updateState });
+    render(<WorkflowOutput onSelectionChange={jest.fn()} />);
+    expect(updateState.mock.calls.some(([update]) => update.formData?.selectedDatasets?.length)).toBe(false);
+  });
+
   test("suggests a new dataset named after a single input plate", async () => {
     const updateState = jest.fn();
     useAppContext.mockReturnValue({

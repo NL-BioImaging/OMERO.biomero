@@ -42,6 +42,10 @@ export const fetchWorkflowHistoryDetail = (id, signal) =>
   apiRequest(`${getDjangoConstants().urls.workflow_history}${encodeURIComponent(id)}/`,
     "GET", null, { signal });
 
+export const fetchWorkflowHistoryOutputs = (id, cursor, signal) =>
+  apiRequest(`${getDjangoConstants().urls.workflow_history}${encodeURIComponent(id)}/outputs/`,
+    "GET", null, { params: { cursor }, signal });
+
 export const fetchomeroFileTreeData = async () => {
   const { user, urls } = getDjangoConstants();
   const params = {

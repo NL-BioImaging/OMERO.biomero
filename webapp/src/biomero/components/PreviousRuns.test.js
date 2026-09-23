@@ -42,6 +42,7 @@ test("embedded reuse keeps apply above I/O and settings and shows recorded resul
     batch: { role: "child", parent_id: "parent", index: 2, total: 2 } });
   render(<PreviousRuns embedded onApply={jest.fn()} selection={{ IDs: [25], Data_Type: "Plate" }} />);
   const apply = await screen.findByRole("button", { name: "Use settings on selected data" });
+  fireEvent.click(screen.getByRole("tab", { name: /Output data/ }));
   const output = screen.getByRole("link", { name: "Result plate (99)" });
   const settings = screen.getByRole("button", { name: "Recorded settings" });
   expect(apply.compareDocumentPosition(output) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -135,6 +136,7 @@ test("failed run can show recorded partial outputs without claiming success", as
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED", outputs: [{ type: "Plate", id: 99, name: "Partial result" }] });
   render(<PreviousRuns onApply={jest.fn()} />);
+  fireEvent.click(await screen.findByRole("tab", { name: /Output data/ }));
   const output = await screen.findByRole("link", { name: "Partial result (99)" });
   expect(output).toHaveAttribute("href", "/webclient/?show=plate-99");
   expect(screen.getAllByText("FAILED")).toHaveLength(2);
@@ -144,7 +146,7 @@ test("failed runs without outputs hide the output section and use the correct UU
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED" });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const link = await screen.findByRole("link", { name: "abc" });
+  const link = await screen.findByRole("link", { name: "Search workflow results in OMERO" });
   expect(link).toHaveAttribute("href", "/webclient/search/?search_query=abc");
   expect(screen.queryByRole("region", { name: "Output data" })).not.toBeInTheDocument();
 });
@@ -160,30 +162,43 @@ test("batch list labels use recorded batch names", () => {
   expect(batchListLabel("Slurm Workflow")).toBeNull();
 });
 
-test("parent navigation shows off-page status and expandable child statuses", async () => {
+test("batch menu shows all child statuses and is removed when switching runs", async () => {
   const children = Array.from({ length: 5 }, (_, i) => ({ workflow_id: `child-${i}`, index: i + 1, status: i === 4 ? "FAILED" : "DONE" }));
   fetchWorkflowHistoryDetail.mockResolvedValueOnce({ ...detail, batch: { role: "child", parent_id: "parent", index: 1, total: 5 } })
-    .mockResolvedValueOnce({ ...detail, workflow_id: "parent", status: "FAILED", started: "2026-09-01T12:00:00Z", batch: { role: "parent", total: 5, children } });
+    .mockResolvedValueOnce({ ...detail, workflow_id: "parent", status: "FAILED", started: "2026-09-01T12:00:00Z", batch: { role: "parent", total: 5, children } })
+    .mockResolvedValueOnce({ ...detail, workflow_id: "child-4", batch: { role: "child", parent_id: "parent", index: 5, total: 5, children } });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const parentButton = await screen.findByRole("button", { name: "View whole run" });
-  expect(parentButton).toHaveClass("bp5-outlined");
-  fireEvent.click(parentButton);
+  fireEvent.click(await screen.findByRole("button", { name: "Choose whole run or batch" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Whole run/ }));
   await screen.findByText("Whole run · 5 batches");
   expect(screen.getByText("FAILED")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Batch 5 · FAILED" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Show all 5 batches" }));
-  fireEvent.click(screen.getByRole("button", { name: "Batch 5 · FAILED" }));
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Choose whole run or batch" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Batch 5.*FAILED/ }));
   await waitFor(() => expect(fetchWorkflowHistoryDetail).toHaveBeenCalledWith("child-4", expect.anything()));
+  await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  expect(await screen.findAllByRole("button", { name: "Choose whole run or batch" })).toHaveLength(1);
 });
 
-test("bounded results are explicitly a preview, not an incomplete full list", async () => {
+test("unrecorded settings stay unavailable without showing an empty settings table", async () => {
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, rerun_error: "No analysis workflow settings were recorded for this run, so they cannot be reused.",
+    form: { IDs: [], Data_Type: null, version: null }, inputs: [] });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  expect(await screen.findByRole("button", { name: "Run again on same data" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Run on different data" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Recorded settings" })).not.toBeInTheDocument();
+});
+
+test("results show five links without eager thumbnails or a preview foldout", async () => {
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, outputs_more: true,
     outputs: Array.from({ length: 6 }, (_, i) => ({ type: "Image", id: i, name: `Result ${i}` })) });
   render(<PreviousRuns onApply={jest.fn()} />);
-  await screen.findByText("Preview: first 6");
-  const note = screen.getByText("More results are available. Open OMERO below for the full list.");
-  expect(screen.getByTestId("preview-0").compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Show preview (6)" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("tab", { name: /Output data/ }));
+  await screen.findByRole("link", { name: "Result 4 (4)" });
+  expect(screen.queryByTestId("preview-0")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("preview-15")).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Result 5 (5)" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Show more outputs" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "View all results in OMERO" })).toBeInTheDocument();
 });
 
@@ -211,8 +226,32 @@ test("many inputs start compact and can be expanded beyond six", async () => {
   render(<PreviousRuns onApply={jest.fn()} />);
   await screen.findByRole("link", { name: "Source 1 (1)" });
   expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "+8 more" }));
+  expect(screen.getByRole("link", { name: "Source 5 (5)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Show more inputs" }));
   expect(screen.getByRole("link", { name: "Source 9 (9)" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+  fireEvent.click(screen.getByRole("button", { name: "Show fewer inputs" }));
   expect(screen.queryByRole("link", { name: "Source 9 (9)" })).not.toBeInTheDocument();
+});
+
+test("workflow breadcrumb filters through the shared workflow search", async () => {
+  const filter = jest.fn();
+  render(<PreviousRuns onApply={jest.fn()} onWorkflowFilter={filter} />);
+  expect(await screen.findByRole("navigation", { name: "Workflow and run" })).toBeInTheDocument();
+  expect(screen.queryByText("v1")).not.toBeInTheDocument();
+  // jsdom has no layout width, so Blueprint moves the first crumb into overflow.
+  fireEvent.click(screen.getByRole("button", { name: "collapsed breadcrumbs" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "segment" }));
+  expect(filter).toHaveBeenCalledWith("segment");
+});
+
+test("start time tooltip explains start, end and duration", async () => {
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, ended: "2026-09-15T15:08:00Z" });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  await screen.findByRole("navigation", { name: "Workflow and run" });
+  const times = screen.getAllByText(new Date(detail.started).toLocaleString());
+  expect(times).toHaveLength(2);
+  fireEvent.focus(times[1]);
+  await screen.findByText(/Started:/);
+  expect(screen.getByText(/Ended:/)).toBeInTheDocument();
+  expect(screen.getByText("Duration: 8m")).toBeInTheDocument();
 });

@@ -61,8 +61,10 @@ def run_configuration(run, tasks):
     names = launcher.get('workflows') or list(dict.fromkeys(
         t.task_name for t in tasks
         if not t.task_name.startswith(('_', 'CONVERT_')) and not t.task_name.endswith('.py')))
-    if len(names) != 1:
-        raise HistoryConfigurationError('History reuse requires a single workflow in the run.')
+    if not names:
+        raise HistoryConfigurationError('No analysis workflow settings were recorded for this run, so they cannot be reused.')
+    if len(names) > 1:
+        raise HistoryConfigurationError('This run contains multiple analysis workflows. Reusing settings is currently supported for a single workflow only.')
     name = names[0]
     analysis = next((t for t in tasks if t.task_name == name), None)
     version = launcher.get(f'{name}_Version') or (analysis.task_version if analysis else None)
@@ -334,12 +336,13 @@ def _batch_context(tracker, run, tasks, config, conn):
     table = WorkflowProgressView.__table__
     # Older child launchers have no back-reference. Narrow the candidate set in
     # SQL, then verify the relationship from the parent's recorded task params.
-    statement = select(table.c.workflow_id).where(
+    statement = select(table.c.workflow_id, table.c.status).where(
         table.c.user == run.user, table.c.group == run.group,
         table.c.name.endswith('(Batched)')).order_by(table.c.start_time.desc()).limit(100)
     with tracker.factory.datastore.engine.connect() as db:
-        candidates = list(db.execute(statement).scalars())
-    for parent_id in candidates:
+        candidates = list(db.execute(statement).mappings())
+    for candidate in candidates:
+        parent_id = candidate['workflow_id']
         parent = tracker.repository.get(parent_id)
         if not _owned(parent, conn):
             continue
@@ -348,6 +351,7 @@ def _batch_context(tracker, run, tasks, config, conn):
         if child is None:
             continue
         parent_config = run_configuration(parent, parent_tasks)
+        parent_config['status'] = candidate['status']
         parent_config['inputs'] = _inputs(conn, parent_config)
         parent_config['inputs_available'] = len(parent_config['inputs']) == len(parent_config['form']['IDs'])
         _restore_destinations(conn, parent_config)

@@ -89,6 +89,12 @@ def test_ambiguous_pipeline_is_not_guessed():
         history.run_configuration(run, tasks)
 
 
+def test_missing_analysis_settings_are_not_reported_as_multiple_workflows():
+    run, _ = fixture()
+    with pytest.raises(ValueError, match='No analysis workflow settings were recorded'):
+        history.run_configuration(run, [])
+
+
 @pytest.mark.parametrize('enabled', [False, True])
 def test_destructive_source_options_are_preserved_only_as_advice(enabled):
     run, tasks = fixture()
@@ -334,6 +340,7 @@ def test_child_reuse_disables_batching_and_retains_whole_parent_configuration():
     assert not config['form']['batchEnabled']
     assert config['parent_run']['form']['IDs'] == [15, 16, 17]
     assert config['parent_run']['form']['batchEnabled']
+    assert config['parent_run']['status'] == 'DONE'
     engine.dispose()
 
 

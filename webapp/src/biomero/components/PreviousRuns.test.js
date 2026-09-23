@@ -146,7 +146,7 @@ test("failed runs without outputs hide the output section and use the correct UU
   fetchWorkflowHistory.mockResolvedValue({ runs: [{ ...run, status: "FAILED" }], total: 1 });
   fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, status: "FAILED" });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const link = await screen.findByRole("link", { name: "abc" });
+  const link = await screen.findByRole("link", { name: "Search workflow results in OMERO" });
   expect(link).toHaveAttribute("href", "/webclient/search/?search_query=abc");
   expect(screen.queryByRole("region", { name: "Output data" })).not.toBeInTheDocument();
 });
@@ -162,20 +162,31 @@ test("batch list labels use recorded batch names", () => {
   expect(batchListLabel("Slurm Workflow")).toBeNull();
 });
 
-test("parent navigation shows off-page status and expandable child statuses", async () => {
+test("batch menu shows all child statuses and is removed when switching runs", async () => {
   const children = Array.from({ length: 5 }, (_, i) => ({ workflow_id: `child-${i}`, index: i + 1, status: i === 4 ? "FAILED" : "DONE" }));
   fetchWorkflowHistoryDetail.mockResolvedValueOnce({ ...detail, batch: { role: "child", parent_id: "parent", index: 1, total: 5 } })
-    .mockResolvedValueOnce({ ...detail, workflow_id: "parent", status: "FAILED", started: "2026-09-01T12:00:00Z", batch: { role: "parent", total: 5, children } });
+    .mockResolvedValueOnce({ ...detail, workflow_id: "parent", status: "FAILED", started: "2026-09-01T12:00:00Z", batch: { role: "parent", total: 5, children } })
+    .mockResolvedValueOnce({ ...detail, workflow_id: "child-4", batch: { role: "child", parent_id: "parent", index: 5, total: 5, children } });
   render(<PreviousRuns onApply={jest.fn()} />);
-  const parentButton = await screen.findByRole("button", { name: "View whole run" });
-  expect(parentButton).toHaveClass("bp5-outlined");
-  fireEvent.click(parentButton);
+  fireEvent.click(await screen.findByRole("button", { name: "Choose whole run or batch" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Whole run/ }));
   await screen.findByText("Whole run · 5 batches");
   expect(screen.getByText("FAILED")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Batch 5 · FAILED" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Show all 5 batches" }));
-  fireEvent.click(screen.getByRole("button", { name: "Batch 5 · FAILED" }));
+  expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Choose whole run or batch" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Batch 5.*FAILED/ }));
   await waitFor(() => expect(fetchWorkflowHistoryDetail).toHaveBeenCalledWith("child-4", expect.anything()));
+  await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  expect(await screen.findAllByRole("button", { name: "Choose whole run or batch" })).toHaveLength(1);
+});
+
+test("unrecorded settings stay unavailable without showing an empty settings table", async () => {
+  fetchWorkflowHistoryDetail.mockResolvedValue({ ...detail, rerun_error: "No analysis workflow settings were recorded for this run, so they cannot be reused.",
+    form: { IDs: [], Data_Type: null, version: null }, inputs: [] });
+  render(<PreviousRuns onApply={jest.fn()} />);
+  expect(await screen.findByRole("button", { name: "Run again on same data" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Run on different data" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Recorded settings" })).not.toBeInTheDocument();
 });
 
 test("results show five links without eager thumbnails or a preview foldout", async () => {

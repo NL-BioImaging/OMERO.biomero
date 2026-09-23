@@ -4,6 +4,8 @@ from .tus_views import TusUploadView
 from . import workflow_history
 
 urlpatterns = [
+    path('api/analyzer/history/<uuid:workflow_id>/outputs/', workflow_history.workflow_history_outputs,
+         name='workflow_history_outputs'),
     path('api/analyzer/history/', workflow_history.workflow_history_list,
          name='workflow_history_list'),
     path('api/analyzer/history/<uuid:workflow_id>/', workflow_history.workflow_history_detail,

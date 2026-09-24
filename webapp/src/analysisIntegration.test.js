@@ -11,6 +11,21 @@ import {
   workspaceDatasetResolutionUrl,
 } from "./analysisIntegration";
 
+test("workspace identity and new-workspace launches survive the BIOMERO frame", () => {
+  const source = parseAnalysisLaunch("?analysis_type=Screen&analysis_id=152&analysis_workspace_id=workspace-2");
+  expect(source.workspaceId).toBe("workspace-2");
+  const resume = new URL(buildAnalysisUrl("/omero_analysis/", {
+    ...source, workspaceAnnotationId: 901,
+  }));
+  expect(resume.searchParams.get("workspace_id")).toBe("workspace-2");
+  expect(resume.searchParams.has("workspace_annotation")).toBe(false);
+  const fresh = new URL(buildAnalysisUrl("/omero_analysis/", {
+    type: "Screen", id: 152, newWorkspace: "new-3", workspaceAnnotationId: 901,
+  }));
+  expect(fresh.searchParams.get("new_workspace")).toBe("new-3");
+  expect(fresh.searchParams.has("workspace_annotation")).toBe(false);
+});
+
 test("explicit Analysis parameters are parsed through the supported whitelist", () => {
   const source = parseAnalysisLaunch(
     "?tab=data-analysis&analysis_type=Plate&analysis_id=12" +

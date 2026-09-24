@@ -57,6 +57,8 @@ const sourceFromParams = (params, prefix) => {
     selectionIds,
     dataAnnotationIds,
     dataBindings,
+    workspaceId: /^[\w-]{1,128}$/.test(params.get(`${prefix}workspace_id`) || "") ? params.get(`${prefix}workspace_id`) : null,
+    newWorkspace: /^[\w-]{1,128}$/.test(params.get(`${prefix}new_workspace`) || "") ? params.get(`${prefix}new_workspace`) : null,
     workspaceAnnotationId: positiveInteger(
       params.get(`${prefix}workspace_annotation`)
     ),
@@ -131,7 +133,9 @@ export const buildAnalysisUrl = (baseUrl, source, embedded = true) => {
   (source.selectionIds || []).forEach((id) =>
     url.searchParams.append("selection_id", String(id))
   );
-  if (source.workspaceAnnotationId) {
+  if (source.workspaceId) url.searchParams.set("workspace_id", source.workspaceId);
+  if (source.newWorkspace) url.searchParams.set("new_workspace", source.newWorkspace);
+  if (source.workspaceAnnotationId && !source.workspaceId && !source.newWorkspace) {
     url.searchParams.set(
       "workspace_annotation",
       String(source.workspaceAnnotationId)
@@ -300,6 +304,7 @@ export const sourceFromWorkspaceDataset = (payload) => {
       dataAnnotationIds: [],
       dataBindings: {},
       workspaceAnnotationId,
+      workspaceId: payload.workspaceId || null,
       libraryItemIds: [],
       openLibrary: false,
       title: payload.sourceObjectName || `${type} ${id}`,
@@ -322,6 +327,7 @@ export const sourceFromLaunchContext = (payload, fallbackSource) => {
     error: summary.can_resume ? "" : "This Analysis Workspace cannot currently be resumed.",
     datasetName: summary.dataset_name,
     workspaceName: summary.workspace_name,
+    workspaceId: summary.workspace_id,
     sourceObjectType: summary.source_type,
     sourceObjectId: summary.source_id,
     sourceObjectName: summary.source_name,

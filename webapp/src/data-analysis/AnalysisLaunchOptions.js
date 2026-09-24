@@ -170,6 +170,24 @@ const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
         </Card>
       )}
 
+      {panelKind === "source" && (
+        <Card className="analysis-launch-section" elevation={1}>
+          <H5>Analysis Workspaces</H5>
+          <p>Open an existing analysis or create a separate workspace. Names can be changed in Analysis.</p>
+          {(launch.data?.analysis_workspaces || []).map(item => (
+            <div key={item.workspaceId} className="analysis-upload-row">
+              <Button onClick={() => onOpen({ ...resolvedSource, workspaceId: item.workspaceId,
+                workspaceAnnotationId: null, newWorkspace: null })}>Open {item.workspaceName}</Button>
+              <span>Revision {item.revision} · {item.syncStatus?.syncState || "saved"}</span>
+            </div>
+          ))}
+          <Button icon="add" onClick={() => onOpen({ ...resolvedSource,
+            workspaceId: null, workspaceAnnotationId: null, newWorkspace: crypto.randomUUID() })}>
+            New workspace
+          </Button>
+        </Card>
+      )}
+
       {panelKind === "source" && !(source.selectionIds || []).length && (
         <>
           <Card className="analysis-launch-section" elevation={1}>

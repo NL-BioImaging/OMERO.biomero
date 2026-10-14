@@ -282,7 +282,21 @@ export const runWorkflow = async (workflowName, params = {}) => {
   }
 };
 
-export const postConfig = async (config, deleted = []) => {
+export const fetchConfigHistory = (snapshot) => {
+  const { urls } = getDjangoConstants();
+  return apiRequest(`${urls.api_config}history/`, "GET", null, {
+    params: snapshot ? { snapshot } : {},
+  });
+};
+
+export const restoreConfigSnapshot = (snapshot, revision) => {
+  const { urls } = getDjangoConstants();
+  return apiRequest(`${urls.api_config}history/`, "POST", { snapshot, revision }, {
+    headers: { "X-CSRFToken": window.csrftoken },
+  });
+};
+
+export const postConfig = async (config, deleted = [], revision) => {
   const { urls } = getDjangoConstants(); // Base URL for the API from Django constants
 
   try {
@@ -290,7 +304,7 @@ export const postConfig = async (config, deleted = []) => {
     const csrfToken = window.csrftoken;
 
     // Prepare the payload with script_name and optional params
-    const payload = { config, deleted };
+    const payload = { config, deleted, ...(revision != null ? { revision } : {}) };
 
     const response = await apiRequest(urls.api_config, "POST", payload, {
       headers: {

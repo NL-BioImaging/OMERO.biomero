@@ -7,3 +7,6 @@ omero_biomero/_version.py
 file.db
 /.idea
 test.sqlite3
+*.ini.history/
+*.ini.lock
+config-history/

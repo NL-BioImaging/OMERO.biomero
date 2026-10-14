@@ -461,11 +461,11 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const saveConfigData = async (config, deleted = []) => {
+  const saveConfigData = async (config, deleted = [], revision = state.configRevision) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await postConfig(config, deleted);
+      const response = await postConfig(config, deleted, revision);
 
       const message = response?.message || "Config saved successfully.";
 
@@ -478,13 +478,13 @@ export const AppProvider = ({ children }) => {
       
       // Mark settings as saved for admin state tracking
       markSettingsSaved();
+      if (response?.revision) updateState({ configRevision: response.revision });
+      return response;
     } catch (err) {
       toaster.show({
         intent: "danger",
         icon: "error",
-        message: `Config response: ${err.message}: ${
-          err.response?.data?.error
-        } (Params: ${JSON.stringify(config, null, 2)})`,
+        message: err.response?.data?.error || "Configuration could not be saved.",
         timeout: 0,
       });
       setError(err.message);
@@ -577,6 +577,7 @@ export const AppProvider = ({ children }) => {
       updateState({
         config,
         configMode: response.config_mode || "layered",
+        configRevision: response.revision,
       });
     } catch (err) {
       setError(err.message);

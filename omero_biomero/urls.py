@@ -36,6 +36,11 @@ urlpatterns = [
     path("upload/<uuid:resource_id>", TusUploadView.as_view(), name="tus_upload_chunks"),
     # Admin URLs
     path(
+        "api/biomero/admin/config/history/",
+        admin_views.admin_config_history,
+        name="admin_config_history",
+    ),
+    path(
         "api/biomero/admin/config/",
         admin_views.admin_config,
         name="admin_config",

@@ -146,6 +146,35 @@ a live multi-well Plate test.
 6. In new terminal, enter `omero-biomero` repository and execute `./omero-init.sh`. This will start the OMERO Webclient server **in background mode**. It also installs the plugin in editable mode, so changes to the plugin code are automatically reflected in the Webclient.
 7. After making changes to the code **outside of the folder webapp**, they should be automatically reflected in the webclient. You can also execute `./omero-update.sh` to restart the Webclient server and apply changes.
 
+### Administrator configuration safety and recovery
+
+The Settings editor rejects incomplete workflow rows, invalid repository URLs,
+empty INI keys, and unexpected line breaks before changing configuration. Fix
+the highlighted fields or delete unfinished rows, then save again. If another
+administrator has saved since you loaded the form, reload before applying your
+edits.
+
+Both configuration candidates are validated and staged before writing. Each
+save preserves the previous INI and JSON files, timestamp, and authenticated
+editor identity in private history. **Configuration recovery** in Settings
+provides download and restore controls even when the current INI cannot be
+parsed or workflows cannot initialize. Restores validate the snapshot, preserve
+the current files in history, and reload the page. Invalid snapshots remain
+downloadable for manual repair.
+
+Set `OMERO_BIOMERO_CONFIG_HISTORY_DIR` to a persistent, private directory writable
+by OMERO.web. The fallback is `<slurm-config-write-path>.history`. History is
+administrator-only through the API; filesystem directories use mode `0700` and
+snapshot files `0600` on POSIX. Keep it outside static/media roots and public
+Git, include it in private backups, and monitor its size; snapshots are retained
+until an operator removes them. NL-BIOMERO supplies a dedicated named volume.
+
+Normal files use staged atomic replacement. Docker file bind mounts require
+in-place writes to preserve the inode shared with workers. Write failures trigger
+rollback, and snapshots remain available if recovery is needed. Neither a
+two-file save nor an in-place mount write is crash-atomic; after a process or
+host failure, inspect and restore through recovery before retrying.
+
 ### Testing
 
 To run tests, create virtual environment, activate it and install the package in editable mode (this automatically pulls all dependencies from setup.py):

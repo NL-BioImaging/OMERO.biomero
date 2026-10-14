@@ -53,7 +53,9 @@ jest.mock("@blueprintjs/core", () => {
 });
 
 jest.mock("./CollapsibleSection", () => ({ children }) => <section>{children}</section>);
-jest.mock("./ConfigSection", () => () => null);
+jest.mock("./ConfigSection", () => ({ onAddItem, title }) => (
+  <button onClick={onAddItem}>Add {title}</button>
+));
 jest.mock("./ModelCard.js", () => () => null);
 jest.mock("./ConverterCard.js", () => () => null);
 
@@ -86,7 +88,7 @@ const config = {
 
 function renderShallower(enabled, slurm = {}) {
   useAppContext.mockReturnValue({
-    state: { config: { ...config, SLURM: { ...config.SLURM, ...slurm } },
+    state: { configRevision: "revision", config: { ...config, SLURM: { ...config.SLURM, ...slurm } },
       workflows: [], ui: { shallow_zarr_enabled: enabled } },
     updateState: jest.fn(), loadBiomeroConfig: jest.fn(), saveConfigData: jest.fn(),
   });
@@ -124,7 +126,7 @@ test('saves opt-out without deleting hidden helper values', async () => {
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
     expect.objectContaining({ SLURM: expect.objectContaining({
       remote_shallow_zarr: 'false', remote_shallower_workers: '4',
-    }) }), expect.anything()));
+    }) }), expect.anything(), "revision"));
 });
 
 test('rejects non-positive workers only while remote shallowing is enabled', async () => {
@@ -156,4 +158,12 @@ test("shows all scheduler-native image-pull controls and portable partition guid
   expect(screen.getByText("sbatch_mem")).toBeInTheDocument();
   expect(screen.getAllByText(/Leave blank to inherit/)).not.toHaveLength(0);
   expect(screen.getByText("BIOMERO_PULL_PARTITION")).toBeInTheDocument();
+});
+
+test("an added empty workflow disables saving", async () => {
+  renderShallower(false);
+  await screen.findByLabelText("Pull Images via sbatch");
+  fireEvent.click(screen.getByRole("button", { name: /Add.*Workflow/i }));
+  expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+  expect(useAppContext().saveConfigData).not.toHaveBeenCalled();
 });

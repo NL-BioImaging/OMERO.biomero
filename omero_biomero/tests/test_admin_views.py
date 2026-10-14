@@ -107,8 +107,13 @@ class AdminConfigTests(TestCase):
     def test_get_uses_shared_loader_and_reports_config_mode(self):
         parser = configparser.ConfigParser(allow_no_value=True)
         parser.read_string("[SLURM]\ngpu_gres=file-value\n")
+        cfg_path = self._tmpdir / "slurm.ini"
 
         class StubSlurm:
+            @classmethod
+            def get_config_write_path(cls):
+                return str(cfg_path)
+
             @classmethod
             def load_config(cls):
                 return parser
@@ -240,7 +245,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "MODELS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -312,7 +317,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "WORKFLOWS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -341,7 +346,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "WORKFLOWS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -370,7 +375,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "WORKFLOWS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -458,6 +463,218 @@ class AdminConfigTests(TestCase):
             )
 
     # Helper to create temporary files in the per-test directory
+    def _post_config(self, payload, ini, json_config=None):
+        class StubSlurm:
+            @classmethod
+            def get_config_write_path(cls):
+                return str(ini)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm), patch(
+            "omero_biomero.admin_views.CONFIG_FILE_PATH",
+            str(json_config or self._tmpdir / "config.json"),
+        ):
+            return _raw_admin_config()(
+                SimpleNamespace(method="POST", body=json.dumps(payload).encode()),
+                conn=_fake_conn(),
+            )
+
+    def test_empty_workflow_cannot_corrupt_previous_job_or_update_json(self):
+        original = (
+            "[WORKFLOWS]\ncidenoise=cidenoise\n"
+            "cidenoise_repo=https://github.com/example/cidenoise\n"
+            "cidenoise_job=jobs/cidenoise.sh\n"
+        )
+        ini = Path(self._create_tempfile(original))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = json_config.read_bytes()
+        response = self._post_config({"config": {
+            "UPLOADER": {"enabled": True},
+            "WORKFLOWS": {"": "", "_repo": "", "_job": ""},
+        }}, ini, json_config)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ini.read_text(), original)
+        self.assertEqual(json_config.read_bytes(), before)
+        self.assertIn("fields", json.loads(response.content))
+
+    def test_invalid_workflow_fields_are_rejected_without_writes(self):
+        valid = {"wf": "wf", "wf_repo": "https://github.com/example/wf",
+                 "wf_job": "jobs/wf.sh"}
+        cases = [
+            {"wf_repo": ""}, {"wf_repo": "https://example.org/wf"},
+            {"wf_repo": "https://github.com/example/wf/tree/"},
+            {"wf_job": "jobs/wf.sh\n="},
+            {"wf_job": "jobs/wf.sh\r="}, {"wf": ""},
+            {" bad": "bad"}, {"wf\n[SSH]": "wf"},
+        ]
+        for updates in cases:
+            with self.subTest(updates=updates):
+                ini = Path(self._create_tempfile("[WORKFLOWS]\n"))
+                response = self._post_config(
+                    {"config": {"WORKFLOWS": {**valid, **updates}}}, ini)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(ini.read_text(), "[WORKFLOWS]\n")
+
+    def test_corrected_workflow_repairs_previously_corrupted_job(self):
+        ini = Path(self._create_tempfile(
+            "[WORKFLOWS]\nwf=wf\nwf_repo=https://github.com/example/wf\n"
+            "wf_job=jobs/wf.sh\n =\n_repo=\n_job=\n"))
+        response = self._post_config({"config": {"WORKFLOWS": {
+            "wf": "wf", "wf_repo": "https://github.com/example/wf",
+            "wf_job": "jobs/wf.sh",
+        }}}, ini)
+        self.assertEqual(response.status_code, 200)
+        parsed = configparser.ConfigParser()
+        parsed.read(ini)
+        self.assertEqual(parsed["WORKFLOWS"]["wf_job"], "jobs/wf.sh")
+        self.assertNotIn("_repo", parsed["WORKFLOWS"])
+
+    def test_invalid_ini_does_not_partially_save_json(self):
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=value\n"))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = json_config.read_bytes()
+        response = self._post_config({"config": {
+            "UPLOADER": {"enabled": True}, "SLURM": "invalid",
+        }}, ini, json_config)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json_config.read_bytes(), before)
+
+    def test_stale_revision_rejects_save_without_overwriting_other_admin(self):
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=other-admin\n"))
+        response = self._post_config({"revision": "old-revision", "config": {
+            "SLURM": {"keep": "my-edit"},
+        }}, ini)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(ini.read_text(), "[SLURM]\nkeep=other-admin\n")
+
+    def test_snapshots_keep_original_files_and_editor_identity(self):
+        from omero_biomero.config_store import history_directory
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=before\n"))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        original_ini = ini.read_bytes().decode("utf-8")
+        original_json = json_config.read_bytes().decode("utf-8")
+        response = self._post_config({"config": {"SLURM": {"keep": "after"}}}, ini, json_config)
+        self.assertEqual(response.status_code, 200)
+        snapshots = list(history_directory(ini).glob("*.json"))
+        self.assertEqual(len(snapshots), 1)
+        snapshot = json.loads(snapshots[0].read_text())
+        self.assertEqual(snapshot["ini"], original_ini)
+        self.assertEqual(snapshot["json"], original_json)
+        self.assertEqual(snapshot["editor"], {"id": 1, "username": "admin"})
+
+    def test_second_file_write_failure_rolls_back_both_files(self):
+        from omero_biomero import config_store
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=before\n"))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = (ini.read_bytes(), json_config.read_bytes())
+        replace = config_store.os.replace
+        failed = False
+
+        def fail_once(source, destination):
+            nonlocal failed
+            if str(destination) == str(json_config) and not failed:
+                failed = True
+                raise OSError("test write failure")
+            return replace(source, destination)
+
+        with patch("omero_biomero.config_store.os.replace", side_effect=fail_once):
+            response = self._post_config({"config": {
+                "SLURM": {"keep": "after"}, "UPLOADER": {"enabled": True},
+            }}, ini, json_config)
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual((ini.read_bytes(), json_config.read_bytes()), before)
+        self.assertNotIn("test write failure", response.content.decode())
+
+    def test_file_bind_mounts_remain_writable(self):
+        import errno
+        from omero_biomero import config_store
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=before\n"))
+        replace = config_store.os.replace
+        def mounted_file(source, destination):
+            if str(destination) == str(ini):
+                raise OSError(errno.EBUSY, "mount point")
+            return replace(source, destination)
+        with patch("omero_biomero.config_store.os.replace", side_effect=mounted_file):
+            response = self._post_config({"config": {"SLURM": {"keep": "after"}}}, ini)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("keep = after", ini.read_text())
+
+    def test_persistent_second_file_failure_still_rolls_back_first_file(self):
+        from omero_biomero import config_store
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=before\n"))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{}')
+        before = (ini.read_bytes(), json_config.read_bytes())
+        replace = config_store.os.replace
+        def denied_file(source, destination):
+            if str(destination) == str(json_config):
+                raise PermissionError("test permanent write failure")
+            return replace(source, destination)
+        with patch("omero_biomero.config_store.os.replace", side_effect=denied_file):
+            response = self._post_config({"config": {
+                "SLURM": {"keep": "after"}, "UPLOADER": {"enabled": True},
+            }}, ini, json_config)
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual((ini.read_bytes(), json_config.read_bytes()), before)
+
+    def test_history_remains_available_with_unparseable_ini_and_can_restore(self):
+        from omero_biomero import admin_views
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=before\n"))
+        json_config = self._tmpdir / "config.json"
+        self.assertEqual(self._post_config({"config": {"SLURM": {"keep": "after"}}}, ini, json_config).status_code, 200)
+        ini.write_text("[broken ini")
+        class StubSlurm:
+            @classmethod
+            def get_config_write_path(cls):
+                return str(ini)
+            @classmethod
+            def from_config(cls, **kwargs):
+                raise AssertionError("Recovery must not initialize workflows")
+        with patch.object(admin_views, "SlurmClient", StubSlurm), patch.object(admin_views, "CONFIG_FILE_PATH", str(json_config)):
+            view = admin_views.admin_config_history
+            while hasattr(view, "__wrapped__"):
+                view = view.__wrapped__
+            response = view(SimpleNamespace(method="GET", GET={}), conn=_fake_conn())
+            self.assertEqual(response.status_code, 200)
+            history = json.loads(response.content)
+            response = view(SimpleNamespace(method="POST", body=json.dumps({
+                "snapshot": history["snapshots"][0]["id"], "revision": history["revision"],
+            }).encode()), conn=_fake_conn())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ini.read_text(), "[SLURM]\nkeep=before\n")
+
+    def test_history_is_admin_only(self):
+        from omero_biomero import admin_views
+        view = admin_views.admin_config_history
+        while hasattr(view, "__wrapped__"):
+            view = view.__wrapped__
+        response = view(SimpleNamespace(method="GET", GET={}), conn=_fake_conn(is_admin=False))
+        self.assertEqual(response.status_code, 403)
+
+    def test_history_rejects_path_traversal_and_stale_restore(self):
+        from omero_biomero import admin_views
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=before\n"))
+        original = ini.read_bytes()
+        view = admin_views.admin_config_history
+        while hasattr(view, "__wrapped__"):
+            view = view.__wrapped__
+        with patch.object(admin_views, "_config_write_path", return_value=str(ini)), patch.object(
+            admin_views, "CONFIG_FILE_PATH", str(self._tmpdir / "config.json")
+        ):
+            response = view(SimpleNamespace(method="GET", GET={"snapshot": "../../secret"}), conn=_fake_conn())
+            self.assertEqual(response.status_code, 400)
+            response = view(SimpleNamespace(method="POST", body=json.dumps({
+                "snapshot": "a" * 32, "revision": "stale",
+            }).encode()), conn=_fake_conn())
+            self.assertEqual(response.status_code, 409)
+            response = view(SimpleNamespace(method="GET", GET={"snapshot": "current"}), conn=_fake_conn())
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertEqual(ini.read_bytes(), original)
+
     def _create_tempfile(self, content: str) -> str:
         f = self._tmpdir / "temp.ini"
         f.write_text(content)

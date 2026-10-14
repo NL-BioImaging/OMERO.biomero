@@ -23,6 +23,7 @@ import { fetchPlateImages } from "../../apiService";
 import DatasetSelectWithPopover from "./DatasetSelectWithPopover";
 import { useAppContext } from "../../AppContext";
 import { WorkflowStepIntro } from "./HistoryFeedback";
+import { workflowImages, reconcileImageSelection } from "./workflowImageCache";
 
 /**
  * Renders a single thumbnail lazily — only requests the image when it scrolls
@@ -254,7 +255,7 @@ const WorkflowInput = () => {
     (state.inputDatasets || []).forEach((ds) => {
       const node = state.omeroFileTreeData[ds.index];
       if (node?.children) {
-        node.children.forEach((img) => { map[img.id] = ds; });
+        workflowImages(state.omeroFileTreeData, node.children).forEach((img) => { map[img.id] = ds; });
       }
     });
     return map;
@@ -267,7 +268,7 @@ const WorkflowInput = () => {
     // Remove images of datasets not in inputDatasets
     const filteredImages = Object.entries(state.omeroFileTreeData || {})
       .filter(([key]) => currentDatasetIds.includes(key))
-      .flatMap(([, datasetNode]) => datasetNode.children || []);
+      .flatMap(([, datasetNode]) => workflowImages(state.omeroFileTreeData, datasetNode.children));
 
     const images = [...new Map([...(state.historicalInputImages || []), ...filteredImages]
       .map(image => [image.id, image])).values()];
@@ -277,7 +278,7 @@ const WorkflowInput = () => {
     state.inputDatasets?.forEach((dataset) => {
       const treeNode = state.omeroFileTreeData[dataset.index];
 
-      if (!treeNode || !treeNode.children || treeNode.children.length === 0) {
+      if (!treeNode || workflowImages(state.omeroFileTreeData, treeNode.children).length === 0) {
         loadImagesForDataset({
           dataset: dataset,
           group: state.user.active_group_id,
@@ -298,6 +299,12 @@ const WorkflowInput = () => {
     // filteredImages is derived via useMemo below — no setFilteredImages needed here.
 
     if (prevIds.length === 0) {
+      const repaired = reconcileImageSelection(selectedImageIds, allIds);
+      if (selectedImageIds.length && (repaired.length !== selectedImageIds.length ||
+          repaired.some((id, index) => id !== selectedImageIds[index]))) {
+        updateWIS({ selectedImageIds: repaired });
+        return;
+      }
       // First mount — if we have stored selections keep them, otherwise select all
       if (selectedImageIds.length === 0) {
         updateWIS({ selectedImageIds: allIds });

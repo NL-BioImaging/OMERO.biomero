@@ -185,6 +185,12 @@ def run_workflow_script(request, conn=None, **kwargs):
         script_id = int(unwrap(script.id))
         input_ids = params.get("IDs", [])
         data_type = params.get("Data_Type", "Image")
+        if not isinstance(input_ids, list) or not input_ids or any(
+            type(value) is not int or value <= 0 for value in input_ids
+        ):
+            return JsonResponse({
+                "error": "Select at least one valid OMERO image or plate before submitting."
+            }, status=400)
         out_email = params.get("receiveEmail")
         attach_og = params.get("attachToOriginalImages")
         import_zp = params.get("importAsZip")

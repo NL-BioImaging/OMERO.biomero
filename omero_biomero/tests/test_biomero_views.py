@@ -1,9 +1,12 @@
 import os
+import json
 import sys
 import types
 import jwt
+from importlib.metadata import PackageNotFoundError
 from unittest.mock import MagicMock, patch
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
+from django.urls import NoReverseMatch
 
 
 def _ensure_stubs():
@@ -59,6 +62,40 @@ class BiomeroViewTests(TestCase):
         conn.isAdmin.return_value = is_admin
         return conn
 
+    def test_dashboard_renewal_locks_user_and_keeps_short_expiry(self):
+        from omero_biomero import biomero_views
+        view = biomero_views.refresh_dashboard
+        while hasattr(view, "__wrapped__"):
+            view = view.__wrapped__
+        env = {"METABASE_SITE_URL": "https://mb.example.org/",
+               "METABASE_SECRET_KEY": "test-key",
+               "METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID": "11",
+               "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID": "22"}
+        for dashboard, expected in [("workflows", {"user": [0]}), ("imports", {"user_name": ["root"]})]:
+            with self.subTest(dashboard=dashboard), patch.dict(os.environ, env), patch("omero_biomero.biomero_views.time.time", return_value=1000):
+                response = view(RequestFactory().get("/", {"user": 999, "user_name": "other"}), dashboard,
+                                conn=self._fake_conn(user_id=0, username="root"))
+                data = json.loads(response.content)
+                token = data["url"].rsplit("/", 1)[1]
+                payload = jwt.decode(token, "test-key", algorithms=["HS256"], options={"verify_exp": False})
+                self.assertEqual(payload["params"], expected)
+                self.assertEqual(payload["exp"], 2800)
+                self.assertEqual(data["expires"], 2800)
+                self.assertEqual(response["Cache-Control"], "no-store")
+
+    def test_dashboard_renewal_rejects_unknown_kind_and_missing_configuration(self):
+        from omero_biomero import biomero_views
+        view = biomero_views.refresh_dashboard
+        while hasattr(view, "__wrapped__"):
+            view = view.__wrapped__
+        conn = self._fake_conn()
+        self.assertEqual(view(RequestFactory().get("/"), "other", conn=conn).status_code, 404)
+        self.assertEqual(view(RequestFactory().post("/"), "workflows", conn=conn).status_code, 405)
+        with patch.dict(os.environ, {}, clear=True):
+            response = view(RequestFactory().get("/"), "workflows", conn=conn)
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("token", response.content.decode())
+
     def test_biomero_context_basic(self):
         env = {
             "METABASE_SITE_URL": "https://mb.example.org",
@@ -67,17 +104,25 @@ class BiomeroViewTests(TestCase):
             "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID": "22",
             "IMPORTER_ENABLED": "true",
             "ANALYZER_ENABLED": "false",
+            "INTEGRATE_DATA_ANALYSIS": "TRUE",
             "BIOMERO_SHALLOW_ZARR": "true",
         }
         with patch.dict(os.environ, env, clear=False), patch(
             "omero_biomero.biomero_views.get_react_build_file",
             side_effect=lambda n: f"hashed-{n}",
+        ), patch(
+            "omero_biomero.biomero_views.version", return_value="0.11.0"
+        ), patch(
+            "omero_biomero.biomero_views.reverse", return_value="/omero_analysis/"
         ):
             ctx = _raw_biomero()(None, conn=self._fake_conn())
 
         self.assertEqual(ctx["metabase_site_url"], env["METABASE_SITE_URL"])
         self.assertTrue(ctx["importer_enabled"])  # true parsed
         self.assertFalse(ctx["analyzer_enabled"])  # false parsed
+        self.assertTrue(ctx["data_analysis_enabled"])
+        self.assertTrue(ctx["data_analysis_available"])
+        self.assertEqual(ctx["data_analysis_url"], "/omero_analysis/")
         self.assertTrue(ctx["shallow_zarr_enabled"])
         self.assertEqual(ctx["main_js"], "hashed-main.js")
         self.assertEqual(ctx["main_css"], "hashed-main.css")
@@ -112,6 +157,49 @@ class BiomeroViewTests(TestCase):
         self.assertTrue(ctx["importer_enabled"])  # default True
         self.assertTrue(ctx["analyzer_enabled"])  # default True
         self.assertFalse(ctx["shallow_zarr_enabled"])  # opt-in default
+        self.assertFalse(ctx["data_analysis_enabled"])
+        self.assertFalse(ctx["data_analysis_available"])
+
+    def test_biomero_reports_missing_analysis_package(self):
+        env = {
+            "METABASE_SECRET_KEY": "k",
+            "METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID": "1",
+            "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID": "2",
+            "INTEGRATE_DATA_ANALYSIS": "1",
+        }
+        with patch.dict(os.environ, env, clear=True), patch(
+            "omero_biomero.biomero_views.get_react_build_file",
+            return_value="fallback.js",
+        ), patch(
+            "omero_biomero.biomero_views.version",
+            side_effect=PackageNotFoundError,
+        ):
+            ctx = _raw_biomero()(None, conn=self._fake_conn())
+
+        self.assertTrue(ctx["data_analysis_enabled"])
+        self.assertFalse(ctx["data_analysis_available"])
+        self.assertEqual(ctx["data_analysis_url"], "")
+        self.assertIn("not installed", ctx["data_analysis_error"])
+
+    def test_biomero_reports_unregistered_analysis_url(self):
+        env = {
+            "METABASE_SECRET_KEY": "k",
+            "METABASE_WORKFLOWS_DB_PAGE_DASHBOARD_ID": "1",
+            "METABASE_IMPORTS_DB_PAGE_DASHBOARD_ID": "2",
+            "INTEGRATE_DATA_ANALYSIS": "true",
+        }
+        with patch.dict(os.environ, env, clear=True), patch(
+            "omero_biomero.biomero_views.get_react_build_file",
+            return_value="fallback.js",
+        ), patch(
+            "omero_biomero.biomero_views.version", return_value="0.11.0"
+        ), patch(
+            "omero_biomero.biomero_views.reverse", side_effect=NoReverseMatch
+        ):
+            ctx = _raw_biomero()(None, conn=self._fake_conn())
+
+        self.assertFalse(ctx["data_analysis_available"])
+        self.assertIn("not registered", ctx["data_analysis_error"])
 
     def test_biomero_build_file_fallback(self):
         with patch.dict(

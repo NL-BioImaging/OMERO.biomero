@@ -55,12 +55,16 @@ export const getDjangoConstants = () => {
     api_slurm_status: "/omero_biomero/api/analyzer/slurm/status/",
     api_attachments: "/omero_biomero/api/analyzer/attachments/",
     api_object_annotations: "/omero_biomero/api/analyzer/object-annotations/",
+    data_analysis: WEBCLIENT.URLS.DATA_ANALYSIS,
   };
 
   const ui = {
     shallow_zarr_enabled: WEBCLIENT.UI.BIOMERO_SHALLOW_ZARR_ENABLED === true,
     importer_enabled: WEBCLIENT.UI.IMPORTER_ENABLED,
     analyzer_enabled: WEBCLIENT.UI.ANALYZER_ENABLED,
+    data_analysis_enabled: WEBCLIENT.UI.DATA_ANALYSIS_ENABLED,
+    data_analysis_available: WEBCLIENT.UI.DATA_ANALYSIS_AVAILABLE,
+    data_analysis_error: WEBCLIENT.UI.DATA_ANALYSIS_ERROR || "",
     uploader_allowed_file_extensions:
       WEBCLIENT.UI.UPLOADER_ALLOWED_FILE_EXTENSIONS || [],
   };

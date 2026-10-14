@@ -223,7 +223,9 @@ export const AppProvider = ({ children }) => {
 
   const updateState = (newState) => {
     setState((prevState) => {
-      return { ...prevState, ...newState };
+      const nextState =
+        typeof newState === "function" ? newState(prevState) : newState;
+      return { ...prevState, ...nextState };
     });
   };
 
@@ -429,6 +431,9 @@ export const AppProvider = ({ children }) => {
       };
       
       const response = await runWorkflow(workflowName, paramsWithGroup);
+      if (response?.status !== "success" || !response?.jobId) {
+        throw new Error(response?.error || "OMERO did not accept the workflow submission.");
+      }
 
       // Use local browser time with timezone label (server time is UTC, browser clock may differ)
       const startedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });

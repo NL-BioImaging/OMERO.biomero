@@ -13,3 +13,121 @@
   z-index: 9999999 !important;
 }
 
+.biomero-root {
+  background: #f0f1f5;
+  color: #1c2127;
+}
+
+.biomero-root[data-biomero-theme="dark"] {
+  background: #1c2127;
+  color: #f6f7f9;
+  color-scheme: dark;
+}
+
+.biomero-root[data-biomero-theme="dark"] .bg-white,
+.biomero-root[data-biomero-theme="dark"] .bg-gray-50 {
+  background-color: #252a31 !important;
+}
+
+.biomero-root[data-biomero-theme="dark"] .text-gray-500,
+.biomero-root[data-biomero-theme="dark"] .text-gray-600 {
+  color: #abb3bf !important;
+}
+
+.analysis-launch-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.analysis-launch-section {
+  display: grid;
+  gap: 10px;
+}
+
+.analysis-launch-section p {
+  color: #5f6b7c;
+  margin: 0;
+}
+
+.bp5-dark .analysis-launch-section p {
+  color: #abb3bf;
+}
+
+.analysis-launch-heading,
+.analysis-upload-row,
+.analysis-launch-counts {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analysis-launch-heading {
+  justify-content: space-between;
+}
+
+.analysis-launch-heading h5 {
+  margin: 0;
+}
+
+.analysis-upload-row > span {
+  color: #5f6b7c;
+  font-size: 12px;
+}
+
+.bp5-dark .analysis-upload-row > span {
+  color: #abb3bf;
+}
+
+.analysis-option-list,
+.analysis-library-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.analysis-option-label {
+  display: grid;
+  gap: 2px;
+}
+
+.analysis-option-label small {
+  color: #5f6b7c;
+}
+
+.bp5-dark .analysis-option-label small {
+  color: #abb3bf;
+}
+
+.analysis-library-list details {
+  border: 1px solid rgba(17, 20, 24, .15);
+  border-radius: 3px;
+  padding: 8px;
+}
+
+.bp5-dark .analysis-library-list details {
+  border-color: rgba(255, 255, 255, .2);
+}
+
+.analysis-library-list summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.analysis-library-list section {
+  display: grid;
+  gap: 4px;
+  padding: 8px 8px 0 18px;
+}
+
+.analysis-empty {
+  padding: 12px;
+  text-align: center;
+}
+
+.analysis-open-button {
+  justify-self: start;
+}
+

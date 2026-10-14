@@ -23,13 +23,17 @@ import {
 } from "./apiService";
 import { getDjangoConstants } from "./constants";
 import { transformStructure, extractGroups } from "./utils";
-import { OverlayToaster, Position, Collapse, Divider, Icon } from "@blueprintjs/core";
+import { historyParametersUnchanged } from "./biomero/runHistory";
+import { OverlayToaster, Position, Callout, Collapse, Divider, Icon } from "@blueprintjs/core";
 
 // Fields that are infrastructure/output config, not workflow-specific parameters
 const INFRA_PARAMS = new Set([
   'IDs', 'Data_Type', 'workflowMode', 'plateMode', 'useZarrFormat', 'Format',
   'active_group_id', 'receiveEmail', 'importAsZip', 'uploadCsv', 'attachFileOutputs',
   'attachToOriginalImages', 'selectedDatasets', 'selectedDatasetId', 'selectedScreens', 'selectedScreenId', 'renamePattern', 'enableRename',
+  'importPlateLabelPreview', 'plateLabelPreviewName',
+  'createRois', 'roiLabelPattern', 'roiShape', 'deleteLabelImagesAfterRois',
+  'clearExistingRois', 'clearRoiFilter', 'roiColor',
   'batchEnabled', 'batchCount', 'batchSize', 'version',
   'cytomine_host', 'cytomine_public_key', 'cytomine_private_key',
   'cytomine_id_project', 'cytomine_id_software',
@@ -38,7 +42,15 @@ const INFRA_PARAMS = new Set([
 const MAX_INPUT_IDS_SHOWN = 20;
 
 
-const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata }) => {
+export const WorkflowSubmitToast = ({
+  workflowName,
+  startedAt,
+  params,
+  metadata,
+  warnings = [],
+  executionMode = "inline",
+  historyRun = null,
+}) => {
   const [openSection, setOpenSection] = React.useState(null);
   const toggle = (key) => setOpenSection((prev) => (prev === key ? null : key));
 
@@ -50,10 +62,24 @@ const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata }) => {
   if (params.selectedScreens?.length) {
     outputLines.push(`Screen: ${params.selectedScreens.join(", ")}`);
   }
+  if (params.importPlateLabelPreview) {
+    const label = params.plateLabelPreviewName
+      ? ` (${params.plateLabelPreviewName})`
+      : " (automatic label selection)";
+    outputLines.push(`Plate label preview${label}`);
+  }
   if (params.importAsZip) outputLines.push("Zip archive");
   if (params.uploadCsv) outputLines.push("OMERO tables (CSV)");
   if (params.attachFileOutputs) outputLines.push("File annotations");
   if (params.attachToOriginalImages) outputLines.push("Attached to input images");
+  if (params.createRois) {
+    const cleanup = params.deleteLabelImagesAfterRois ? "; imported labels removed from OMERO" : "";
+    const clearing = params.clearExistingRois
+      ? `; existing ROIs cleared${params.clearRoiFilter ? ` matching "${params.clearRoiFilter}"` : ""}`
+      : "";
+    const color = params.roiColor ? `; color ${params.roiColor}` : "; automatic run color";
+    outputLines.push(`ROIs on original images (${params.roiShape || "Polygon"}${color}${cleanup}${clearing})`);
+  }
   if (params.receiveEmail) outputLines.push("E-mail on completion");
 
   // Build lookup from descriptor so we can classify each param
@@ -108,6 +134,11 @@ const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata }) => {
     <div className="min-w-64">
       <div><strong>{workflowName}</strong> submitted successfully</div>
       {startedAt && <div className="bp5-text-small mt-0.5 opacity-80">Started at {startedAt}</div>}
+      {warnings.map((warning, index) => (
+        <Callout key={`${warning.code || "warning"}-${index}`} intent="warning" compact className="mt-1">
+          {warning.message || String(warning)}
+        </Callout>
+      ))}
 
       {outputLines.length > 0 && (
         <SectionRow label={`Output (${outputLines.length})`} sectionKey="output">
@@ -129,7 +160,7 @@ const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata }) => {
       </SectionRow>
 
       {(wfParams.length > 0 || params.version) && (
-        <SectionRow label={`Parameters (${wfParams.length + (params.version ? 1 : 0)})`} sectionKey="params">
+        <SectionRow label={`Parameters (${wfParams.length + (params.version ? 1 : 0)})${historyParametersUnchanged(historyRun, params, metadata) ? ` — unchanged from ${historyRun.id}` : ""}`} sectionKey="params">
           {params.version && <div>• version: <strong>{params.version}</strong></div>}
           {wfParams.map(([k, v]) => (
             <div key={k}>• {k}: <strong>{String(v)}</strong></div>
@@ -138,9 +169,15 @@ const WorkflowSubmitToast = ({ workflowName, startedAt, params, metadata }) => {
       )}
 
       <Divider className="my-1" />
-      <div className="bp5-text-small">
-        <strong>⚠ Do not log out or close this browser tab.</strong> Your OMERO session must stay active for results to be automatically imported. Logging out risks data loss and wastes compute time.
-      </div>
+      {executionMode === "detached" ? (
+        <div className="bp5-text-small">
+          <strong>Your workflow runs in the background.</strong> You may close this tab or browser window. Results will be imported into OMERO automatically.
+        </div>
+      ) : (
+        <div className="bp5-text-small">
+          <strong>⚠ Do not log out or close this browser tab.</strong> Your OMERO session must stay active for results to be automatically imported. Logging out risks data loss and wastes compute time.
+        </div>
+      )}
     </div>
   );
 };
@@ -157,6 +194,7 @@ export const AppProvider = ({ children }) => {
     scripts: [],
     workflows: null,
     workflowMetadata: null,
+    capabilities: {},
     workflowStatusTooltipShown: false,
     inputDatasets: [],
     omeroFileTreeData: null,
@@ -393,16 +431,19 @@ export const AppProvider = ({ children }) => {
       };
       
       const response = await runWorkflow(workflowName, paramsWithGroup);
-
-      const message = response?.message || "Workflow executed successfully.";
+      if (response?.status !== "success" || !response?.jobId) {
+        throw new Error(response?.error || "OMERO did not accept the workflow submission.");
+      }
 
       // Use local browser time with timezone label (server time is UTC, browser clock may differ)
       const startedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
 
+      const warnings = response?.warnings || [];
+      const effectiveParams = { ...params, ...(response?.effectiveOptions || {}) };
       toaster.show({
-        intent: "success",
-        icon: "tick-circle",
-        message: <WorkflowSubmitToast workflowName={workflowName} startedAt={startedAt} params={params} metadata={state.selectedWorkflow?.metadata} />,
+        intent: warnings.length ? "warning" : "success",
+        icon: warnings.length ? "warning-sign" : "tick-circle",
+        message: <WorkflowSubmitToast workflowName={workflowName} startedAt={startedAt} params={effectiveParams} metadata={state.selectedWorkflow?.metadata} warnings={warnings} executionMode={response?.executionMode} historyRun={state.historyRun} />,
         timeout: 0,
       });
     } catch (err) {

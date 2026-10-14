@@ -1,6 +1,8 @@
 import datetime
 import json
 import logging
+import os
+import re
 from django.core.cache import cache
 
 
@@ -13,7 +15,37 @@ from omeroweb.webclient.decorators import login_required
 from omero.rtypes import unwrap, rbool, wrap, rlong, rlist
 import omero.model
 
+from .utils import parse_bool_env
+
 logger = logging.getLogger(__name__)
+
+
+def plate_label_preview_allowed():
+    """Return the administrator-managed UI policy; missing stays disabled."""
+    try:
+        config = SlurmClient.load_config()
+        return config.getboolean(
+            "UI", "allow_plate_label_preview", fallback=False
+        )
+    except Exception as exc:
+        logger.warning("Could not read Plate label preview policy: %s", exc)
+        return False
+
+def get_roi_script_capability(script_service, scripts=None):
+    """Ask OMERO whether the optional Labels2Rois script is installed."""
+    scripts = scripts if scripts is not None else script_service.getScripts()
+    matches = [script for script in scripts
+               if unwrap(script.getName()) == constants.LABELS_TO_ROIS_SCRIPT]
+    if not matches:
+        return {
+            "available": False,
+            "reason": "The Labels2Rois utility script is not installed.",
+        }
+
+    return {
+        "available": True,
+        "reason": None,
+    }
 
 
 @login_required()
@@ -30,6 +62,28 @@ def run_workflow_script(request, conn=None, **kwargs):
         if not workflow_name:
             return JsonResponse({"error": "workflow_name is required"}, status=400)
         params = data.get("params", {})
+        launch_warnings = []
+        execution_mode = (
+            "detached"
+            if parse_bool_env(
+                os.environ.get(
+                    constants.slurm_env.BIOMERO_DETACHED_WORKFLOWS
+                ),
+                default=False,
+            )
+            else "inline"
+        )
+        if params.get("importPlateLabelPreview", False) and not plate_label_preview_allowed():
+            return JsonResponse({
+                "error": "Plate mask previews are disabled by the administrator"
+            }, status=400)
+        if (params.get("importPlateLabelPreview", False) and not parse_bool_env(
+                os.environ.get("BIOMERO_SHALLOW_ZARR"), default=False)):
+            return JsonResponse({
+                "error": (
+                    "Plate mask preview requires BIOMERO_SHALLOW_ZARR=true"
+                )
+            }, status=400)
         
         # Determine which script to use based on batch processing settings
         batch_enabled = params.get("batchEnabled", False)
@@ -131,6 +185,12 @@ def run_workflow_script(request, conn=None, **kwargs):
         script_id = int(unwrap(script.id))
         input_ids = params.get("IDs", [])
         data_type = params.get("Data_Type", "Image")
+        if not isinstance(input_ids, list) or not input_ids or any(
+            type(value) is not int or value <= 0 for value in input_ids
+        ):
+            return JsonResponse({
+                "error": "Select at least one valid OMERO image or plate before submitting."
+            }, status=400)
         out_email = params.get("receiveEmail")
         attach_og = params.get("attachToOriginalImages")
         import_zp = params.get("importAsZip")
@@ -139,10 +199,31 @@ def run_workflow_script(request, conn=None, **kwargs):
         output_sc = params.get("selectedScreens", [])
         output_ds_id = params.get("selectedDatasetId")  # OMERO ID (int or None)
         output_sc_id = params.get("selectedScreenId")   # OMERO ID (int or None)
+        import_plate_label_preview = bool(
+            params.get("importPlateLabelPreview", False))
+        plate_label_preview_name = str(
+            params.get("plateLabelPreviewName", "") or "").strip()
         rename_enabled = params.get("enableRename", False)
         rename_pt = params.get("renamePattern", "")
         version = params.get("version")
         attach_file_outputs = params.get("attachFileOutputs", False)
+        file_output_target = params.get("fileOutputTarget")
+        if file_output_target is None:
+            # Cached/older clients did not send a target mode. Preserve the
+            # historic input Dataset/Plate behavior for those submissions.
+            file_output_target = constants.file_output_targets.INPUT_CONTAINER
+        if file_output_target not in constants.file_output_targets.USER_VALUES:
+            return JsonResponse({
+                "error": "Invalid file annotation destination"
+            }, status=400)
+        create_rois = bool(params.get("createRois", False))
+        delete_label_images_after_rois = bool(
+            params.get("deleteLabelImagesAfterRois", False))
+        clear_existing_rois = bool(params.get("clearExistingRois", False))
+        clear_roi_filter = str(params.get("clearRoiFilter", "") or "").strip()
+        roi_label_pattern = str(params.get("roiLabelPattern", "") or "").strip()
+        roi_shape = str(params.get("roiShape", "Polygon") or "Polygon")
+        roi_color = str(params.get("roiColor", "") or "").strip().upper()
         # EXPERIMENTAL: ZARR format support
         use_zarr = params.get("useZarrFormat", False)
         # Always default to 0.4 so omero-cli-zarr doesn't fall back to 0.5 (Zarr v3)
@@ -151,6 +232,69 @@ def run_workflow_script(request, conn=None, **kwargs):
         batch_enabled = params.get("batchEnabled", False)
         batch_count = params.get("batchCount", 1)
         batch_size = params.get("batchSize", len(input_ids) if input_ids else 1)
+
+        # This optional view is meaningful only for a Plate result imported to
+        # a Screen. SLURM_Run_Workflow applies the importer/shallow feature
+        # gates as the final authority; normalize the UI contract here too.
+        import_plate_label_preview = bool(
+            import_plate_label_preview
+            and data_type == transfer.DATA_TYPE_PLATE
+            and (output_sc or output_sc_id)
+        )
+        if not import_plate_label_preview:
+            plate_label_preview_name = ""
+
+        if create_rois and data_type == transfer.DATA_TYPE_PLATE:
+            create_rois = False
+            launch_warnings.append({
+                "code": "roi_plate_unsupported",
+                "message": (
+                    "ROI postprocessing for Plate workflows is not yet "
+                    "supported; the Plate result will still be imported."
+                ),
+            })
+
+        if create_rois:
+            roi_capability = get_roi_script_capability(svc, scripts)
+            if not roi_capability["available"]:
+                create_rois = False
+                launch_warnings.append({
+                    "code": "roi_script_unavailable",
+                    "message": (
+                        "ROI postprocessing was requested but will be skipped: "
+                        f"{roi_capability['reason']}"
+                    ),
+                })
+            else:
+                has_import_destination = bool(
+                    output_ds or output_sc or output_ds_id or output_sc_id)
+                if not has_import_destination:
+                    return JsonResponse({
+                        "error": (
+                            "ROI creation requires importing result images "
+                            "into a Dataset or Screen."
+                        )
+                    }, status=400)
+                if roi_shape not in ("Polygon", "Mask"):
+                    return JsonResponse({
+                        "error": "ROI shape must be Polygon or Mask"
+                    }, status=400)
+                if roi_color and not re.fullmatch(r"#[0-9A-F]{6}", roi_color):
+                    return JsonResponse({
+                        "error": "ROI color must be empty or use #RRGGBB format"
+                    }, status=400)
+                # An empty selector requests conservative, best-effort
+                # selection after imported results are matched to sources.
+                # The frontend already uses its loaded descriptor to send "*"
+                # when every image output is declared as a label. Do not fetch
+                # descriptors again here: that adds an external GitHub request
+                # to workflow submission and can exceed Gunicorn's timeout.
+
+        delete_label_images_after_rois = (
+            create_rois and delete_label_images_after_rois)
+        clear_existing_rois = create_rois and clear_existing_rois
+        if not clear_existing_rois:
+            clear_roi_filter = ""
 
         # Convert provided params to OMERO rtypes using wrap
         known_params = [
@@ -164,6 +308,8 @@ def run_workflow_script(request, conn=None, **kwargs):
             "selectedScreens",
             "selectedDatasetId",
             "selectedScreenId",
+            "importPlateLabelPreview",
+            "plateLabelPreviewName",
             "renamePattern",
             "enableRename",
             "workflow_name",
@@ -179,6 +325,14 @@ def run_workflow_script(request, conn=None, **kwargs):
             "batchCount",     # Frontend calculated (not sent to script)
             "batchSize",      # Converted to Batch_Size for script
             "attachFileOutputs",  # Converted to workflow.OUTPUT_ATTACH_FILE_OUTPUTS
+            "fileOutputTarget",   # Converted to workflow target policy
+            "createRois",         # Converted to workflow.OUTPUT_CREATE_ROIS
+            "deleteLabelImagesAfterRois",  # Converted to workflow.ROI_DELETE_LABEL_IMAGES
+            "clearExistingRois",      # Converted to workflow.ROI_CLEAR_EXISTING
+            "clearRoiFilter",         # Converted to workflow.ROI_CLEAR_FILTER
+            "roiLabelPattern",    # Converted to workflow.ROI_LABEL_PATTERN
+            "roiShape",           # Converted to workflow.ROI_SHAPE
+            "roiColor",           # Converted to workflow.ROI_COLOR
         ]
         # File-attachment params arrive as FILE_{param_id}: int annotation ID.
         # Must be rlong — wrap() would give rstring if the value is a string.
@@ -221,14 +375,29 @@ def run_workflow_script(request, conn=None, **kwargs):
                 constants.results.OUTPUT_ATTACH_NEW_SCREEN_ID: (
                     rlong(int(output_sc_id)) if output_sc_id else None
                 ),
+                constants.results.IMPORT_PLATE_LABEL_PREVIEW: rbool(
+                    import_plate_label_preview),
+                constants.results.PLATE_LABEL_PREVIEW_NAME: wrap(
+                    plate_label_preview_name),
                 workflow.OUTPUT_DUPLICATES: rbool(False),
                 workflow.OUTPUT_RENAME: (
                     wrap(rename_pt) if (rename_enabled and rename_pt) else wrap(workflow.NO)
                 ),
                 workflow.OUTPUT_CSV_TABLE: rbool(uploadcsv),
                 workflow.OUTPUT_ATTACH_FILE_OUTPUTS: rbool(attach_file_outputs),
+                workflow.OUTPUT_ATTACH_FILE_OUTPUTS_TARGET: wrap(
+                    file_output_target),
+                workflow.OUTPUT_CREATE_ROIS: rbool(create_rois),
+                workflow.ROI_LABEL_PATTERN: wrap(roi_label_pattern),
+                workflow.ROI_SHAPE: wrap(roi_shape),
+                workflow.ROI_COLOR: wrap(roi_color),
             }
         )
+        if delete_label_images_after_rois:
+            inputs[workflow.ROI_DELETE_LABEL_IMAGES] = rbool(True)
+        if clear_existing_rois:
+            inputs[workflow.ROI_CLEAR_EXISTING] = rbool(True)
+            inputs[workflow.ROI_CLEAR_FILTER] = wrap(clear_roi_filter)
         
         # Remove None values for non-batched workflows
         inputs = {k: v for k, v in inputs.items() if v is not None}
@@ -262,6 +431,18 @@ def run_workflow_script(request, conn=None, **kwargs):
                     "status": "success",
                     "message": f"Script {script_name} for {workflow_name} started successfully: {msg}",
                     "jobId": job_id,
+                    "executionMode": execution_mode,
+                    "warnings": launch_warnings,
+                    "effectiveOptions": {
+                        "createRois": create_rois,
+                        "deleteLabelImagesAfterRois":
+                            delete_label_images_after_rois,
+                        "clearExistingRois": clear_existing_rois,
+                        "clearRoiFilter": clear_roi_filter,
+                        "importPlateLabelPreview":
+                            import_plate_label_preview,
+                        "plateLabelPreviewName": plate_label_preview_name,
+                    },
                 }
             )
 
@@ -544,12 +725,17 @@ def get_slurm_status(request, conn=None, **kwargs):
     script_name = constants.RUN_WF_SCRIPT  # Contains all workflow version info
     
     logger.info(f"Starting SLURM status check for script: {script_name}")
+    roi_capability = {
+        "available": False,
+        "reason": "ROI capability could not be checked.",
+    }
     
     try:
         scriptService = conn.getScriptService()
         
         # Find the script by name (same approach as run_workflow_script)
         scripts = scriptService.getScripts()
+        roi_capability = get_roi_script_capability(scriptService, scripts)
         script = None
         for s in scripts:
             if unwrap(s.getName()) == script_name:
@@ -565,7 +751,8 @@ def get_slurm_status(request, conn=None, **kwargs):
                 "last_checked": datetime.datetime.now().isoformat(),
                 "icon": "error",
                 "intent": "danger",
-                "workflow_versions": {}
+                "workflow_versions": {},
+                "capabilities": {"roi_postprocessing": roi_capability},
             })
         
         # Get the script ID and fetch params
@@ -617,7 +804,8 @@ def get_slurm_status(request, conn=None, **kwargs):
             "last_checked": datetime.datetime.now().isoformat(),
             "icon": "tick-circle",
             "intent": "success",
-            "workflow_versions": workflow_versions
+            "workflow_versions": workflow_versions,
+            "capabilities": {"roi_postprocessing": roi_capability},
         }
         
         logger.info(f"SLURM status check successful. Status: {status['status']}, Workflows: {total_workflows}")
@@ -654,6 +842,8 @@ def get_slurm_status(request, conn=None, **kwargs):
                 "workflow_versions": {}
             }
     
+    status.setdefault(
+        "capabilities", {"roi_postprocessing": roi_capability})
     return JsonResponse(status)
 
 

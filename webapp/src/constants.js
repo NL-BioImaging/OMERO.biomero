@@ -50,6 +50,7 @@ export const getDjangoConstants = () => {
     workflow_metadata: "/omero_biomero/api/analyzer/workflows/_/",
     api_config: "/omero_biomero/api/biomero/admin/config/",
     api_run_workflow: "/omero_biomero/api/analyzer/workflows/", // append <name>/jobs/
+    workflow_history: "/omero_biomero/api/analyzer/history/",
     get_workflows: "/omero_biomero/api/analyzer/scripts/",
     api_slurm_status: "/omero_biomero/api/analyzer/slurm/status/",
     api_attachments: "/omero_biomero/api/analyzer/attachments/",
@@ -58,6 +59,7 @@ export const getDjangoConstants = () => {
   };
 
   const ui = {
+    shallow_zarr_enabled: WEBCLIENT.UI.BIOMERO_SHALLOW_ZARR_ENABLED === true,
     importer_enabled: WEBCLIENT.UI.IMPORTER_ENABLED,
     analyzer_enabled: WEBCLIENT.UI.ANALYZER_ENABLED,
     data_analysis_enabled: WEBCLIENT.UI.DATA_ANALYSIS_ENABLED,

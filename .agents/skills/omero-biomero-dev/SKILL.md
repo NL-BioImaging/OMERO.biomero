@@ -12,7 +12,23 @@ do not reformat or rewrite unrelated code.
 
 Preserve released behavior and deployment compatibility unless the user
 explicitly authorizes a breaking change. Treat generated frontend bundles as
-watcher-owned output. Change and verify source, but do not build or clear assets.
+tracked deployment artifacts: frontend source and its production bundle must be
+committed and published together.
+
+## Pull-request branch workflow
+
+On an existing non-default branch intended for a pull request, make focused,
+coherent commits and push them as normal completion of authorized development
+work. Do not hold the branch locally merely to run a slow full suite: run cheap,
+relevant checks that catch immediate mistakes, inspect the diff, then let the
+required GitHub Actions checks be the full-suite gate. If CI fails, inspect it
+and push a follow-up fix. Incremental branch commits may stay small because the
+pull request will normally be squash-merged.
+
+Use proportionate local verification before a direct default-branch push,
+release, change without suitable CI coverage, or higher-risk operation. This
+workflow does not authorize unrelated publication, merging, deployment, or
+destructive actions.
 
 ## Workflow
 
@@ -24,13 +40,29 @@ watcher-owned output. Change and verify source, but do not build or clear assets
    the new behavior to prove the positive test goes red, then restore it.
 3. Implement using the nearest established pattern. Extract shared code only
    when behavior genuinely repeats.
-4. Run the narrowest useful checks, then the relevant backend/frontend suite.
+4. Run the narrowest useful checks while iterating. Read the repository
+   README's Testing section before choosing commands. For a direct
+   default-branch push or release, include its documented `python manage.py
+   test` run; on a pull-request branch, focused backend tests may be followed by
+   a prompt push so GitHub performs the full suite. For React behavior, run the
+   focused `yarn test` selection described by the frontend reference.
 5. Run Python installation and tests through the repository-local `venv`.
    Install the editable package and test requirements into that environment
    when imports are missing; never fall back to bare `python` or `pip`.
-6. Never run `build`, `clear-assets`, or start another frontend watcher. Assume
-   the developer-owned `corepack yarn watch` process updates assets. Inspect the
-   source diff, preserve watcher output, and run `git diff --check`.
+6. During local-only work, including local commits, do not start a competing
+   frontend watcher, invoke `clear-assets` directly, or produce a release build;
+   preserve the developer's watch/dev output. When the task includes pushing
+   frontend changes, run `corepack yarn build` from `webapp` immediately before
+   the final commit and push, verify the generated manifest and assets, and
+   include them in the published commit. Do not publish frontend source with a
+   stale bundle. Inspect the complete diff and run `git diff --check`.
+7. During merges, treat conflicts under the generated frontend asset directory
+   as disposable output, not source to reconcile manually. Resolve the actual
+   frontend source first and choose either side's generated files only as needed
+   to clear Git's conflicts. From the resulting merged source, run
+   `corepack yarn build` in `webapp` and replace the chosen artifacts with that
+   fresh output. Commit the regenerated assets in the merge commit or an
+   immediate follow-up, and push the merge and asset update together.
 
 ## Reference Routing
 

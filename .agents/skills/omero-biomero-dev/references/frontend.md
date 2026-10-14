@@ -66,8 +66,29 @@ corepack yarn test --watchAll=false --runInBand
 .\node_modules\.bin\eslint.cmd src
 ```
 
-Do not run `build`, `clear-assets`, or `watch`. The developer keeps
-`corepack yarn watch` running and owns generated updates under
-`omero_biomero/static/omero_biomero/assets`. Do not start a competing watcher or
-rewrite those assets after source changes. Preserve and report any watcher
-output visible in the worktree.
+During local-only work, including local commits, do not start a competing
+watcher, invoke `clear-assets` directly, or produce a release build. Preserve
+generated output from the developer's existing watcher. When the task includes
+pushing frontend changes, run this from `webapp/` on the host platform
+immediately before the final commit and push:
+
+```text
+corepack yarn build
+```
+
+The build performs its own asset cleanup and production compilation. Verify the
+updated manifest and files under `omero_biomero/static/omero_biomero/assets`,
+then commit those generated artifacts with the frontend source. Do not publish
+frontend source while its packaged bundle is stale.
+
+## Merging Generated Assets
+
+Generated bundle names and manifests commonly conflict across branches. Do not
+hand-merge their contents. Resolve the React and other frontend source first;
+choose either side of generated-asset conflicts only to let Git establish the
+merged tree. Then run `corepack yarn build` from `webapp/` and use its output as
+the authoritative assets for the merged source.
+
+The regenerated assets may be included in the merge commit or in an immediate
+follow-up commit. Push the merge and regenerated-assets commit together; do not
+publish a merge that leaves the arbitrary conflict-resolution bundle in place.

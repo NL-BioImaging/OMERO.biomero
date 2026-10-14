@@ -24,6 +24,13 @@
 - If Python or JavaScript source imports a package directly, declare it in
   `setup.py` or `webapp/package.json` and update the lockfile as appropriate.
   Remove a dependency only after repository-wide search proves it is unused.
+- For a temporary cross-repository proof of concept, declare an unpublished
+  dependency branch as a PEP 508 direct reference in the feature branch's
+  `setup.py`. This lets downstream Dockerfiles install OMERO.biomero once and
+  receive the compatible sibling branch transitively, even when that sibling's
+  generated development version does not satisfy the next release's lower
+  bound. Mark the reference as development-only and restore a released version
+  range before publishing.
 
 ## Generated Frontend Assets
 

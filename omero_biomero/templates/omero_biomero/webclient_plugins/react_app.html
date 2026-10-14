@@ -62,6 +62,8 @@
     WEBCLIENT.URLS.reset_rdef_json = "{% url 'reset_rdef_json' %}";
     WEBCLIENT.URLS.script_upload = "{% url 'script_upload' %}";
     WEBCLIENT.URLS.DATA_ANALYSIS = "{{ data_analysis_url|escapejs }}";
+    WEBCLIENT.URLS.DASHBOARD_WORKFLOWS = "{% url 'refresh_biomero_dashboard' 'workflows' %}";
+    WEBCLIENT.URLS.DASHBOARD_IMPORTS = "{% url 'refresh_biomero_dashboard' 'imports' %}";
     // jsTree code in ome.tree.js and center panel code in center_plugin.thumbs.js.html uses initially_select
     // instead of browser URL since URL may be /webclient/?path=plate.name-barcode|well.name-A1
 
@@ -86,6 +88,7 @@
     WEBCLIENT.UI.DATA_ANALYSIS_ENABLED = {{ data_analysis_enabled|yesno:"true,false" }};
     WEBCLIENT.UI.DATA_ANALYSIS_AVAILABLE = {{ data_analysis_available|yesno:"true,false" }};
     WEBCLIENT.UI.DATA_ANALYSIS_ERROR = "{{ data_analysis_error|escapejs }}";
+    WEBCLIENT.UI.BIOMERO_SHALLOW_ZARR_ENABLED = {{ shallow_zarr_enabled|yesno:"true,false" }};
     WEBCLIENT.UI.UPLOADER_ALLOWED_FILE_EXTENSIONS = {{ uploader_allowed_file_extensions|json_dumps|safe }};
 
 

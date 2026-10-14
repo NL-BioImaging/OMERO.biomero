@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import useDashboard from "../shared/useDashboard";
 import { useAppContext } from "../AppContext";
 import FileBrowser from "./components/FileBrowser";
 import OmeroDataBrowser from "../shared/components/OmeroDataBrowser";
@@ -28,6 +29,8 @@ const MonitorPanel = ({
   setMetabaseError,
   isAdmin,
   metabaseUrl,
+  dashboardError,
+  retryDashboard,
 }) => {
   const iframeRef = useRef(null);
 
@@ -89,6 +92,10 @@ const MonitorPanel = ({
         </div>
       </div>
       <div className="p-4">
+        {dashboardError && <Callout intent="warning" role="alert">
+          <p>{dashboardError}</p>
+          <Button icon="refresh" onClick={retryDashboard}>Retry monitor</Button>
+        </Callout>}
         {!metabaseError ? (
           <iframe
             title="Metabase dashboard"
@@ -608,7 +615,10 @@ const ImporterApp = () => {
     .getAttribute("data-metabase-token-imports");
   const isAdmin =
     document.getElementById("root").getAttribute("data-is-admin") === "true";
-  const iframeUrl = `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=false&refresh=20`;
+  const { iframeUrl, error: dashboardError, retry: retryDashboard } = useDashboard(
+    `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=false&refresh=20`,
+    window.WEBCLIENT?.URLS?.DASHBOARD_IMPORTS, activeTab === "Monitor",
+  );
 
   useEffect(() => {
     loadOmeroTreeData();
@@ -1060,6 +1070,8 @@ const ImporterApp = () => {
                   setMetabaseError={setMetabaseError}
                   isAdmin={isAdmin}
                   metabaseUrl={metabaseUrl}
+                  dashboardError={dashboardError}
+                  retryDashboard={retryDashboard}
                 />
               ) : null
             }

@@ -137,8 +137,14 @@ const SettingsForm = () => {
     return validateMaxBatchJobs(settingsForm?.UI?.max_batch_jobs);
   };
   
+  const remoteShallowEnabled = !["false", "0", "no", "off"].includes(
+    String(settingsForm?.SLURM?.remote_shallow_zarr ?? "true").trim().toLowerCase());
+  const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
+  const invalidShallowWorkers = state.ui?.shallow_zarr_enabled && remoteShallowEnabled &&
+    workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
+
   const hasValidationErrors = () => {
-    return getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
+    return invalidShallowWorkers || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
   };
 
   const validateModelFields = (models, scriptRepo, slurm) => {
@@ -790,11 +796,13 @@ const SettingsForm = () => {
   ) => (
     <FormGroup
       label={label}
+      labelFor={field}
       helperText={explanation}
       intent={intent}
     >
       <div className="flex items-center space-x-2">
         <InputGroup
+          id={field}
           value={value || ""}
           onChange={(e) => handleInputChange(field, e.target.value)}
           readOnly={!editMode[field]}
@@ -1138,8 +1146,8 @@ const SettingsForm = () => {
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
-                Controls how BIOMERO pulls container images. Default: background <code>nohup</code> on login node.
-                Enable sbatch-based pulling on clusters that restrict long-running login-node processes.
+                Controls how BIOMERO pulls container images. Default: legacy background <code>nohup</code> on the login node.
+                Enable scheduler-native pulling to use one bounded workflow-and-converter job array, node-local temporary storage, per-image logs, validation, and atomic publication.
                 <EnvVarNote vars={["BIOMERO_IMAGE_PULL_VIA_SBATCH"]} />
               </div>
             </div>
@@ -1160,8 +1168,8 @@ const SettingsForm = () => {
             settingsForm.SLURM?.image_pull_cpus,
             "",
             <>
-              CPUs for sbatch image pull jobs. Only used when Pull via sbatch is on. Default: 8.
-              <ExampleNote>8</ExampleNote>
+              CPUs for sbatch image pull jobs. Leave blank to inherit <code>sbatch_cpus-per-task</code>, then the scheduler default.
+              <ExampleNote>2</ExampleNote>
               <EnvVarNote vars={["BIOMERO_PULL_CPUS"]} />
             </>
           )}
@@ -1171,9 +1179,41 @@ const SettingsForm = () => {
             settingsForm.SLURM?.image_pull_mem,
             "",
             <>
-              Memory for sbatch image pull jobs. Size to fit your cluster node. Default: 32G.
+              Memory for sbatch image pull jobs. Leave blank to inherit <code>sbatch_mem</code>, then the scheduler default.
               <ExampleNote>4G</ExampleNote>
               <EnvVarNote vars={["BIOMERO_PULL_MEM"]} />
+            </>
+          )}
+          {renderEditableField(
+            "Pull Time",
+            "SLURM.image_pull_time",
+            settingsForm.SLURM?.image_pull_time,
+            "",
+            <>
+              Time limit for the combined workflow and converter image array. Leave blank to inherit <code>sbatch_time</code> when configured.
+              <ExampleNote>1-00:00:00</ExampleNote>
+              <EnvVarNote vars={["BIOMERO_PULL_TIME"]} />
+            </>
+          )}
+          {renderEditableField(
+            "Pull Concurrency",
+            "SLURM.image_pull_concurrency",
+            settingsForm.SLURM?.image_pull_concurrency,
+            "",
+            <>
+              Maximum image array tasks running simultaneously. Default: 1 for compatibility; 2–4 is recommended to protect shared storage.
+              <ExampleNote>4</ExampleNote>
+              <EnvVarNote vars={["BIOMERO_PULL_CONCURRENCY"]} />
+            </>
+          )}
+          {renderEditableField(
+            "Pull Partition",
+            "SLURM.image_pull_partition",
+            settingsForm.SLURM?.image_pull_partition,
+            "",
+            <>
+              Dedicated partition for image initialization. Leave blank to inherit <code>sbatch_partition</code>. This value overrides the global flag when set.
+              <EnvVarNote vars={["BIOMERO_PULL_PARTITION"]} />
             </>
           )}
           <H6><span className="inline-flex items-center gap-1">ZIP Command <RuntimeIcon /></span></H6>
@@ -1181,7 +1221,8 @@ const SettingsForm = () => {
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
                 ZIP command for archiving result files on the cluster. Leave blank to auto-detect
-                (<code>7z</code> or <code>7za</code> in PATH).
+                (<code>7z</code> or <code>7za</code> in PATH). Set <code>zip</code> to use the
+                Info-ZIP <code>zip</code>/<code>unzip</code> pair.
               </div>
             </div>
           </div>
@@ -1191,8 +1232,9 @@ const SettingsForm = () => {
             settingsForm.SLURM?.slurm_zip_cmd,
             "",
             <>
-              Explicit zip command. Leave blank to auto-detect (<code>7z</code> or <code>7za</code> in PATH).
-              <ExampleNote>7za</ExampleNote>
+              Executable name or path. Leave blank to auto-detect (<code>7z</code> or <code>7za</code> in PATH).
+              <code>zip</code> selects Info-ZIP syntax and requires the matching <code>unzip</code> executable.
+              <ExampleNote>zip</ExampleNote>
               <EnvVarNote vars={["BIOMERO_SLURM_ZIP_CMD"]} />
             </>
           )}
@@ -1200,8 +1242,8 @@ const SettingsForm = () => {
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
-                Additional <code>sbatch</code> flags applied to every workflow <em>and</em> conversion submission.
-                Per-workflow job parameters always take precedence.
+                Additional <code>sbatch</code> flags applied to workflow, conversion, and scheduled image-pull submissions.
+                Per-workflow, conversion-specific, and dedicated image-pull values take precedence.
                 Stored as <code>sbatch_flag=value</code> in the config.
               </div>
               <div className="bp5-form-helper-text">
@@ -1251,6 +1293,46 @@ const SettingsForm = () => {
           </Button>
         </CollapsibleSection>
       </CollapsibleSection>
+      {state.ui?.shallow_zarr_enabled && (
+        <CollapsibleSection title="Shallow Zarr">
+          <FormGroup helperText={<>
+            Shallow eligible Zarr results on Slurm before transfer. Enabled by default;
+            opt out to shallow locally in the importer and avoid additional Slurm compute costs.
+            <EnvVarNote vars={["BIOMERO_REMOTE_SHALLOW_ZARR"]} />
+            Keep the worker and importer settings aligned. Environment overrides must
+            be changed in the deployment, not in this form.
+          </>}>
+            <Switch
+              label="Remote shallowing"
+              checked={remoteShallowEnabled}
+              onChange={(e) => handleInputChange("SLURM.remote_shallow_zarr", e.target.checked ? "true" : "false")}
+            />
+          </FormGroup>
+          {remoteShallowEnabled && <>
+            <p className="bp5-text-muted">
+              Image and tool version must match the importer trust configuration.
+              Run Slurm Init after changing the image. Keep the original image available
+              until outstanding jobs finish. The helper requests no GPU.
+            </p>
+            {invalidShallowWorkers && <p role="alert">Shallower workers must be a positive integer.</p>}
+            {[
+              ["image", "Shallower image", "cellularimagingcf/biomero-shallower:0.1.0", "Versioned container reference; an immutable digest is supported."],
+              ["version", "Shallower tool version", "0.1.0", "Tool version expected in the helper receipt."],
+              ["workers", "Shallower workers", "1", "Positive integer; also sets CPUs per task. Default: 1."],
+              ["partition", "Shallower partition", "", "Leave blank to inherit slurm_default_partition, then sbatch_partition, then the scheduler default."],
+              ["mem", "Shallower memory", "", "Leave blank to inherit global sbatch_mem, then the scheduler default."],
+              ["time", "Shallower time limit", "", "Leave blank to inherit global sbatch_time, then the scheduler default."],
+            ].map(([key, label, placeholder, description]) => (
+              <React.Fragment key={key}>
+                {renderEditableField(label, `SLURM.remote_shallower_${key}`,
+                  settingsForm.SLURM?.[`remote_shallower_${key}`], placeholder,
+                  <>{description}<EnvVarNote vars={[`BIOMERO_REMOTE_SHALLOWER_${key.toUpperCase()}`]} /></>)}
+              </React.Fragment>
+            ))}
+          </>}
+        </CollapsibleSection>
+      )}
+
       <CollapsibleSection title={<span className="inline-flex items-center gap-1">UI Settings <RuntimeIcon /></span>} errorCount={getMaxBatchJobsError() ? 1 : 0}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
@@ -1259,6 +1341,14 @@ const SettingsForm = () => {
             </div>
           </div>
         </div>
+        <H6>Workflow Result Options</H6>
+        <Switch
+          checked={settingsForm.UI?.allow_plate_label_preview === "true"}
+          label="Allow users to create a separate Plate mask preview"
+          onChange={(e) =>
+            handleInputChange("UI.allow_plate_label_preview", e.target.checked ? "true" : "false")
+          }
+        />
         <H6>Batch Processing Limits</H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">

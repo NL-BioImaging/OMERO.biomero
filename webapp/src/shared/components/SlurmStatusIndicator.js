@@ -40,10 +40,14 @@ const SlurmStatusIndicator = ({ onTabChange, onWorkflowError }) => {
       if (result.workflow_versions) {
         updateState({ 
           workflowVersions: result.workflow_versions,
-          slurmStatus: result.status 
+          slurmStatus: result.status,
+          capabilities: result.capabilities || {},
         });
       } else {
-        updateState({ slurmStatus: result.status });
+        updateState({
+          slurmStatus: result.status,
+          capabilities: result.capabilities || {},
+        });
       }
     } catch (error) {
       setStatus({
@@ -56,7 +60,8 @@ const SlurmStatusIndicator = ({ onTabChange, onWorkflowError }) => {
       // Clear version data on error
       updateState({ 
         workflowVersions: {},
-        slurmStatus: "error"
+        slurmStatus: "error",
+        capabilities: {},
       });
     }
   };

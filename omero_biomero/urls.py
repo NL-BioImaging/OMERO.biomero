@@ -1,8 +1,17 @@
 from django.urls import path
 from . import biomero_views, importer_views, admin_views, analyzer_views
 from .tus_views import TusUploadView
+from . import workflow_history
 
 urlpatterns = [
+    path('api/analyzer/history/<uuid:workflow_id>/outputs/', workflow_history.workflow_history_outputs,
+         name='workflow_history_outputs'),
+    path('api/analyzer/history/', workflow_history.workflow_history_list,
+         name='workflow_history_list'),
+    path('api/analyzer/history/<uuid:workflow_id>/', workflow_history.workflow_history_detail,
+         name='workflow_history_detail'),
+    path("api/dashboard/<str:dashboard>/", biomero_views.refresh_dashboard,
+         name="refresh_biomero_dashboard"),
     # Importer URLs
     path(
         "api/importer/import_selected/",

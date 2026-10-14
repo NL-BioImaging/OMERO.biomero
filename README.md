@@ -1,5 +1,5 @@
 # <img src="https://raw.githubusercontent.com/NL-BioImaging/OMERO.biomero/refs/tags/v1.2.1/webapp/src/img/biomero-logo.svg" alt="BIOMERO" height="28" style="height:28px; width:auto; vertical-align:middle;"> OMERO.biomero Plugin
-
+[![Upload Python Package](https://github.com/NL-BioImaging/OMERO.biomero/actions/workflows/publish-to-pypi.yml/badge.svg?event=release)](https://github.com/NL-BioImaging/OMERO.biomero/actions/workflows/publish-to-pypi.yml) [![CI](https://github.com/NL-BioImaging/OMERO.biomero/actions/workflows/ci.yml/badge.svg)](https://github.com/NL-BioImaging/OMERO.biomero/actions/workflows/ci.yml)
 > 🚀 **This package is part of <img src="https://raw.githubusercontent.com/NL-BioImaging/OMERO.biomero/refs/tags/v1.2.1/webapp/src/img/biomero-logo.svg" alt="BIOMERO" height="16" style="height:16px; width:auto; vertical-align:middle;"> BIOMERO 2.0** — For complete deployment and FAIR infrastructure setup, start with the [**NL-BIOMERO Documentation**](https://nl-bioimaging.github.io/NL-BIOMERO/) 📖
 
 
@@ -16,6 +16,40 @@ Additionally, the plugin provides a user-friendly interface to execute OMERO scr
 - **Upload Monitoring**: Monitor the status and history of uploads using a dashboard.
 - **Script Execution**: Execute OMERO scripts through a user-friendly interface and monitor their execution.
 - **Workflow Execution**: Execute BIOMERO workflows on SLURM cluster and monitor their execution.
+- **Detached Workflow Execution**: With a compatible BIOMERO worker supervisor, queued workflows continue after the submitting browser or OMERO session ends.
+- **Optional ROI Output**: Import label-image results and convert them into Polygon or Mask ROIs on the original images. BIOMERO automatically matches results to source images and selects label-like outputs on a best-effort basis.
+
+### Detached workflows and session guidance
+
+> **New in OMERO.biomero 1.7:** `BIOMERO_DETACHED_WORKFLOWS` is an opt-in
+> feature flag. Installing or upgrading the plugin does not enable it. Existing
+> and custom deployments retain inline execution while
+> `BIOMERO_DETACHED_WORKFLOWS` is
+> absent or false; administrators must opt in through their deployment
+> configuration.
+
+OMERO.biomero reads `BIOMERO_DETACHED_WORKFLOWS` so its submission message can
+match the backend execution mode. When detached mode is enabled, the successful
+response confirms that the workflow was handed to the background supervisor;
+the user may close the tab or browser, and monitoring and automatic result
+import continue independently of that web session. Deployments do not need
+seven-day or infinite OMERO sessions, or an unusually large web-session cookie,
+just to cover the complete workflow duration.
+
+When detached mode is disabled, OMERO.biomero retains the warning to keep the
+browser and OMERO session active because the workflow still runs inline.
+NL-BIOMERO applies the setting consistently to the web and worker services. See the
+[NL-BIOMERO detached-workflow guide](https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/detached-workflows.html)
+for configuration and verification.
+
+### File annotation destination behavior
+
+Workflow dialogs now let users choose where non-image result files are
+attached. The new UI defaults to **Auto**, which attaches to the selected
+result destination when one exists and otherwise to the input container. This
+is an intentional behavior change from older dialogs, which attached files to
+the input Dataset or Plate. Cached and older clients that do not send the new
+destination field retain that historical input-container behavior.
 
 ## Technologies Used
 
@@ -44,8 +78,63 @@ Reads remain backward compatible with deployments that only have
 
 ## Development
 
+### Reusing previous workflow settings
+
+In the Run panel, open **Previous runs** alongside Image Workflows and Plate
+Workflows, without selecting data first. The shared search accepts a workflow
+name or UUID. Runs are listed newest first, with details beside the list on
+wide screens and below it on narrow screens. **Load more runs** appends older
+runs without changing the selected run. There is no separate history popup.
+
+- **Run again** loads the original Image or Plate selection.
+- **Use settings on selected data** is offered inside the workflow dialog when
+  input data is selected, and keeps that selection instead.
+- **Configure Workflow → Reuse previous settings** embeds the same picker inside either
+  workflow dialog. Applying a run here restores its workflow parameters and
+  version, keeping current input data, batching and output options unchanged.
+
+Both actions open the normal workflow dialog for review; neither submits a job.
+The recorded workflow version must still be installed. Missing original inputs
+prevent Run again, but do not prevent applying settings to other accessible data.
+Output destinations and attachments must be reviewed. ROI clearing and deletion
+of label images are always off when loading history.
+
+The existing step banners identify the source run; the title stays compact. Parameter badges
+show which values were restored and which have since been modified. Output
+suggestions reflect options enabled in the source run; disabled suggestions
+are orange. Destructive options receive a review warning only if the source
+run enabled them. The submission confirmation identifies unchanged parameter
+sets without claiming that changed inputs or output destinations are identical.
+
+History currently includes only the signed-in user's runs in the active group.
+It reads the existing workflow-progress index and replays the recorded workflow
+and task aggregates; it does not rely on OMERO key/value annotations or write to
+the tracking database. Reuse supports runs containing one scientific workflow
+with recorded Image or Plate inputs. Older incomplete records or multi-workflow
+pipelines display an explanation instead of guessing settings.
+
+This is a new execution through the existing submission path, not recovery of an
+old job or a guarantee of identical results. Sharing and durable rerun lineage
+are not included in this first implementation.
+
 The following instructions assume Ubuntu OS.
 For development, we use [NL-BIOMERO](https://github.com/NL-BioImaging/NL-BIOMERO) - dockerized OMERO setup.
+
+### Plate ROI postprocessing TODO
+
+ROI creation from workflow label Images is currently exposed only for Image
+and Dataset workflows. The Plate workflow UI deliberately hides this option,
+while the backend continues to normalize requests from older clients to
+`createRois=false` for compatibility.
+
+The existing result code can enumerate the original Images in a Plate, but its
+general result-to-source matcher still relies on names, similarity, and stable
+ordering. Plate ROI support must instead pair only label-backed result Images
+to their original Images by exact Plate/well/field membership (for example,
+`A/1/1` to `A/1/1`). It must also exclude the normal source-backed result Plate
+from label conversion and validate matching dimensions and coordinates before
+calling `Labels2Rois`. Keep the UI gate until those rules have unit coverage and
+a live multi-well Plate test.
 
 ### Setup and development of plugin core/Django files
 
@@ -73,7 +162,7 @@ Then you can run the tests using:
 python manage.py test
 ```
 
-**Note**: All dependencies (including `biomero-importer>=1.0.0b5`) are automatically installed from setup.py when you install with `-e .`
+**Note**: All dependencies, including BIOMERO core and the importer with identity support, are automatically installed from the version ranges in `setup.py` when you install with `-e .`.
 
 ### Setup and development of the plugin frontend
 

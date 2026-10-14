@@ -11,6 +11,7 @@ import {
 } from "@blueprintjs/core";
 import DatasetSelectWithPopover from "../DatasetSelectWithPopover";
 import { useAppContext } from "../../../AppContext";
+import { WorkflowStepIntro } from "../HistoryFeedback";
 import { fetchPlatesData } from "../../../apiService";
 
 const PlateWorkflowInput = () => {
@@ -177,9 +178,9 @@ const PlateWorkflowInput = () => {
 
   return (
     <DialogBody className="flex flex-col min-h-[75vh]">
-      <Callout intent="primary" icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the selected input plates">
         Choose the OMERO plates this workflow should process. You can select plates directly, or select a screen to include all of its sub-plates, then review the plate layout preview before continuing.
-      </Callout>
+      </WorkflowStepIntro>
 
       <div className="w-full">
         <H6 className="mb-2">Select Input Plates</H6>

@@ -22,6 +22,8 @@ import {
 import { fetchPlateImages } from "../../apiService";
 import DatasetSelectWithPopover from "./DatasetSelectWithPopover";
 import { useAppContext } from "../../AppContext";
+import { WorkflowStepIntro } from "./HistoryFeedback";
+import { workflowImages, reconcileImageSelection } from "./workflowImageCache";
 
 /**
  * Renders a single thumbnail lazily — only requests the image when it scrolls
@@ -91,7 +93,7 @@ const imageItemPropsAreEqual = (prev, next) =>
   prev.apiLoading === next.apiLoading;
 
 // Memoized list row — only re-renders when this specific image’s selection/thumbnail changes.
-const ImageListRow = React.memo(
+export const ImageListRow = React.memo(
   ({ image, isSelected, isDisabled, thumbnail, apiLoading, datasetInfo, onToggle, onVisible }) => (
     <div
       className={`flex items-center justify-between gap-4 ${
@@ -107,6 +109,9 @@ const ImageListRow = React.memo(
         {image.name}
       </Switch>
       <div className="flex items-center gap-1 shrink-0">
+        <Tag minimal round size="small" icon="id-number">
+          ID: {image.id}
+        </Tag>
         {datasetInfo && (
           <Tag minimal round size="small" icon="id-number">
             {datasetInfo.data} (ID: {datasetInfo.id})
@@ -126,12 +131,15 @@ const ImageListRow = React.memo(
 );
 
 // Memoized grid card — same principle.
-const ImageGridCard = React.memo(
+export const ImageGridCard = React.memo(
   ({ image, isSelected, isDisabled, thumbnail, apiLoading, datasetInfo, onToggle, onVisible }) => (
     <Tooltip
       content={
         <div>
           <div>{image.name}</div>
+          <div className="text-xs opacity-75 mt-0.5">
+            Image ID: {image.id}
+          </div>
           {datasetInfo && (
             <div className="text-xs opacity-75 mt-0.5">
               {datasetInfo.data} (ID: {datasetInfo.id})
@@ -173,6 +181,8 @@ const WorkflowInput = () => {
   // Persistent state (survives Back/Next navigation)
   const wis = state.workflowInputState || {};
   const selectedImageIds = wis.selectedImageIds ?? [];
+  const hasHistoricalImages = (state.historicalInputImages?.length || 0) > 0;
+  const hasImageSources = hasHistoricalImages || (state.inputDatasets?.length || 0) > 0;
   // searchQuery stays local for instant typing; debounced value is mirrored to AppContext
   // so it survives Back/Next navigation
   const [searchQuery, setSearchQuery] = useState(wis.searchQuery ?? "");
@@ -245,7 +255,7 @@ const WorkflowInput = () => {
     (state.inputDatasets || []).forEach((ds) => {
       const node = state.omeroFileTreeData[ds.index];
       if (node?.children) {
-        node.children.forEach((img) => { map[img.id] = ds; });
+        workflowImages(state.omeroFileTreeData, node.children).forEach((img) => { map[img.id] = ds; });
       }
     });
     return map;
@@ -256,24 +266,26 @@ const WorkflowInput = () => {
     const currentDatasetIds = state.inputDatasets?.map((ds) => ds.index) || [];
 
     // Remove images of datasets not in inputDatasets
-    const filteredImages = Object.entries(state.omeroFileTreeData)
+    const filteredImages = Object.entries(state.omeroFileTreeData || {})
       .filter(([key]) => currentDatasetIds.includes(key))
-      .flatMap(([, datasetNode]) => datasetNode.children || []);
+      .flatMap(([, datasetNode]) => workflowImages(state.omeroFileTreeData, datasetNode.children));
 
-    updateState({ images: filteredImages });
+    const images = [...new Map([...(state.historicalInputImages || []), ...filteredImages]
+      .map(image => [image.id, image])).values()];
+    updateState({ images });
 
     // Load images for datasets missing children in omeroFileTreeData
     state.inputDatasets?.forEach((dataset) => {
       const treeNode = state.omeroFileTreeData[dataset.index];
 
-      if (!treeNode || !treeNode.children || treeNode.children.length === 0) {
+      if (!treeNode || workflowImages(state.omeroFileTreeData, treeNode.children).length === 0) {
         loadImagesForDataset({
           dataset: dataset,
           group: state.user.active_group_id,
         }); // Fetch only if not already loaded
       }
     });
-  }, [state.inputDatasets]);
+  }, [state.inputDatasets, state.historicalInputImages]);
 
   // Load thumbnails and sync image selection when images list changes
   useEffect(() => {
@@ -287,6 +299,12 @@ const WorkflowInput = () => {
     // filteredImages is derived via useMemo below — no setFilteredImages needed here.
 
     if (prevIds.length === 0) {
+      const repaired = reconcileImageSelection(selectedImageIds, allIds);
+      if (selectedImageIds.length && (repaired.length !== selectedImageIds.length ||
+          repaired.some((id, index) => id !== selectedImageIds[index]))) {
+        updateWIS({ selectedImageIds: repaired });
+        return;
+      }
       // First mount — if we have stored selections keep them, otherwise select all
       if (selectedImageIds.length === 0) {
         updateWIS({ selectedImageIds: allIds });
@@ -444,7 +462,7 @@ const WorkflowInput = () => {
           IDs: selectedImageIds,
           Data_Type: "Image", // Backend expects "Image" (case sensitive)
           plateMode: false,
-          useZarrFormat: shouldUseZarr, // Use admin-configured ZARR setting
+          useZarrFormat: shouldUseZarr || state.formData.useZarrFormat,
         },
       });
     }
@@ -547,9 +565,9 @@ const WorkflowInput = () => {
 
   return (
     <DialogBody className="flex flex-col min-h-[75vh]">
-      <Callout intent="primary" icon="info-sign" className="mb-4">
+      <WorkflowStepIntro step="the selected input data">
         Choose the OMERO data this workflow should process. Start by selecting one or more datasets or plates, then review the images that will be included.
-      </Callout>
+      </WorkflowStepIntro>
 
       <div className="w-full">
         <H6 className="mb-2">
@@ -563,7 +581,7 @@ const WorkflowInput = () => {
             value={state.inputDatasets.map((dataset) =>
               dataset?.id ? `${dataset.data} (ID: ${dataset.id})` : dataset?.data
             ) || []}
-            label="Select dataset(s) or plate(s)"
+            label={hasHistoricalImages ? "Add images from dataset(s) or plate(s) (optional)" : "Select dataset(s) or plate(s)"}
             placeholder="Select one or more datasets or plates..."
             buttonText="Select Datasets or Plates"
             tooltip="Select one or more OMERO datasets or plates as workflow input."
@@ -606,7 +624,7 @@ const WorkflowInput = () => {
             multiSelect={true}
             allowedCategories={["datasets", "plates"]}
             onClear={() => {
-              updateState({ inputDatasets: [], images: [] });
+              updateState({ inputDatasets: [], images: [], historicalInputImages: [] });
               updateWIS({ selectedImageIds: [] });
             }}
           />
@@ -679,7 +697,7 @@ const WorkflowInput = () => {
         )}
         
       </div>
-      {inputMode === "images" && state.inputDatasets?.length > 0 && (
+      {inputMode === "images" && hasImageSources && (
         <>
             {/* Filter bar and buttons */}
             <div className="pb-2">
@@ -692,9 +710,10 @@ const WorkflowInput = () => {
                         icon="refresh"
                         minimal
                         small
+                        disabled={!state.inputDatasets?.length}
                         onClick={() => {
-                          updateState({ images: [] });
-                          updateWIS({ selectedImageIds: [] });
+                          updateState({ images: state.historicalInputImages || [] });
+                          updateWIS({ selectedImageIds: (state.historicalInputImages || []).map(image => image.id) });
                           state.inputDatasets.forEach((ds) => {
                             loadImagesForDataset({
                               dataset: ds,
@@ -897,7 +916,7 @@ const WorkflowInput = () => {
             </div>
         </>
       )}
-      {inputMode === "images" && state.inputDatasets?.length > 0 && (
+      {inputMode === "images" && hasImageSources && (
         <div className="p-1 h-full overflow-hidden">
           <Tabs
             id="workflow-input-tabs"

@@ -5,8 +5,7 @@ the embedded OMERO.Analysis host. It retains workflow history, shallow-Zarr
 policy controls, and the single-store dependency requirements from `main`.
 
 Use Analysis 1.0.0, optional WorkflowSkills 0.4.0 and DataQueryWorker 0.2.2.
-ZarrViewer 0.7.1 supplies the reviewed viewer integration. The web environment
-must also satisfy this package's BIOMERO >=2.9.0b11 and importer >=1.5.0b8
+The web environment must also satisfy this package's BIOMERO >=2.9.0b11 and importer >=1.5.0b8
 requirements; the former 1.6.1 host backport is no longer the source baseline.
 
 Analysis is optional: upgrading `omero-biomero` does not install Analysis,

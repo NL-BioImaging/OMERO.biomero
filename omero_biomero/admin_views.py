@@ -3,7 +3,6 @@ import datetime
 import json
 import logging
 import os
-import re
 
 from biomero import SlurmClient
 from collections import defaultdict
@@ -13,17 +12,8 @@ from django.views.decorators.http import require_http_methods
 from omeroweb.webclient.decorators import login_required
 from .settings import CONFIG_FILE_PATH
 from .config_validation import ConfigValidationError, validate_ini_sections
-from .config_store import (config_lock, revision, save_files, RevisionConflict,
-                           history_directory)
 
 logger = logging.getLogger(__name__)
-
-
-def _config_write_path():
-    if hasattr(SlurmClient, "get_config_write_path"):
-        return SlurmClient.get_config_write_path()
-    return os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3)
-
 
 
 @login_required()
@@ -41,60 +31,58 @@ def admin_config(request, conn=None, **kwargs):
             if not is_admin:
                 logger.error(f"Unauthorized request for user {user_id}:{username}")
                 return JsonResponse({"error": "Unauthorized request"}, status=403)
-            with config_lock(_config_write_path()):
-                # Use BIOMERO's public loader so reads and writes follow the same
-                # layered or authoritative-file policy. Legacy [MODELS] remains a
-                # lower-priority alias for [WORKFLOWS].
-                if hasattr(SlurmClient, "load_config"):
-                    loaded_config = SlurmClient.load_config()
-                else:  # Backward compatibility with older BIOMERO releases.
-                    loaded_config = configparser.ConfigParser(allow_no_value=True)
-                    loaded_config.read([
-                        os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_1),
-                        os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_2),
-                        os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3),
-                    ])
+            # Use BIOMERO's public loader so reads and writes follow the same
+            # layered or authoritative-file policy. Legacy [MODELS] remains a
+            # lower-priority alias for [WORKFLOWS].
+            if hasattr(SlurmClient, "load_config"):
+                loaded_config = SlurmClient.load_config()
+            else:  # Backward compatibility with older BIOMERO releases.
+                loaded_config = configparser.ConfigParser(allow_no_value=True)
+                loaded_config.read([
+                    os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_1),
+                    os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_2),
+                    os.path.expanduser(SlurmClient._DEFAULT_CONFIG_PATH_3),
+                ])
 
-                config_dict = {}
-                for section in loaded_config.sections():
-                    if section.upper() not in ("MODELS", "WORKFLOWS"):
-                        config_dict[section] = dict(loaded_config.items(section))
+            config_dict = {}
+            for section in loaded_config.sections():
+                if section.upper() not in ("MODELS", "WORKFLOWS"):
+                    config_dict[section] = dict(loaded_config.items(section))
 
-                workflows = {}
-                for section in ("MODELS", "WORKFLOWS"):
-                    if loaded_config.has_section(section):
-                        workflows.update(dict(loaded_config.items(section)))
-                if workflows:
-                    config_dict["WORKFLOWS"] = workflows
+            workflows = {}
+            for section in ("MODELS", "WORKFLOWS"):
+                if loaded_config.has_section(section):
+                    workflows.update(dict(loaded_config.items(section)))
+            if workflows:
+                config_dict["WORKFLOWS"] = workflows
 
-                # Load the JSON configuration file (biomero-config.json)
-                json_config = {}
-                if os.path.exists(CONFIG_FILE_PATH):
-                    try:
-                        with open(CONFIG_FILE_PATH, "r") as f:
-                            json_config = json.load(f)
-                    except Exception as e:
-                        logger.error(f"Error reading JSON config: {str(e)}")
+            # Load the JSON configuration file (biomero-config.json)
+            json_config = {}
+            if os.path.exists(CONFIG_FILE_PATH):
+                try:
+                    with open(CONFIG_FILE_PATH, "r") as f:
+                        json_config = json.load(f)
+                except Exception as e:
+                    logger.error(f"Error reading JSON config: {str(e)}")
 
-                # Merge JSON config into config_dict
-                # Note: JSON config allows nested dicts, while INI is flat (section -> key/value)
-                # We assume top-level keys in JSON correspond to sections or specific config groups
-                for key, value in json_config.items():
-                    config_dict[key] = value
+            # Merge JSON config into config_dict
+            # Note: JSON config allows nested dicts, while INI is flat (section -> key/value)
+            # We assume top-level keys in JSON correspond to sections or specific config groups
+            for key, value in json_config.items():
+                config_dict[key] = value
 
-                authoritative = (
-                    SlurmClient.get_authoritative_config_path()
-                    if hasattr(SlurmClient, "get_authoritative_config_path")
-                    else None
-                )
-                return JsonResponse({
-                    "config": config_dict,
-                    "config_mode": "authoritative" if authoritative else "layered",
-                    "revision": revision([_config_write_path(), CONFIG_FILE_PATH]),
-                })
+            authoritative = (
+                SlurmClient.get_authoritative_config_path()
+                if hasattr(SlurmClient, "get_authoritative_config_path")
+                else None
+            )
+            return JsonResponse({
+                "config": config_dict,
+                "config_mode": "authoritative" if authoritative else "layered",
+            })
         except Exception as e:
             logger.error(f"Error retrieving BIOMERO config: {str(e)}")
-            return JsonResponse({"error": "Unable to read configuration. Open configuration recovery to download or restore it."}, status=500)
+            return JsonResponse({"error": "Unable to read configuration. Check the server logs."}, status=500)
 
     elif request.method == "POST":
         """
@@ -120,256 +108,262 @@ def admin_config(request, conn=None, **kwargs):
                 config_path = os.path.expanduser(
                     SlurmClient._DEFAULT_CONFIG_PATH_3)
 
-            with config_lock(config_path):
-                if ("revision" in data and data["revision"] != revision([config_path, CONFIG_FILE_PATH])):
-                    raise RevisionConflict("Configuration changed. Reload before saving your edits.")
-                # Create ConfigUpdater object
-                config = ConfigUpdater()
+            # Create ConfigUpdater object
+            config = ConfigUpdater()
 
-                # Read the existing configuration if the file exists
-                if os.path.exists(config_path):
-                    config.read(config_path)
+            # Read the existing configuration if the file exists
+            if os.path.exists(config_path):
+                config.read(config_path)
 
-                # Extract the 'config' section from the incoming data
-                config_data = data.get("config", {})
-                deleted = data.get("deleted", [])
-                if not isinstance(deleted, list):
-                    raise ValueError("Invalid deletion list")
-                for deletion in deleted:
-                    if (
-                        not isinstance(deletion, dict)
-                        or not isinstance(deletion.get("section"), str)
-                        or not deletion["section"]
-                        or not isinstance(deletion.get("option"), str)
-                        or not deletion["option"]
-                    ):
-                        raise ValueError("Invalid deletion entry")
+            # Extract the 'config' section from the incoming data
+            config_data = data.get("config", {})
+            deleted = data.get("deleted", [])
+            if not isinstance(deleted, list):
+                raise ValueError("Invalid deletion list")
+            for deletion in deleted:
+                if (
+                    not isinstance(deletion, dict)
+                    or not isinstance(deletion.get("section"), str)
+                    or not deletion["section"]
+                    or not isinstance(deletion.get("option"), str)
+                    or not deletion["option"]
+                ):
+                    raise ValueError("Invalid deletion entry")
 
-                def generate_model_comment(key):
-                    if key.endswith("_job"):
-                        c = "# The jobscript in the 'slurm_script_repo'"
-                    elif key.endswith("_repo"):
-                        c = "# The (e.g. github) repository with the descriptor.json / config.yaml file"
-                    elif key.endswith("_use_gpu"):
-                        c = "# Mark this workflow as GPU-enabled by default (uses global gpu_partition / gpu_gres / gpu_gpus)"
-                    else:
-                        c = "# Adding or overriding job value for this workflow"
-                    return c
-
-                # Separate settings for JSON config and INI config
-                json_config_updates = {}
-                ini_config_updates = {}
-
-                # Define sections that belong in the JSON configuration
-                JSON_SECTIONS = [
-                    "UPLOADER",
-                    "PREPROCESSING_CONFIG",
-                    "PREPROCESSING_EXTENSION_MAP",
-                    "FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE",
-                    "UPLOADER_NESTED_FILE_EXTENSIONS",
-                    "group_mappings",
-                ]
-
-                for section, settingsd in config_data.items():
-                    if section in JSON_SECTIONS:
-                        json_config_updates[section] = settingsd
-                    else:
-                        ini_config_updates[section] = settingsd
-
-                json_deletions = [
-                    item for item in deleted if item["section"] in JSON_SECTIONS
-                ]
-                ini_deletions = [
-                    item for item in deleted if item["section"] not in JSON_SECTIONS
-                ]
-
-                # Prepare both candidates in memory before touching either live file.
-                validate_ini_sections(ini_config_updates)
-                current_json_config = None
-                if json_config_updates or json_deletions:
-                    current_json_config = {}
-                    if os.path.exists(CONFIG_FILE_PATH):
-                        with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
-                            current_json_config = json.load(f)
-                    if not isinstance(current_json_config, dict):
-                        raise ConfigValidationError({"config": "The JSON configuration must be an object."})
-                    current_json_config.update(json_config_updates)
-                    for deletion in json_deletions:
-                        section_data = current_json_config.get(deletion["section"])
-                        if isinstance(section_data, dict):
-                            section_data.pop(deletion["option"], None)
-
-                # --- Save INI Config ---
-                # The workflow definitions section may be named [WORKFLOWS]
-                # (preferred) or [MODELS] (legacy). The web UI always sends it as
-                # "WORKFLOWS", but we preserve whichever name the existing ini file
-                # already uses so we never create a duplicate/conflicting section.
-                if "WORKFLOWS" in config:
-                    workflow_section_name = "WORKFLOWS"
-                elif "MODELS" in config:
-                    workflow_section_name = "MODELS"
+            def generate_model_comment(key):
+                if key.endswith("_job"):
+                    c = "# The jobscript in the 'slurm_script_repo'"
+                elif key.endswith("_repo"):
+                    c = "# The (e.g. github) repository with the descriptor.json / config.yaml file"
+                elif key.endswith("_use_gpu"):
+                    c = "# Mark this workflow as GPU-enabled by default (uses global gpu_partition / gpu_gres / gpu_gpus)"
                 else:
-                    workflow_section_name = "WORKFLOWS"
+                    c = "# Adding or overriding job value for this workflow"
+                return c
 
-                # Update the config with new values
-                for section, settingsd in ini_config_updates.items():
-                    if not isinstance(settingsd, dict):
-                        raise ValueError(
-                            f"Section '{section}' must contain key-value pairs."
-                        )
+            # Separate settings for JSON config and INI config
+            json_config_updates = {}
+            ini_config_updates = {}
 
-                    # Normalize the workflow section name to whatever the existing
-                    # ini uses (MODELS or WORKFLOWS); they share identical handling.
-                    if section in ("MODELS", "WORKFLOWS"):
-                        section = workflow_section_name
+            # Define sections that belong in the JSON configuration
+            JSON_SECTIONS = [
+                "UPLOADER",
+                "PREPROCESSING_CONFIG",
+                "PREPROCESSING_EXTENSION_MAP",
+                "FILE_OR_EXTENSION_PATTERNS_EXCLUSIVE",
+                "UPLOADER_NESTED_FILE_EXTENSIONS",
+                "group_mappings",
+            ]
 
-                    # If the section doesn't exist, add it
-                    if section not in config:
-                        config.add_section(section)
+            for section, settingsd in config_data.items():
+                if section in JSON_SECTIONS:
+                    json_config_updates[section] = settingsd
+                else:
+                    ini_config_updates[section] = settingsd
 
-                    if section in ("MODELS", "WORKFLOWS"):
-                        # Group keys by prefix (cellpose, stardist, etc.)
-                        model_keys = defaultdict(list)
-                        for key, value in settingsd.items():
-                            # Split the key on the known suffixes to derive the
-                            # model prefix.  Order matters: check longer/more-
-                            # specific suffixes before shorter ones so that
-                            # e.g. "wf_job_mem" → prefix "wf" (not "wf_job").
-                            model_prefix = key
-                            for suffix in ["use_gpu", "job_", "repo", "job"]:
-                                if f"_{suffix}" in key:
-                                    model_prefix = key.split(f"_{suffix}")[0]
-                                    break
-                            model_keys[model_prefix].append((key, value))
+            json_deletions = [
+                item for item in deleted if item["section"] in JSON_SECTIONS
+            ]
+            ini_deletions = [
+                item for item in deleted if item["section"] not in JSON_SECTIONS
+            ]
 
-                        # Sort the prefixes and insert the keys in the correct order
-                        for model_prefix in sorted(model_keys.keys()):
-                            # Add the model-specific keys
-                            for key, value in model_keys[model_prefix]:
-                                # If the key already exists, just update it
-                                if key in config[section]:
+            # Prepare both candidates in memory before touching either live file.
+            validate_ini_sections(ini_config_updates)
+            current_json_config = None
+            if json_config_updates or json_deletions:
+                current_json_config = {}
+                if os.path.exists(CONFIG_FILE_PATH):
+                    with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+                        current_json_config = json.load(f)
+                if not isinstance(current_json_config, dict):
+                    raise ConfigValidationError({"config": "The JSON configuration must be an object."})
+                current_json_config.update(json_config_updates)
+                for deletion in json_deletions:
+                    section_data = current_json_config.get(deletion["section"])
+                    if isinstance(section_data, dict):
+                        section_data.pop(deletion["option"], None)
+
+            # --- Save INI Config ---
+            # The workflow definitions section may be named [WORKFLOWS]
+            # (preferred) or [MODELS] (legacy). The web UI always sends it as
+            # "WORKFLOWS", but we preserve whichever name the existing ini file
+            # already uses so we never create a duplicate/conflicting section.
+            if "WORKFLOWS" in config:
+                workflow_section_name = "WORKFLOWS"
+            elif "MODELS" in config:
+                workflow_section_name = "MODELS"
+            else:
+                workflow_section_name = "WORKFLOWS"
+
+            # Update the config with new values
+            for section, settingsd in ini_config_updates.items():
+                if not isinstance(settingsd, dict):
+                    raise ValueError(
+                        f"Section '{section}' must contain key-value pairs."
+                    )
+
+                # Normalize the workflow section name to whatever the existing
+                # ini uses (MODELS or WORKFLOWS); they share identical handling.
+                if section in ("MODELS", "WORKFLOWS"):
+                    section = workflow_section_name
+
+                # If the section doesn't exist, add it
+                if section not in config:
+                    config.add_section(section)
+
+                if section in ("MODELS", "WORKFLOWS"):
+                    # Group keys by prefix (cellpose, stardist, etc.)
+                    model_keys = defaultdict(list)
+                    for key, value in settingsd.items():
+                        # Split the key on the known suffixes to derive the
+                        # model prefix.  Order matters: check longer/more-
+                        # specific suffixes before shorter ones so that
+                        # e.g. "wf_job_mem" → prefix "wf" (not "wf_job").
+                        model_prefix = key
+                        for suffix in ["use_gpu", "job_", "repo", "job"]:
+                            if f"_{suffix}" in key:
+                                model_prefix = key.split(f"_{suffix}")[0]
+                                break
+                        model_keys[model_prefix].append((key, value))
+
+                    # Sort the prefixes and insert the keys in the correct order
+                    for model_prefix in sorted(model_keys.keys()):
+                        # Add the model-specific keys
+                        for key, value in model_keys[model_prefix]:
+                            # If the key already exists, just update it
+                            if key in config[section]:
+                                config.set(section, key, value)
+                            else:
+                                if key == model_prefix:
+                                    comment = f"""
+    # -------------------------------------
+    # {model_prefix.capitalize()} (added via web UI)
+    # -------------------------------------
+    # The path to store the container on the slurm_images_path"""
                                     config.set(section, key, value)
+                                    (
+                                        config[section][
+                                            model_prefix
+                                        ].add_before.comment(comment)
+                                    )
                                 else:
-                                    if key == model_prefix:
-                                        comment = f"""
-        # -------------------------------------
-        # {model_prefix.capitalize()} (added via web UI)
-        # -------------------------------------
-        # The path to store the container on the slurm_images_path"""
-                                        config.set(section, key, value)
+                                    # For new keys, add the key and a comment before it
+                                    model_comment = generate_model_comment(key)
+
+                                    if "job_" in key:
                                         (
-                                            config[section][
-                                                model_prefix
-                                            ].add_before.comment(comment)
+                                            config[section][model_prefix + "_job"]
+                                            .add_after.comment(model_comment)
+                                            .option(key, value)
+                                        )
+                                    elif "_job" in key:
+                                        (
+                                            config[section][model_prefix + "_repo"]
+                                            .add_after.comment(model_comment)
+                                            .option(key, value)
                                         )
                                     else:
-                                        # For new keys, add the key and a comment before it
-                                        model_comment = generate_model_comment(key)
+                                        (
+                                            config[section][model_prefix]
+                                            .add_after.comment(model_comment)
+                                            .option(key, value)
+                                        )
 
-                                        if "job_" in key:
-                                            (
-                                                config[section][model_prefix + "_job"]
-                                                .add_after.comment(model_comment)
-                                                .option(key, value)
-                                            )
-                                        elif "_job" in key:
-                                            (
-                                                config[section][model_prefix + "_repo"]
-                                                .add_after.comment(model_comment)
-                                                .option(key, value)
-                                            )
-                                        else:
-                                            (
-                                                config[section][model_prefix]
-                                                .add_after.comment(model_comment)
-                                                .option(key, value)
-                                            )
+                    # Check for removing top-level keys and related keys
+                    for key in list(config[section].keys()):
+                        model_prefix = key
+                        for suffix in ["use_gpu", "job_", "repo", "job"]:
+                            if f"_{suffix}" in key:
+                                model_prefix = key.split(f"_{suffix}")[0]
+                                break
+                        if model_prefix not in model_keys:
+                            # Remove the unwanted key or subsection
+                            del config[section][key]
 
-                        # Check for removing top-level keys and related keys
+                    for key in list(config[section].keys()):
+                        if (
+                            key not in settingsd
+                        ):  # If key isn't in new settings, remove it
+                            del config[section][key]
+
+                elif section == "CONVERTERS":
+                    # add new or edits as normal
+                    for key, value in settingsd.items():
+                        config.set(section, key, value)
+                    # Check for removing top-level keys and related keys
+                    for key in list(config[section].keys()):
+                        if key not in settingsd.keys():
+                            del config[section][key]
+                else:
+                    # Update or add the keys in the section
+                    for key, value in settingsd.items():
+                        config.set(section, key, value)
+                    # Remove sbatch_* keys that were deleted via the UI.
+                    # The frontend omits removed entries from the payload, so any
+                    # sbatch_* key still in the ini but absent from settingsd is stale.
+                    if section == "SLURM":
                         for key in list(config[section].keys()):
-                            model_prefix = key
-                            for suffix in ["use_gpu", "job_", "repo", "job"]:
-                                if f"_{suffix}" in key:
-                                    model_prefix = key.split(f"_{suffix}")[0]
-                                    break
-                            if model_prefix not in model_keys:
-                                # Remove the unwanted key or subsection
+                            if key.startswith("sbatch_") and key not in settingsd:
                                 del config[section][key]
 
-                        for key in list(config[section].keys()):
-                            if (
-                                key not in settingsd
-                            ):  # If key isn't in new settings, remove it
-                                del config[section][key]
+            # Apply explicit deletions last so every INI option can be removed,
+            # independent of section-specific form behavior.
+            for deletion in ini_deletions:
+                section = deletion["section"]
+                if section in ("MODELS", "WORKFLOWS"):
+                    section = workflow_section_name
+                if section in config and deletion["option"] in config[section]:
+                    del config[section][deletion["option"]]
 
-                    elif section == "CONVERTERS":
-                        # add new or edits as normal
-                        for key, value in settingsd.items():
-                            config.set(section, key, value)
-                        # Check for removing top-level keys and related keys
-                        for key in list(config[section].keys()):
-                            if key not in settingsd.keys():
-                                del config[section][key]
-                    else:
-                        # Update or add the keys in the section
-                        for key, value in settingsd.items():
-                            config.set(section, key, value)
-                        # Remove sbatch_* keys that were deleted via the UI.
-                        # The frontend omits removed entries from the payload, so any
-                        # sbatch_* key still in the ini but absent from settingsd is stale.
-                        if section == "SLURM":
-                            for key in list(config[section].keys()):
-                                if key.startswith("sbatch_") and key not in settingsd:
-                                    del config[section][key]
+            # Prepare the update timestamp comment
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            change_comment = f"Config automatically updated by {username} ({user_id}) via the web UI on {timestamp}"
+            # Check if the changelog section exists, and create it if not
+            if "changelog" not in config:
+                config.add_section("changelog")
 
-                # Apply explicit deletions last so every INI option can be removed,
-                # independent of section-specific form behavior.
-                for deletion in ini_deletions:
-                    section = deletion["section"]
-                    if section in ("MODELS", "WORKFLOWS"):
-                        section = workflow_section_name
-                    if section in config and deletion["option"] in config[section]:
-                        del config[section][deletion["option"]]
+            # Add the change comment as the first block of the changelog section
+            changelog_section = config["changelog"]
+            if isinstance(changelog_section.first_block, Comment):
+                changelog_section.first_block.detach()
+            changelog_section.add_after.comment(change_comment)
 
-                # Prepare the update timestamp comment
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                change_comment = f"Config automatically updated by {username} ({user_id}) via the web UI on {timestamp}"
-                # Check if the changelog section exists, and create it if not
-                if "changelog" not in config:
-                    config.add_section("changelog")
+            # Validate serialization and workflow semantics before writing either file.
+            candidate = str(config)
+            parsed = configparser.ConfigParser(allow_no_value=True)
+            parsed.read_string(candidate)
+            validate_ini_sections({
+                section: dict(parsed.items(section, raw=True))
+                for section in parsed.sections() if section in ("MODELS", "WORKFLOWS")
+            })
+            # Serialize JSON before opening either file: invalid candidates must
+            # never partially apply a save. File I/O failures remain separate.
+            json_candidate = None
+            if current_json_config is not None:
+                json_candidate = json.dumps(current_json_config, indent=2, ensure_ascii=False)
 
-                # Add the change comment as the first block of the changelog section
-                changelog_section = config["changelog"]
-                if isinstance(changelog_section.first_block, Comment):
-                    changelog_section.first_block.detach()
-                changelog_section.add_after.comment(change_comment)
+            if json_candidate is not None:
+                config_dir = os.path.dirname(CONFIG_FILE_PATH)
+                if config_dir:
+                    os.makedirs(config_dir, exist_ok=True)
+                with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as stream:
+                    stream.write(json_candidate)
+                logger.info(f"JSON configuration saved to {CONFIG_FILE_PATH}")
+            with open(config_path, "w", encoding="utf-8") as stream:
+                stream.write(candidate)
+            logger.info(f"Configuration saved successfully to {config_path}")
 
-                # Validate serialization and workflow semantics before staging files.
-                candidate = str(config)
-                parsed = configparser.ConfigParser(allow_no_value=True)
-                parsed.read_string(candidate)
-                validate_ini_sections({
-                    section: dict(parsed.items(section, raw=True))
-                    for section in parsed.sections() if section in ("MODELS", "WORKFLOWS")
-                })
-                updates = {config_path: candidate.encode("utf-8")}
-                if current_json_config is not None:
-                    updates[CONFIG_FILE_PATH] = json.dumps(
-                        current_json_config, indent=2, ensure_ascii=False).encode("utf-8")
-                save_files(config_path, CONFIG_FILE_PATH, updates,
-                           {"id": user_id, "username": username})
+            return JsonResponse(
+                {"message": "Configuration saved successfully"}, status=200,
+            )
 
-                return JsonResponse(
-                    {"message": "Configuration saved successfully",
-                     "revision": revision([config_path, CONFIG_FILE_PATH])},
-                    status=200,
-                )
-
-        except RevisionConflict as e:
-            return JsonResponse({"error": str(e)}, status=409)
         except ConfigValidationError as e:
             return JsonResponse({"error": "Invalid configuration format: " + str(e),
                                  "fields": e.fields}, status=400)
+        except configparser.Error:
+            logger.exception("Invalid serialized INI configuration")
+            return JsonResponse({"error": "Invalid configuration format: correct the INI settings before saving."}, status=400)
         except json.JSONDecodeError:
             logger.error("Invalid JSON data in the request")
             return JsonResponse({"error": "Invalid JSON data"}, status=400)
@@ -385,82 +379,8 @@ def admin_config(request, conn=None, **kwargs):
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
             return JsonResponse(
-                {"error": "Failed to save configuration. Use configuration recovery to inspect or restore previous files; check the server logs."}, status=500
+                {"error": "Failed to save configuration. Check the server logs."}, status=500
             )
     else:
         logger.error("Unsupported HTTP method for 'config' endpoint")
         return HttpResponseBadRequest("Unsupported HTTP method. Use GET or POST.")
-
-
-@login_required()
-@require_http_methods(["GET", "POST"])
-def admin_config_history(request, conn=None, **kwargs):
-    """Recovery remains available even if current INI or descriptors are broken."""
-    if not conn.isAdmin():
-        return JsonResponse({"error": "Unauthorized request"}, status=403)
-    try:
-        from .config_store import read_bytes
-
-        config_path = _config_write_path()
-        paths = [config_path, CONFIG_FILE_PATH]
-        with config_lock(config_path):
-            directory = history_directory(config_path)
-            current_revision = revision(paths)
-            if request.method == "GET":
-                requested = request.GET.get("snapshot")
-                if requested == "current":
-                    response = JsonResponse({
-                        "ini": (read_bytes(config_path) or b"").decode("utf-8"),
-                        "json": (read_bytes(CONFIG_FILE_PATH) or b"").decode("utf-8"),
-                    })
-                    response["Content-Disposition"] = 'attachment; filename="biomero-config-current.json"'
-                elif requested:
-                    snapshot = _read_snapshot(directory, requested)
-                    response = JsonResponse(snapshot)
-                    response["Content-Disposition"] = 'attachment; filename="biomero-config-snapshot.json"'
-                else:
-                    snapshots = []
-                    for path in directory.glob("*.json"):
-                        snapshot = _read_snapshot(directory, path.stem)
-                        snapshots.append({key: snapshot[key] for key in ("id", "timestamp", "editor")})
-                    response = JsonResponse({
-                        "revision": current_revision,
-                        "snapshots": sorted(snapshots, key=lambda item: item["timestamp"], reverse=True),
-                    })
-            else:
-                data = json.loads(request.body)
-                if not isinstance(data, dict):
-                    raise ValueError("Invalid recovery request")
-                if data.get("revision") != current_revision:
-                    raise RevisionConflict("Configuration changed. Refresh recovery before restoring.")
-                snapshot = _read_snapshot(directory, data.get("snapshot"))
-                parsed = configparser.ConfigParser(allow_no_value=True)
-                parsed.read_string(snapshot["ini"])
-                validate_ini_sections({section: dict(parsed.items(section, raw=True))
-                                       for section in parsed.sections()})
-                if snapshot["json_exists"] and not isinstance(json.loads(snapshot["json"]), dict):
-                    raise ValueError("Invalid JSON snapshot")
-                user = conn.getUser()
-                save_files(config_path, CONFIG_FILE_PATH, {
-                    config_path: snapshot["ini"].encode("utf-8") if snapshot["ini_exists"] else None,
-                    CONFIG_FILE_PATH: snapshot["json"].encode("utf-8") if snapshot["json_exists"] else None,
-                }, {"id": user.getId(), "username": user.getName()})
-                response = JsonResponse({"message": "Configuration restored", "revision": revision(paths)})
-            response["Cache-Control"] = "no-store"
-            return response
-    except RevisionConflict as e:
-        return JsonResponse({"error": str(e)}, status=409)
-    except FileNotFoundError:
-        return JsonResponse({"error": "Snapshot not found"}, status=404)
-    except (ValueError, configparser.Error):
-        return JsonResponse({"error": "Invalid snapshot. Download it for manual repair; no configuration was changed."}, status=400)
-    except Exception:
-        logger.exception("Configuration recovery failed")
-        return JsonResponse({"error": "Configuration recovery failed. Check the server logs."}, status=500)
-
-
-def _read_snapshot(directory, snapshot_id):
-    if not isinstance(snapshot_id, str) or not re.fullmatch(r"[0-9a-f]{32}", snapshot_id):
-        raise ValueError("Invalid snapshot identifier")
-    with open(directory / (snapshot_id + ".json"), encoding="utf-8") as stream:
-        return json.load(stream)

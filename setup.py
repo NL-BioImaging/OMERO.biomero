@@ -55,7 +55,6 @@ setup(
         "biomero>=2.9.0b11,<3",
         "biomero-schema==0.3.0b1",
         "configupdater>=3.2,<4",
-        "filelock>=3.12,<4",
         "sqlalchemy>=2,<3",
         "biomero-importer[identity]>=1.5.0b8,<2",
         "convertleica-file-browser>=1.7.4,<2",

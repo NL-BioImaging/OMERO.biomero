@@ -88,7 +88,7 @@ const config = {
 
 function renderShallower(enabled, slurm = {}) {
   useAppContext.mockReturnValue({
-    state: { configRevision: "revision", config: { ...config, SLURM: { ...config.SLURM, ...slurm } },
+    state: { config: { ...config, SLURM: { ...config.SLURM, ...slurm } },
       workflows: [], ui: { shallow_zarr_enabled: enabled } },
     updateState: jest.fn(), loadBiomeroConfig: jest.fn(), saveConfigData: jest.fn(),
   });
@@ -126,7 +126,7 @@ test('saves opt-out without deleting hidden helper values', async () => {
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
     expect.objectContaining({ SLURM: expect.objectContaining({
       remote_shallow_zarr: 'false', remote_shallower_workers: '4',
-    }) }), expect.anything(), "revision"));
+    }) }), expect.anything()));
 });
 
 test('rejects non-positive workers only while remote shallowing is enabled', async () => {

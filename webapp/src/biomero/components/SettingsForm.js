@@ -21,7 +21,6 @@ import ModelCard from "./ModelCard.js";
 import ConverterCard from "./ConverterCard.js";
 import { checkModelVersions, clearGitHubCache, slugify, fetchWorkflowMetadata } from "../../apiService";
 import { getDeletedConfigOptions, validateWorkflowRows } from "../configAdmin";
-import ConfigRecovery from "./ConfigRecovery";
 
 const DOCS_URL = "https://nl-bioimaging.github.io/biomero/slurm-configuration.html";
 
@@ -97,7 +96,6 @@ const SettingsForm = () => {
   const [showResetTooltip, setShowResetTooltip] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false); // Track if form has been initialized
-  const [formRevision, setFormRevision] = useState(null);
   const [saveError, setSaveError] = useState("");
 
   const [converters, setConverters] = useState([]);
@@ -227,7 +225,6 @@ const SettingsForm = () => {
 
   const initializeFormState = () => {
     if (state.config) {
-      setFormRevision(state.configRevision);
       const mappedModels = Object.entries(state.config.WORKFLOWS || {})
         .filter(([key]) => key.endsWith("_repo")) // Filter for relevant keys
         .map(([key, value]) => {
@@ -721,8 +718,7 @@ const SettingsForm = () => {
       const deleted = getDeletedConfigOptions(
         state.config || {}, configPayload
       );
-      const response = await saveConfigData(configPayload, deleted, formRevision);
-      if (response?.revision) setFormRevision(response.revision);
+      await saveConfigData(configPayload, deleted);
       
       // Update the baseline for "hasChanges" detection - form state is now the "initial" state
       const currentFormState = {
@@ -841,12 +837,11 @@ const SettingsForm = () => {
     </FormGroup>
   );
 
-  if (!settingsForm) return <div><ConfigRecovery /><div>Configuration is loading or unavailable. Recovery is available above.</div></div>;
+  if (!settingsForm) return <div>Loading...</div>;
 
   return (
     <Card>
       <H3>Settings</H3>
-        <ConfigRecovery />
         {saveError && <div role="alert" className="text-red-600 mb-3">{saveError}</div>}
       <div className="bp5-form-group">
         <div className="bp5-form-content">

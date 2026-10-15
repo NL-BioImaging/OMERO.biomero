@@ -5,6 +5,11 @@ the embedded OMERO.Analysis host. It retains workflow history, shallow-Zarr
 policy controls, and the single-store dependency requirements from `main`.
 
 Use Analysis 1.0.1, optional WorkflowSkills 0.4.0 and DataQueryWorker 0.2.2.
+Analysis 1.0.1 is published on
+[PyPI](https://pypi.org/project/omero-analysis/1.0.1/) and
+[GitHub Releases](https://github.com/NL-BioImaging/OMERO.Analysis/releases/tag/v1.0.1)
+with identical application wheels, including the rebuilt frontend and complete
+browser runtime. The notebook SDK retains its independent version.
 The web environment must also satisfy this package's BIOMERO >=2.9.0b11 and importer >=1.5.0b8
 requirements; the former 1.6.1 host backport is no longer the source baseline.
 

@@ -358,7 +358,7 @@ const ModelCard = ({
           errors?.job ? (
             <span className="text-red-500"><Icon icon="error" size={10} className="mr-1" />{errors.job} — rename the model above to fix this automatically.</span>
           ) : !hasScriptRepo ? (
-            <span className="text-gray-400">Auto-generated from the model name — rename the model to update this. To use custom scripts instead, add a <em>Slurm Script Repository</em> in Slurm Settings.</span>
+            <span className="bp5-text-muted">Auto-generated from the model name — rename the model to update this. To use custom scripts instead, add a <em>Slurm Script Repository</em> in Slurm Settings.</span>
           ) : undefined
         }
       >
@@ -390,7 +390,7 @@ const ModelCard = ({
               <Icon icon="grid-view" size={12} intent="primary" />
               Plate Workflow (ZARR Only)
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs bp5-text-muted">
               Enable for workflows that process entire plates and require ZARR format
             </span>
           </div>
@@ -404,7 +404,7 @@ const ModelCard = ({
           />
         </div>
         {descriptorMeta !== null && descriptorMeta !== undefined && descriptorMeta.requiresPlate !== null && (item.isPlateWorkflow || false) !== descriptorMeta.requiresPlate && (
-          <div className="text-gray-400 text-xs mt-1 flex items-center gap-1">
+          <div className="bp5-text-muted text-xs mt-1 flex items-center gap-1">
             <Icon icon="help" size={10} />
             {descriptorMeta.requiresPlate
               ? 'Descriptor indicates plate input — enable Plate Workflow?'
@@ -419,7 +419,7 @@ const ModelCard = ({
               <Icon icon="applications" size={12} intent="primary" />
               Also Allow Image Input
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs bp5-text-muted">
               Show this same workflow in both tabs and use the image dialog for image runs
             </span>
           </div>
@@ -437,10 +437,10 @@ const ModelCard = ({
         <div className="flex items-center justify-between mt-3">
           <div className="flex flex-col">
             <span className="text-sm font-medium flex items-center gap-1">
-              <Icon icon="cube" size={12} className="text-gray-500" />
+              <Icon icon="cube" size={12} className="bp5-text-muted" />
               ZARR Format Required
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs bp5-text-muted">
               {supportsPlates
                 ? "Automatically enabled when plate workflow is selected"
                 : "Enable for workflows that require ZARR input format (skips TIFF conversion)"
@@ -457,7 +457,7 @@ const ModelCard = ({
           />
         </div>
         {descriptorMeta !== null && descriptorMeta !== undefined && descriptorMeta.requiresZarr !== null && (item.isZarrWorkflow || false) !== descriptorMeta.requiresZarr && (
-          <div className="text-gray-400 text-xs mt-1 flex items-center gap-1">
+          <div className="bp5-text-muted text-xs mt-1 flex items-center gap-1">
             <Icon icon="help" size={10} />
             {descriptorMeta.requiresZarr
               ? 'Descriptor indicates Zarr input — enable Zarr Workflow?'
@@ -471,7 +471,7 @@ const ModelCard = ({
               <Icon icon="lightning" size={12} className="text-yellow-500" />
               GPU Workflow
             </span>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs bp5-text-muted">
               Mark this workflow as GPU-enabled by default. BIOMERO will apply the global{" "}
               <code>gpu_partition</code> / <code>gpu_gres</code> / <code>gpu_gpus</code> from
               Slurm Settings — or override them per-workflow using the sbatch parameters below
@@ -690,12 +690,12 @@ const ModelCard = ({
 
         if (activeGlobals.length === 0) return null;
         return (
-          <div className="mt-2 border-t border-gray-100 pt-2 space-y-0.5">
-            <div className="text-xs text-gray-400 font-medium mb-1">Also active for this workflow:</div>
+          <div className="mt-2 border-t border-bp-border pt-2 space-y-0.5">
+            <div className="text-xs bp5-text-muted font-medium mb-1">Also active for this workflow:</div>
             {activeGlobals.map(({ flag, value, source }, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-xs text-gray-400">
-                <code className="text-gray-400">{flag}={value}</code>
-                <span className="text-gray-300">({source})</span>
+              <div key={i} className="flex items-center gap-1.5 text-xs bp5-text-muted">
+                <code className="bp5-text-muted">{flag}={value}</code>
+                <span className="bp5-text-muted">({source})</span>
               </div>
             ))}
           </div>

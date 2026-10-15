@@ -6,11 +6,13 @@ import {
   H3,
   InputGroup,
   Spinner,
+  Tag,
 } from "@blueprintjs/core";
 
 import { useAppContext } from "../AppContext";
 import OmeroDataBrowser from "../shared/components/OmeroDataBrowser";
 import AnalysisLaunchOptions from "./AnalysisLaunchOptions";
+import useUnsavedChanges from "../shared/useUnsavedChanges";
 import {
   buildAnalysisUrl,
   isAnalysisMessage,
@@ -19,7 +21,7 @@ import {
   sourceFromTreeItems,
 } from "../analysisIntegration";
 
-const DataAnalysisApp = ({ theme = "light" }) => {
+const DataAnalysisApp = ({ theme = "light", onDirtyChange }) => {
   const { state, updateState, loadOmeroTreeData } = useAppContext();
   const [source, setSource] = useState(() =>
     parseAnalysisLaunch(window.location.search)
@@ -81,30 +83,23 @@ const DataAnalysisApp = ({ theme = "light" }) => {
     setQuery("");
   };
 
-  const changeSource = () => {
-    if (
-      dirty &&
-      !window.confirm("Analysis has unsaved editor changes. Change source anyway?")
-    ) {
-      return;
-    }
+  const { request: requestLeave, dialog: leaveDialog } = useUnsavedChanges(dirty);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  const changeSource = () => requestLeave(() => {
     setSource(null);
     setDirty(false);
     setReady(false);
     updateState({ omeroFileTreeSelection: [] });
-  };
+  });
 
-  const reloadAnalysis = () => {
-    if (
-      dirty &&
-      !window.confirm("Analysis has unsaved editor changes. Reload anyway?")
-    ) {
-      return;
-    }
+  const reloadAnalysis = () => requestLeave(() => {
+    setDirty(false);
     setReady(false);
     setSessionExpired(false);
     setIframeRevision((value) => value + 1);
-  };
+  });
 
   const embeddedUrl = buildAnalysisUrl(urls.data_analysis, source, true);
   const standaloneUrl = buildAnalysisUrl(urls.data_analysis, source, false);
@@ -151,7 +146,7 @@ const DataAnalysisApp = ({ theme = "light" }) => {
     return (
       <div className="p-6 max-w-5xl mx-auto overflow-y-auto h-[calc(100vh-85px)]">
         <H3>Choose data for Analysis</H3>
-        <p className="mb-4 text-gray-600">
+        <p className="mb-4 bp5-text-muted">
           Select a Dataset, Screen, Plate, or Image. Hold Ctrl or Command to
           select multiple Images or Plates of the same type. Expand the
           +AnalysisWorkspaces Project and select a managed Dataset to resume it.
@@ -194,12 +189,12 @@ const DataAnalysisApp = ({ theme = "light" }) => {
   }
 
   return (
-    <div className="h-[calc(100vh-85px)] flex flex-col bg-white">
-      <div className="h-[48px] px-3 border-b flex items-center gap-2 bg-gray-50">
+    <div className="h-[calc(100vh-85px)] flex flex-col bg-bp-surface">
+      <div className="h-[48px] px-3 border-b flex items-center gap-2 bg-bp-surface">
         <strong className="truncate flex-1">{source.title}</strong>
-        <span className="text-gray-500">{source.type} {source.id}</span>
+        <span className="bp5-text-muted">{source.type} {source.id}</span>
         {!ready && <Spinner size={16} />}
-        {dirty && <span className="text-amber-700">Unsaved changes</span>}
+        {dirty && <Tag intent="warning" minimal>Unsaved changes</Tag>}
         <Button
           minimal
           icon="exchange"
@@ -219,6 +214,7 @@ const DataAnalysisApp = ({ theme = "light" }) => {
           Sign in again, then reload Data Analysis.
         </Callout>
       )}
+      {leaveDialog}
       <iframe
         key={iframeRevision}
         ref={iframeRef}

@@ -233,7 +233,7 @@ const BiomeroApp = () => {
     document.getElementById("root").getAttribute("data-is-admin") === "true";
   const { iframeUrl, error: dashboardError, retry: retryDashboard } = useDashboard(
     `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=true&refresh=20`,
-    window.WEBCLIENT?.URLS?.DASHBOARD_WORKFLOWS, activeTab === "Status",
+    state.urls.dashboard_workflows, activeTab === "Status",
   );
 
   return (

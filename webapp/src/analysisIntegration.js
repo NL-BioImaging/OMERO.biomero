@@ -1,3 +1,5 @@
+import { ANALYSIS_API_PATHS } from "./constants";
+
 export const ANALYSIS_MESSAGE_SCHEMA =
   "nl.bioimaging.omero-analysis.host.v1";
 
@@ -56,6 +58,7 @@ const sourceFromParams = (params, prefix) => {
     id,
     selectionIds,
     dataAnnotationIds,
+    stagedAttachmentIds: [...new Set(params.getAll(`${prefix}staged_attachment`))].filter(value => /^[\w-]{1,128}$/.test(value)),
     dataBindings,
     workspaceId: /^[\w-]{1,128}$/.test(params.get(`${prefix}workspace_id`) || "") ? params.get(`${prefix}workspace_id`) : null,
     newWorkspace: /^[\w-]{1,128}$/.test(params.get(`${prefix}new_workspace`) || "") ? params.get(`${prefix}new_workspace`) : null,
@@ -135,6 +138,9 @@ export const buildAnalysisUrl = (baseUrl, source, embedded = true) => {
   );
   if (source.workspaceId) url.searchParams.set("workspace_id", source.workspaceId);
   if (source.newWorkspace) url.searchParams.set("new_workspace", source.newWorkspace);
+  (source.stagedAttachmentIds || []).forEach(id => {
+    if (/^[\w-]{1,128}$/.test(id)) url.searchParams.append("staged_attachment", id);
+  });
   if (source.workspaceAnnotationId && !source.workspaceId && !source.newWorkspace) {
     url.searchParams.set(
       "workspace_annotation",
@@ -169,16 +175,16 @@ export const workspaceDatasetResolutionUrl = (baseUrl, datasetId) => {
   if (!baseUrl || !id) return "";
   const base = new URL(baseUrl, window.location.origin);
   if (base.origin !== window.location.origin) return "";
-  return new URL(`api/workspace-dataset/${id}/`, base).toString();
+  return new URL(`${ANALYSIS_API_PATHS.workspaceDataset}${id}/`, base).toString();
 };
 
-const sameOriginAnalysisBase = (baseUrl) => {
+export const sameOriginAnalysisBase = (baseUrl) => {
   if (!baseUrl) return null;
   const base = new URL(baseUrl, window.location.origin);
   return base.origin === window.location.origin ? base : null;
 };
 
-const analysisObjectUrl = (baseUrl, resource, source) => {
+export const analysisObjectUrl = (baseUrl, resource, source) => {
   const base = sameOriginAnalysisBase(baseUrl);
   const type = normalizedType(source?.type);
   const id = positiveInteger(source?.id);
@@ -187,91 +193,13 @@ const analysisObjectUrl = (baseUrl, resource, source) => {
 };
 
 export const launchContextUrl = (baseUrl, source) => {
-  const value = analysisObjectUrl(baseUrl, "launch-context", source);
+  const value = analysisObjectUrl(baseUrl, ANALYSIS_API_PATHS.launchContext, source);
   if (!value) return "";
   const url = new URL(value);
   (source.selectionIds || []).forEach((id) =>
     url.searchParams.append("selection_id", String(id))
   );
   return url.toString();
-};
-
-export const fetchAnalysisLaunchContext = async (baseUrl, source, options = {}) => {
-  const url = launchContextUrl(baseUrl, source);
-  if (!url) throw new Error("The selected Analysis source is invalid.");
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-    signal: options.signal,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "The Analysis launch options could not be loaded.");
-  }
-  return payload;
-};
-
-const csrfToken = () => {
-  const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : "";
-};
-
-export const uploadAnalysisAttachment = async (baseUrl, source, file) => {
-  const base = sameOriginAnalysisBase(baseUrl);
-  const uploadUrl = analysisObjectUrl(baseUrl, "attachments", source);
-  if (!base || !uploadUrl || !file) throw new Error("The Analysis upload is invalid.");
-  const tokenResponse = await fetch(new URL("api/context-token/", base), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-CSRFToken": csrfToken(),
-    },
-    body: JSON.stringify({ object_type: source.type, object_id: source.id }),
-  });
-  const tokenPayload = await tokenResponse.json().catch(() => ({}));
-  if (!tokenResponse.ok) {
-    throw new Error(tokenPayload?.error?.message || "The Analysis upload could not be authorized.");
-  }
-  const form = new FormData();
-  form.append("file", file, file.name);
-  const response = await fetch(`${uploadUrl}upload/`, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "X-CSRFToken": csrfToken(),
-      "X-OMERO-Analysis-Context": tokenPayload.context_token,
-    },
-    body: form,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "The attachment upload failed.");
-  }
-  return payload.attachment;
-};
-
-export const fetchWorkspaceDatasetResolution = async (
-  baseUrl,
-  datasetId,
-  options = {}
-) => {
-  const url = workspaceDatasetResolutionUrl(baseUrl, datasetId);
-  if (!url) throw new Error("The Analysis Workspace Dataset is invalid.");
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-    signal: options.signal,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      payload?.error?.message ||
-        "The Analysis Workspace metadata could not be resolved."
-    );
-  }
-  return payload;
 };
 
 export const sourceFromWorkspaceDataset = (payload) => {

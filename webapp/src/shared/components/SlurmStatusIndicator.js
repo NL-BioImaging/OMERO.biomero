@@ -104,7 +104,7 @@ const SlurmStatusIndicator = ({ onTabChange, onWorkflowError }) => {
   };
 
   return (
-    <div className="flex items-center space-x-2 ml-6 px-3 py-1 border rounded-md bg-gray-50">
+    <div className="flex items-center space-x-2 ml-6 px-3 py-1 border rounded-md bg-bp-surface">
       <Tooltip content="Refresh SLURM status" position="bottom">
         <Button
           icon="refresh"

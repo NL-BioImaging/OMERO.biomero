@@ -188,7 +188,7 @@ const InputOptions = ({ itemLabel = "images" }) => {
                 )}
                 
                 {totalImages > 10 && !allowDangerousJobs && (
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm bp5-text-muted">
                     Admin has limited batch jobs to safe range (2-10)
                   </span>
                 )}

@@ -5,6 +5,7 @@ import { ImageGridCard, ImageListRow } from "./WorkflowInput";
 jest.mock("@blueprintjs/core", () => {
   const Container = ({ children }) => <div>{children}</div>;
   return {
+    Colors: jest.requireActual("@blueprintjs/core").Colors,
     Card: Container,
     Switch: ({ children, checked, onChange, disabled }) => (
       <label>

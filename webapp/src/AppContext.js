@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState } from "react";
-import { createRoot } from "react-dom/client";
 import {
   fetchomeroFileTreeData,
   fetchFolderData,
@@ -270,24 +269,6 @@ export const AppProvider = ({ children }) => {
     return state.lastSlurmInitTime && 
            (!state.lastSlurmCheckTime || state.lastSlurmInitTime > state.lastSlurmCheckTime);
   };
-
-  // Initialize toaster asynchronously
-  React.useEffect(() => {
-    async function initializeToaster() {
-      const toaster = await OverlayToaster.createAsync(
-        {
-          position: Position.TOP,
-          className: "text-base",
-        },
-        {
-          domRenderer: (toaster, containerElement) =>
-            createRoot(containerElement).render(toaster),
-        }
-      );
-      setToaster(toaster);
-    }
-    initializeToaster();
-  }, []);
 
   const loadThumbnails = async (imageIds) => {
     setError(null);
@@ -925,6 +906,7 @@ export const AppProvider = ({ children }) => {
         createNewContainer,
       }}
     >
+      <OverlayToaster ref={setToaster} position={Position.TOP} className="text-base" />
       {children}
     </AppContext.Provider>
   );

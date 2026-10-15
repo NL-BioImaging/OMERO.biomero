@@ -1,5 +1,7 @@
 import ReactDOM from "react-dom/client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import BlueprintTheme, { readTheme } from "./shared/BlueprintTheme";
+import useUnsavedChanges from "./shared/useUnsavedChanges";
 import {
   BrowserRouter,
   Routes,
@@ -22,10 +24,8 @@ import {
   NavbarDivider,
   Button,
   Alignment,
-  Classes,
 } from "@blueprintjs/core";
 
-const THEME_KEY = "biomero.ui.theme";
 
 const BiomeroIcon = () => (
   <div className="mr-2 w-[20px]">
@@ -70,27 +70,18 @@ c-64 60 -112 93 -271 188 -375 222 -525 400 -604 719 -18 72 -22 117 -22 257
   </div>
 );
 
-const AppRouter = () => {
+export const AppRouter = () => {
   const [searchParams] = useSearchParams();
   const WEBCLIENT = window.WEBCLIENT;
   const { IMPORTER_ENABLED, ANALYZER_ENABLED, DATA_ANALYSIS_ENABLED } = WEBCLIENT.UI;
   const navigate = useNavigate();
-  const [theme, setTheme] = useState(() => {
-    try {
-      return window.localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
-    } catch (_error) {
-      return "light";
-    }
+  const [theme, setTheme] = useState(readTheme);
+  const [analysisDirty, setAnalysisDirty] = useState(false);
+  const { request: requestNavigation, dialog: navigationDialog } = useUnsavedChanges(analysisDirty);
+  const navigateTo = (tab) => requestNavigation(() => {
+    setAnalysisDirty(false);
+    navigate(`?tab=${tab}`);
   });
-  useEffect(() => {
-    document.body.classList.toggle(Classes.DARK, theme === "dark");
-    try {
-      window.localStorage.setItem(THEME_KEY, theme);
-    } catch (_error) {
-      // Theme persistence is optional when browser storage is unavailable.
-    }
-    return () => document.body.classList.remove(Classes.DARK);
-  }, [theme]);
   const appName = resolveAppName(searchParams.get("tab"), {
     importer_enabled: IMPORTER_ENABLED,
     analyzer_enabled: ANALYZER_ENABLED,
@@ -98,11 +89,8 @@ const AppRouter = () => {
   });
 
   return (
+    <BlueprintTheme theme={theme}>
     <AppProvider>
-      <div
-        className={`biomero-root w-full h-full relative top-0 ${theme === "dark" ? Classes.DARK : ""}`}
-        data-biomero-theme={theme}
-      >
         <Navbar className="z-[1] top-[35px]" fixedToTop>
           <NavbarGroup>
             {/* <Icon icon="style" className="mr-[7px]" /> */}
@@ -118,7 +106,7 @@ const AppRouter = () => {
                 }`}
                 icon="cloud-upload"
                 text="Import"
-                onClick={() => navigate("?tab=import")}
+                onClick={() => appName !== "import" && navigateTo("import")}
                 outlined={appName === "import"}
               />
             )}
@@ -131,7 +119,7 @@ const AppRouter = () => {
                 }`}
                 icon="data-sync"
                 text="Analyze"
-                onClick={() => navigate("?tab=biomero")}
+                onClick={() => appName !== "biomero" && navigateTo("biomero")}
                 outlined={appName === "biomero"}
               />
             )}
@@ -144,7 +132,7 @@ const AppRouter = () => {
                 }`}
                 icon="applications"
                 text="Data Analysis"
-                onClick={() => navigate("?tab=data-analysis")}
+                onClick={() => appName !== "data-analysis" && navigateTo("data-analysis")}
                 outlined={appName === "data-analysis"}
               />
             )}
@@ -162,16 +150,18 @@ const AppRouter = () => {
         <div className="pt-[50px]">
           {appName === "import" && <ImporterApp />}
           {appName === "biomero" && <BiomeroApp />}
-          {appName === "data-analysis" && <DataAnalysisApp theme={theme} />}
+          {appName === "data-analysis" && <DataAnalysisApp theme={theme} onDirtyChange={setAnalysisDirty} />}
           {!appName && <div className="p-6">No BIOMERO applications are enabled.</div>}
         </div>
-      </div>
+      {navigationDialog}
     </AppProvider>
+    </BlueprintTheme>
   );
 };
 
 window.onload = function () {
   const rootElement = document.getElementById("root");
+  if (!rootElement) return;
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <BrowserRouter>

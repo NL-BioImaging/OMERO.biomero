@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { refreshDashboard } from "../apiService";
 
-// Renew before Metabase's 30-minute token expires; never reload the OMERO page.
 export const DASHBOARD_REFRESH_MS = 20 * 60 * 1000;
 
 export default function useDashboard(initialUrl, endpoint, active) {
@@ -10,39 +10,35 @@ export default function useDashboard(initialUrl, endpoint, active) {
   useEffect(() => {
     if (!active || !endpoint) return undefined;
     const controller = new AbortController();
+    let timer;
     let refreshing = false;
-    let lastRefresh = 0;
+    const visible = () => document.visibilityState !== "hidden";
     const refresh = async () => {
-      if (refreshing) return;
+      if (refreshing || !visible() || controller.signal.aborted) return;
       refreshing = true;
+      clearTimeout(timer);
       try {
-        const response = await fetch(endpoint, {
-          credentials: "same-origin", cache: "no-store", redirect: "error",
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error("Monitor unavailable");
-        const data = await response.json();
-        if (typeof data.url !== "string" || !data.url) throw new Error("Invalid monitor response");
+        const data = await refreshDashboard(endpoint, controller.signal);
         if (!controller.signal.aborted) {
           setIframeUrl(data.url + (initialUrl.includes("#") ? "#" + initialUrl.split("#")[1] : ""));
           setError("");
-          lastRefresh = Date.now();
         }
       } catch (_) {
         if (!controller.signal.aborted) setError("Could not refresh the monitor. Check your connection and OMERO login, then retry.");
       } finally {
         refreshing = false;
+        if (!controller.signal.aborted && visible()) timer = setTimeout(refresh, DASHBOARD_REFRESH_MS);
       }
     };
     const onVisibility = () => {
-      if (document.visibilityState === "visible" && Date.now() - lastRefresh >= DASHBOARD_REFRESH_MS) refresh();
+      clearTimeout(timer);
+      if (visible()) void refresh();
     };
-    refresh();
-    const timer = setInterval(refresh, DASHBOARD_REFRESH_MS);
+    void refresh();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       controller.abort();
-      clearInterval(timer);
+      clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [active, endpoint, initialUrl, attempt]);

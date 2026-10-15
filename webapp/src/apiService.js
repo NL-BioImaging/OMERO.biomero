@@ -1,6 +1,35 @@
 import axios from "axios";
 import { getDjangoConstants } from "./constants";
 
+const requestHeaders = (method, headers = {}) => {
+  const result = { ...headers };
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) && window.csrftoken) {
+    result["X-CSRFToken"] = window.csrftoken;
+  }
+  return result;
+};
+
+// Fetch is deliberate here: browser XHR cannot enforce redirect: "error".
+export const requestJson = async (endpoint, options = {}, message = "The request failed.") => {
+  const url = new URL(endpoint, window.location.origin);
+  if (url.origin !== window.location.origin) throw new Error("Only same-origin API requests are allowed.");
+  const response = await fetch(url.toString(), {
+    ...options,
+    credentials: "same-origin",
+    headers: requestHeaders(options.method || "GET", { Accept: "application/json", ...options.headers }),
+  });
+  let payload;
+  try { payload = await response.json(); } catch (_) { throw new Error(message); }
+  if (!response.ok) throw new Error(payload?.error?.message || message);
+  return payload;
+};
+
+export const refreshDashboard = async (endpoint, signal) => {
+  const data = await requestJson(endpoint, { signal, cache: "no-store", redirect: "error" }, "Monitor unavailable");
+  if (typeof data.url !== "string" || !data.url) throw new Error("Invalid monitor response");
+  return data;
+};
+
 // General API request function
 export const apiRequest = async (
   endpoint,
@@ -10,21 +39,14 @@ export const apiRequest = async (
 ) => {
   try {
     // Include CSRF token for methods that modify data
-    const csrfToken = window.csrftoken;
-    const headers = options.headers || {};
-    if (
-      ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) &&
-      csrfToken
-    ) {
-      headers["X-CSRFToken"] = csrfToken;
-    }
+    const headers = requestHeaders(method, options.headers);
 
     const response = await axios({
       url: `${window.location.origin}${endpoint}`,
       method,
       data,
-      headers,
       ...options,
+      headers,
     });
     return response.data;
   } catch (error) {

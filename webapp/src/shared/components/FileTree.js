@@ -70,10 +70,10 @@ const FileTree = ({
     const itemLabel = isOmeroItem ? (
       item.tooltip ? (
         <Tooltip content={item.tooltip} placement="right" hoverOpenDelay={350}>
-          <span className={`text-sm relative top-[2px] ${(enableStatusNodes && item.isStatus) ? "text-gray-500 italic" : ""}`}>{item.data}</span>
+          <span className={`text-sm relative top-[2px] ${(enableStatusNodes && item.isStatus) ? "bp5-text-muted italic" : ""}`}>{item.data}</span>
         </Tooltip>
       ) : (
-        <span className={`text-sm relative top-[2px] ${(enableStatusNodes && item.isStatus) ? "text-gray-500 italic" : ""}`}>{item.data}</span>
+        <span className={`text-sm relative top-[2px] ${(enableStatusNodes && item.isStatus) ? "bp5-text-muted italic" : ""}`}>{item.data}</span>
       )
     ) : (
       <div className="relative">

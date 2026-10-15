@@ -1,3 +1,10 @@
+import { Colors } from "@blueprintjs/core";
+
+export const ANALYSIS_API_PATHS = {
+  contextToken: "api/context-token/", workspaceDataset: "api/workspace-dataset/",
+  attachments: "attachments", launchContext: "launch-context",
+};
+
 export const getDjangoConstants = () => {
   const WEBCLIENT = window.WEBCLIENT;
   const user = {
@@ -56,6 +63,8 @@ export const getDjangoConstants = () => {
     api_attachments: "/omero_biomero/api/analyzer/attachments/",
     api_object_annotations: "/omero_biomero/api/analyzer/object-annotations/",
     data_analysis: WEBCLIENT.URLS.DATA_ANALYSIS,
+    dashboard_workflows: WEBCLIENT.URLS.DASHBOARD_WORKFLOWS,
+    dashboard_imports: WEBCLIENT.URLS.DASHBOARD_IMPORTS,
   };
 
   const ui = {
@@ -76,26 +85,26 @@ export const iconMeta = {
   dataset: {
     icon: "folder-close",
     tooltip: "Dataset",
-    color: "#99b882",
+    color: Colors.GREEN3,
   },
   project: {
     icon: "folder-close",
     tooltip: "Project",
-    color: "#76899e",
+    color: Colors.BLUE3,
   },
   screen: {
     icon: "folder-close",
     tooltip: "Screen",
-    color: "#393939",
+    color: "currentColor",
   },
   image: {
     icon: "image",
     tooltip: "Image",
-    color: "#393939",
+    color: "currentColor",
   },
   attachment: {
     icon: "paperclip",
     tooltip: "Attachment",
-    color: "#777777",
+    color: "currentColor",
   },
 };

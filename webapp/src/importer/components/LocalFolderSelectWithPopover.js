@@ -90,7 +90,7 @@ const LocalFolderSelectWithPopover = ({
             />
           </div>
           <div className="p-2 border-t flex items-center justify-between gap-2">
-            <span className="text-xs text-gray-500 truncate">
+            <span className="text-xs bp5-text-muted truncate">
               {pendingName ? `Selected: ${pendingName}` : "Click a folder to select it"}
             </span>
             <div className="flex gap-2 shrink-0">

@@ -11,6 +11,14 @@ import {
   workspaceDatasetResolutionUrl,
 } from "./analysisIntegration";
 
+test("staged upload IDs survive host URLs and reach the selected workspace", () => {
+  const source = parseAnalysisLaunch("?analysis_type=Image&analysis_id=51&analysis_workspace_id=review&analysis_staged_attachment=upload-1&analysis_staged_attachment=upload-1&analysis_staged_attachment=../invalid");
+  expect(source.stagedAttachmentIds).toEqual(["upload-1"]);
+  const url = new URL(buildAnalysisUrl("/omero_analysis/", source));
+  expect(url.searchParams.getAll("staged_attachment")).toEqual(["upload-1"]);
+  expect(url.searchParams.get("workspace_id")).toBe("review");
+});
+
 test("workspace identity and new-workspace launches survive the BIOMERO frame", () => {
   const source = parseAnalysisLaunch("?analysis_type=Screen&analysis_id=152&analysis_workspace_id=workspace-2");
   expect(source.workspaceId).toBe("workspace-2");

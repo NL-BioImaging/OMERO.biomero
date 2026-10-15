@@ -204,7 +204,7 @@ const DatasetSelectWithPopover = ({
                     onSelectCallback={(folder) => handleInputChange(folder)}
                   />
                 </div>
-                <div className="p-4 border-t bg-white">
+                <div className="p-4 border-t bg-bp-surface">
                   <div className="flex justify-end gap-2">
                     <Tooltip content="Refresh file tree">
                       <Button

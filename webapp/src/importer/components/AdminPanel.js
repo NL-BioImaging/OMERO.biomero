@@ -170,13 +170,13 @@ const AdminPanel = () => {
           </label>
         </div>
 
-        <div className="text-gray-500 text-sm mt-3">
+        <div className="bp5-text-muted text-sm mt-3">
           When enabled, the "Upload images" tab will be visible to all users.
         </div>
-        <div className="text-gray-500 text-sm mt-2">
+        <div className="bp5-text-muted text-sm mt-2">
           When enabled, uploaded files are assembled under the active group's mapped folder in uploads/username instead of the shared uploader destination.
         </div>
-        <div className="text-gray-500 text-sm mt-2">
+        <div className="bp5-text-muted text-sm mt-2">
           Uploader chunk size specifies the chunk size in MB for resumable uploads. Lower values help if reverse proxies (like Nginx) limit POST request sizes.
         </div>
       </Card>

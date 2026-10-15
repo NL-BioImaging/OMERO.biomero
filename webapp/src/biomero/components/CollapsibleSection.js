@@ -6,7 +6,7 @@ const CollapsibleSection = ({ title, children, versionSummary, versionCheckLoadi
   const TitleTag = nested ? H6 : H5;
 
   return (
-    <div className={nested ? "ml-2 pl-3 border-l-2 border-gray-200 my-1" : ""}>
+    <div className={nested ? "ml-2 pl-3 border-l-2 border-bp-border my-1" : ""}>
       <div className="flex items-center justify-between">
         <TitleTag className="flex items-center cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
           <Icon

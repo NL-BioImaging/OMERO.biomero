@@ -1,6 +1,6 @@
 # Analysis integration baseline
 
-The 1.7.0b7 prerelease baseline from `analysis_integration` combines the current BIOMERO backend with
+The 1.7.0b8 test prerelease from `analysis_integration` combines the current BIOMERO backend with
 the embedded OMERO.Analysis host. It retains workflow history, shallow-Zarr
 policy controls, and the single-store dependency requirements from `main`.
 
@@ -15,7 +15,7 @@ requirements; the former 1.6.1 host backport is no longer the source baseline.
 
 Analysis is optional: upgrading `omero-biomero` does not install Analysis,
 WorkflowSkills or a query worker. The host is disabled when its feature flag
-is absent or false. Install `omero-biomero==1.7.0b7` from PyPI; no deployment
+is absent or false. Install `omero-biomero==1.7.0b8` from PyPI; no deployment
 patch or commit-based build is needed.
 
 The current PR revision additionally protects unsaved Analysis edits on host
@@ -23,8 +23,8 @@ navigation, ignores obsolete upload responses, supports staged uploads, and
 shows retryable launch errors. Its Blueprint theme and portals are scoped to the
 plugin, layout uses Tailwind, and monitor renewal pauses while the panel or
 document is inactive. These changes include regenerated frontend assets and
-require the current source revision until a subsequent OMERO.biomero package is
-published; the existing 1.7.0b7 wheel does not contain this follow-up revision.
+are packaged in 1.7.0b8. The earlier 1.7.0b7 wheel predates this follow-up.
+Publishing this beta does not merge or approve the integration PR.
 
 Set `INTEGRATE_DATA_ANALYSIS=TRUE` and install/register `omero_analysis` to
 enable the Data Analysis host. Source selection, remote input bindings and

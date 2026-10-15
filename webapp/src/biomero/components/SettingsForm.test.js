@@ -53,7 +53,9 @@ jest.mock("@blueprintjs/core", () => {
 });
 
 jest.mock("./CollapsibleSection", () => ({ children }) => <section>{children}</section>);
-jest.mock("./ConfigSection", () => () => null);
+jest.mock("./ConfigSection", () => ({ onAddItem, title }) => (
+  <button onClick={onAddItem}>Add {title}</button>
+));
 jest.mock("./ModelCard.js", () => () => null);
 jest.mock("./ConverterCard.js", () => () => null);
 
@@ -156,4 +158,12 @@ test("shows all scheduler-native image-pull controls and portable partition guid
   expect(screen.getByText("sbatch_mem")).toBeInTheDocument();
   expect(screen.getAllByText(/Leave blank to inherit/)).not.toHaveLength(0);
   expect(screen.getByText("BIOMERO_PULL_PARTITION")).toBeInTheDocument();
+});
+
+test("an added empty workflow disables saving", async () => {
+  renderShallower(false);
+  await screen.findByLabelText("Pull Images via sbatch");
+  fireEvent.click(screen.getByRole("button", { name: /Add.*Workflow/i }));
+  expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
+  expect(useAppContext().saveConfigData).not.toHaveBeenCalled();
 });

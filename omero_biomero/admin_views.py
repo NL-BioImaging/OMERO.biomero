@@ -11,6 +11,7 @@ from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from omeroweb.webclient.decorators import login_required
 from .settings import CONFIG_FILE_PATH
+from .config_validation import ConfigValidationError, validate_ini_sections
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ def admin_config(request, conn=None, **kwargs):
             })
         except Exception as e:
             logger.error(f"Error retrieving BIOMERO config: {str(e)}")
-            return JsonResponse({"error": str(e)}, status=500)
+            return JsonResponse({"error": "Unable to read configuration. Check the server logs."}, status=500)
 
     elif request.method == "POST":
         """
@@ -90,6 +91,8 @@ def admin_config(request, conn=None, **kwargs):
         try:
             # Parse the incoming JSON payload
             data = json.loads(request.body)
+            if not isinstance(data, dict) or not isinstance(data.get("config", {}), dict):
+                raise ConfigValidationError({"config": "Expected an object of configuration sections."})
             current_user = conn.getUser()
             username = current_user.getName()
             user_id = current_user.getId()
@@ -165,40 +168,21 @@ def admin_config(request, conn=None, **kwargs):
                 item for item in deleted if item["section"] not in JSON_SECTIONS
             ]
 
-            # --- Save JSON Config ---
+            # Prepare both candidates in memory before touching either live file.
+            validate_ini_sections(ini_config_updates)
+            current_json_config = None
             if json_config_updates or json_deletions:
-                try:
-                    current_json_config = {}
-                    if os.path.exists(CONFIG_FILE_PATH):
-                        with open(CONFIG_FILE_PATH, "r") as f:
-                            current_json_config = json.load(f) or {}
-
-                    # Update with new values
-                    for key, value in json_config_updates.items():
-                        current_json_config[key] = value
-
-                    for deletion in json_deletions:
-                        section_data = current_json_config.get(
-                            deletion["section"])
-                        if isinstance(section_data, dict):
-                            section_data.pop(deletion["option"], None)
-
-                    # Ensure directory exists
-                    config_dir = os.path.dirname(CONFIG_FILE_PATH)
-                    if config_dir and not os.path.exists(config_dir):
-                        os.makedirs(config_dir, exist_ok=True)
-
-                    with open(CONFIG_FILE_PATH, "w") as f:
-                        json.dump(current_json_config, f, indent=2)
-                    logger.info(f"JSON configuration saved to {CONFIG_FILE_PATH}")
-                except Exception as e:
-                    logger.error(f"Failed to save JSON config: {str(e)}")
-                    # We might want to return an error here, but let's see if INI save works first?
-                    # Or fail immediately? Let's fail if we can't save the requested changes.
-                    return JsonResponse(
-                        {"error": f"Failed to save JSON configuration: {str(e)}"},
-                        status=500,
-                    )
+                current_json_config = {}
+                if os.path.exists(CONFIG_FILE_PATH):
+                    with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+                        current_json_config = json.load(f)
+                if not isinstance(current_json_config, dict):
+                    raise ConfigValidationError({"config": "The JSON configuration must be an object."})
+                current_json_config.update(json_config_updates)
+                for deletion in json_deletions:
+                    section_data = current_json_config.get(deletion["section"])
+                    if isinstance(section_data, dict):
+                        section_data.pop(deletion["option"], None)
 
             # --- Save INI Config ---
             # The workflow definitions section may be named [WORKFLOWS]
@@ -345,25 +329,41 @@ def admin_config(request, conn=None, **kwargs):
                 changelog_section.first_block.detach()
             changelog_section.add_after.comment(change_comment)
 
-            # Save the updated configuration while preserving comments
-            try:
-                with open(config_path, "w") as config_file:
-                    config.write(config_file)
-                logger.info(f"Configuration saved successfully to {config_path}")
-            except PermissionError:
-                logger.error(
-                    f"Permission denied writing to {config_path}."
-                )
-                raise
-            except Exception as e:
-                logger.error(f"Error saving INI config: {e}")
-                raise e
+            # Validate serialization and workflow semantics before writing either file.
+            candidate = str(config)
+            parsed = configparser.ConfigParser(allow_no_value=True)
+            parsed.read_string(candidate)
+            validate_ini_sections({
+                section: dict(parsed.items(section, raw=True))
+                for section in parsed.sections() if section in ("MODELS", "WORKFLOWS")
+            })
+            # Serialize JSON before opening either file: invalid candidates must
+            # never partially apply a save. File I/O failures remain separate.
+            json_candidate = None
+            if current_json_config is not None:
+                json_candidate = json.dumps(current_json_config, indent=2, ensure_ascii=False)
+
+            if json_candidate is not None:
+                config_dir = os.path.dirname(CONFIG_FILE_PATH)
+                if config_dir:
+                    os.makedirs(config_dir, exist_ok=True)
+                with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as stream:
+                    stream.write(json_candidate)
+                logger.info(f"JSON configuration saved to {CONFIG_FILE_PATH}")
+            with open(config_path, "w", encoding="utf-8") as stream:
+                stream.write(candidate)
+            logger.info(f"Configuration saved successfully to {config_path}")
 
             return JsonResponse(
-                {"message": "Configuration saved successfully"},
-                status=200,
+                {"message": "Configuration saved successfully"}, status=200,
             )
 
+        except ConfigValidationError as e:
+            return JsonResponse({"error": "Invalid configuration format: " + str(e),
+                                 "fields": e.fields}, status=400)
+        except configparser.Error:
+            logger.exception("Invalid serialized INI configuration")
+            return JsonResponse({"error": "Invalid configuration format: correct the INI settings before saving."}, status=400)
         except json.JSONDecodeError:
             logger.error("Invalid JSON data in the request")
             return JsonResponse({"error": "Invalid JSON data"}, status=400)
@@ -379,7 +379,7 @@ def admin_config(request, conn=None, **kwargs):
         except Exception as e:
             logger.error(f"Unexpected error: {str(e)}")
             return JsonResponse(
-                {"error": f"Failed to save configuration: {str(e)}"}, status=500
+                {"error": "Failed to save configuration. Check the server logs."}, status=500
             )
     else:
         logger.error("Unsupported HTTP method for 'config' endpoint")

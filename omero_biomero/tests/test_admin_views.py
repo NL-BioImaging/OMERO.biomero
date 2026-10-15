@@ -240,7 +240,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "MODELS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -312,7 +312,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "WORKFLOWS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -341,7 +341,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "WORKFLOWS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -370,7 +370,7 @@ class AdminConfigTests(TestCase):
                 "config": {
                     "WORKFLOWS": {
                         "cellpose": "/path/cellpose.sif",
-                        "cellpose_repo": "https://example.org/cellpose",
+                        "cellpose_repo": "https://github.com/example/cellpose",
                         "cellpose_job": "cellpose_job.sh",
                     }
                 }
@@ -458,6 +458,95 @@ class AdminConfigTests(TestCase):
             )
 
     # Helper to create temporary files in the per-test directory
+    def _post_config(self, payload, ini, json_config=None):
+        class StubSlurm:
+            @classmethod
+            def get_config_write_path(cls):
+                return str(ini)
+
+        with patch("omero_biomero.admin_views.SlurmClient", StubSlurm), patch(
+            "omero_biomero.admin_views.CONFIG_FILE_PATH",
+            str(json_config or self._tmpdir / "config.json"),
+        ):
+            return _raw_admin_config()(
+                SimpleNamespace(method="POST", body=json.dumps(payload).encode()),
+                conn=_fake_conn(),
+            )
+
+    def test_empty_workflow_cannot_corrupt_previous_job_or_update_json(self):
+        original = (
+            "[WORKFLOWS]\ncidenoise=cidenoise\n"
+            "cidenoise_repo=https://github.com/example/cidenoise\n"
+            "cidenoise_job=jobs/cidenoise.sh\n"
+        )
+        ini = Path(self._create_tempfile(original))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = json_config.read_bytes()
+        response = self._post_config({"config": {
+            "UPLOADER": {"enabled": True},
+            "WORKFLOWS": {"": "", "_repo": "", "_job": ""},
+        }}, ini, json_config)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ini.read_text(), original)
+        self.assertEqual(json_config.read_bytes(), before)
+        self.assertIn("fields", json.loads(response.content))
+
+    def test_invalid_workflow_fields_are_rejected_without_writes(self):
+        valid = {"wf": "wf", "wf_repo": "https://github.com/example/wf",
+                 "wf_job": "jobs/wf.sh"}
+        cases = [
+            {"wf_repo": ""}, {"wf_repo": "https://example.org/wf"},
+            {"wf_repo": "https://github.com/example/wf/tree/"},
+            {"wf_job": "jobs/wf.sh\n="},
+            {"wf_job": "jobs/wf.sh\r="}, {"wf": ""},
+            {" bad": "bad"}, {"wf\n[SSH]": "wf"},
+        ]
+        for updates in cases:
+            with self.subTest(updates=updates):
+                ini = Path(self._create_tempfile("[WORKFLOWS]\n"))
+                response = self._post_config(
+                    {"config": {"WORKFLOWS": {**valid, **updates}}}, ini)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(ini.read_text(), "[WORKFLOWS]\n")
+
+    def test_corrected_workflow_repairs_previously_corrupted_job(self):
+        ini = Path(self._create_tempfile(
+            "[WORKFLOWS]\nwf=wf\nwf_repo=https://github.com/example/wf\n"
+            "wf_job=jobs/wf.sh\n =\n_repo=\n_job=\n"))
+        response = self._post_config({"config": {"WORKFLOWS": {
+            "wf": "wf", "wf_repo": "https://github.com/example/wf",
+            "wf_job": "jobs/wf.sh",
+        }}}, ini)
+        self.assertEqual(response.status_code, 200)
+        parsed = configparser.ConfigParser()
+        parsed.read(ini)
+        self.assertEqual(parsed["WORKFLOWS"]["wf_job"], "jobs/wf.sh")
+        self.assertNotIn("_repo", parsed["WORKFLOWS"])
+
+    def test_invalid_ini_does_not_partially_save_json(self):
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=value\n"))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = json_config.read_bytes()
+        response = self._post_config({"config": {
+            "UPLOADER": {"enabled": True}, "SLURM": "invalid",
+        }}, ini, json_config)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json_config.read_bytes(), before)
+
+    def test_invalid_serialized_candidate_does_not_write_either_file(self):
+        ini = Path(self._create_tempfile("[SLURM]\nkeep=value\n"))
+        json_config = self._tmpdir / "config.json"
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = (ini.read_bytes(), json_config.read_bytes())
+        with patch("omero_biomero.admin_views.ConfigUpdater.__str__", return_value="[broken"):
+            response = self._post_config({"config": {
+                "UPLOADER": {"enabled": True}, "SLURM": {"keep": "changed"},
+            }}, ini, json_config)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual((ini.read_bytes(), json_config.read_bytes()), before)
+
     def _create_tempfile(self, content: str) -> str:
         f = self._tmpdir / "temp.ini"
         f.write_text(content)

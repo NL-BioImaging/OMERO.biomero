@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState } from "react";
-import { createRoot } from "react-dom/client";
 import {
   fetchomeroFileTreeData,
   fetchFolderData,
@@ -223,7 +222,9 @@ export const AppProvider = ({ children }) => {
 
   const updateState = (newState) => {
     setState((prevState) => {
-      return { ...prevState, ...newState };
+      const nextState =
+        typeof newState === "function" ? newState(prevState) : newState;
+      return { ...prevState, ...nextState };
     });
   };
 
@@ -268,24 +269,6 @@ export const AppProvider = ({ children }) => {
     return state.lastSlurmInitTime && 
            (!state.lastSlurmCheckTime || state.lastSlurmInitTime > state.lastSlurmCheckTime);
   };
-
-  // Initialize toaster asynchronously
-  React.useEffect(() => {
-    async function initializeToaster() {
-      const toaster = await OverlayToaster.createAsync(
-        {
-          position: Position.TOP,
-          className: "text-base",
-        },
-        {
-          domRenderer: (toaster, containerElement) =>
-            createRoot(containerElement).render(toaster),
-        }
-      );
-      setToaster(toaster);
-    }
-    initializeToaster();
-  }, []);
 
   const loadThumbnails = async (imageIds) => {
     setError(null);
@@ -429,6 +412,9 @@ export const AppProvider = ({ children }) => {
       };
       
       const response = await runWorkflow(workflowName, paramsWithGroup);
+      if (response?.status !== "success" || !response?.jobId) {
+        throw new Error(response?.error || "OMERO did not accept the workflow submission.");
+      }
 
       // Use local browser time with timezone label (server time is UTC, browser clock may differ)
       const startedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
@@ -918,6 +904,7 @@ export const AppProvider = ({ children }) => {
         createNewContainer,
       }}
     >
+      <OverlayToaster ref={setToaster} position={Position.TOP} className="text-base" />
       {children}
     </AppContext.Provider>
   );

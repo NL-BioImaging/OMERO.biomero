@@ -1,15 +1,4 @@
-.bp5-selected {
-  border: 1px solid darkblue !important;
+/* Keep plugin-owned notifications above the upload dashboard. */
+.biomero-portal .bp5-toast-container {
+  z-index: 9999999;
 }
-
-/*
- * Blueprint's OverlayToaster renders into its own portal appended to
- * document.body. Its default z-index can end up stacked below/between
- * elements of the Uppy Dashboard (upload status bar, per-file thumbnails
- * and checkmarks), which establishes its own stacking contexts. Force the
- * toast container to always render above everything else in the app.
- */
-.bp5-toast-container {
-  z-index: 9999999 !important;
-}
-

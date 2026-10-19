@@ -401,7 +401,7 @@ const WorkflowForm = () => {
               small
               rightIcon={advancedOpen ? "chevron-up" : "chevron-down"}
               onClick={() => setAdvancedOpen((o) => !o)}
-              className="text-gray-500 mb-2"
+              className="bp5-text-muted mb-2"
             >
               Advanced ({advancedInputs.length})
             </Button>

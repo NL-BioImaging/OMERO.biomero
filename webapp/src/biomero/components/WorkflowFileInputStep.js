@@ -88,7 +88,7 @@ const WorkflowFileInputStep = ({ dialogBodyClassName = "" }) => {
   if (fileParams.length === 0) {
     return (
       <DialogBody className={dialogBodyClassName || undefined}>
-        <p className="text-gray-500 text-sm">This workflow has no file attachment inputs.</p>
+        <p className="bp5-text-muted text-sm">This workflow has no file attachment inputs.</p>
       </DialogBody>
     );
   }
@@ -128,7 +128,7 @@ const WorkflowFileInputStep = ({ dialogBodyClassName = "" }) => {
           ].filter(Boolean).join("\n\n");
 
           return (
-            <div key={param.id} className="border border-gray-200 rounded">
+            <div key={param.id} className="border border-bp-border rounded">
               <Tooltip
                 content={<span className="block max-w-sm whitespace-pre-wrap text-xs">{headerTooltip}</span>}
                 hoverOpenDelay={250}
@@ -148,13 +148,13 @@ const WorkflowFileInputStep = ({ dialogBodyClassName = "" }) => {
                       <Icon
                         icon={done ? "tick-circle" : "paperclip"}
                         size={14}
-                        className={done ? "text-green-500" : "text-gray-400"}
+                        className={done ? "text-green-500" : "bp5-text-muted"}
                       />
-                      <span className="text-sm font-semibold text-gray-900 flex-1 text-left leading-5">
+                      <span className="text-sm font-semibold text-bp-text flex-1 text-left leading-5">
                         {param.name || param.id}
                       </span>
                       {param.optional
-                        ? <span className="text-xs text-gray-400">(optional)</span>
+                        ? <span className="text-xs bp5-text-muted">(optional)</span>
                         : !done && <span className="text-xs text-red-400">required</span>
                       }
                       <Tag minimal round intent="none" className="shrink-0">
@@ -169,12 +169,12 @@ const WorkflowFileInputStep = ({ dialogBodyClassName = "" }) => {
                     {(param.description || formats.length > 0 || param["file-count"]) && (
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 ml-5">
                         {param.description && (
-                          <span className="text-xs text-gray-500 text-left">{param.description}</span>
+                          <span className="text-xs bp5-text-muted text-left">{param.description}</span>
                         )}
                         {formats.length > 0 && (
-                          <span className="text-xs text-gray-400 italic">Formats: {formats.join(", ")}</span>
+                          <span className="text-xs bp5-text-muted italic">Formats: {formats.join(", ")}</span>
                         )}
-                        <span className="text-xs text-gray-400 italic">
+                        <span className="text-xs bp5-text-muted italic">
                           {param["file-count"] === "single" ? "Select exactly one file" : "Select one or more files"}
                         </span>
                       </div>
@@ -184,7 +184,7 @@ const WorkflowFileInputStep = ({ dialogBodyClassName = "" }) => {
               </Tooltip>
 
               <Collapse isOpen={isOpen} keepChildrenMounted>
-                <div className="px-3 pb-3 pt-1 border-t border-gray-100">
+                <div className="px-3 pb-3 pt-1 border-t border-bp-border">
                   <OmeroAttachmentBrowser
                     formats={formats}
                     fileCount={param["file-count"] || null}

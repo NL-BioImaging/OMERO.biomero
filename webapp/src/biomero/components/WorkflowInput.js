@@ -23,6 +23,7 @@ import { fetchPlateImages } from "../../apiService";
 import DatasetSelectWithPopover from "./DatasetSelectWithPopover";
 import { useAppContext } from "../../AppContext";
 import { WorkflowStepIntro } from "./HistoryFeedback";
+import { workflowImages, reconcileImageSelection } from "./workflowImageCache";
 
 /**
  * Renders a single thumbnail lazily — only requests the image when it scrolls
@@ -56,7 +57,7 @@ const LazyThumbnail = ({ imageId, thumbnail, apiLoading, onVisible, listMode = f
         {thumbnail ? (
           <img src={thumbnail} alt="" className="w-6 h-6 object-cover rounded-sm shadow-sm" />
         ) : (
-          <div className="w-6 h-6 bg-gray-200 flex items-center justify-center rounded-sm">
+          <div className="w-6 h-6 bg-bp-surface flex items-center justify-center rounded-sm">
             {apiLoading && <Spinner size={SpinnerSize.SMALL} />}
           </div>
         )}
@@ -71,10 +72,10 @@ const LazyThumbnail = ({ imageId, thumbnail, apiLoading, onVisible, listMode = f
       {thumbnail ? (
         <img src={thumbnail} alt="" className="object-cover w-full" />
       ) : (
-        <div className="bg-gray-300 rounded-md w-full h-[100px] flex items-center justify-center">
+        <div className="bg-bp-surface rounded-md w-full h-[100px] flex items-center justify-center">
           {apiLoading
             ? <Spinner size={SpinnerSize.SMALL} />
-            : <span className="text-gray-500 text-xs">No preview</span>}
+            : <span className="bp5-text-muted text-xs">No preview</span>}
         </div>
       )}
     </div>
@@ -254,7 +255,7 @@ const WorkflowInput = () => {
     (state.inputDatasets || []).forEach((ds) => {
       const node = state.omeroFileTreeData[ds.index];
       if (node?.children) {
-        node.children.forEach((img) => { map[img.id] = ds; });
+        workflowImages(state.omeroFileTreeData, node.children).forEach((img) => { map[img.id] = ds; });
       }
     });
     return map;
@@ -267,7 +268,7 @@ const WorkflowInput = () => {
     // Remove images of datasets not in inputDatasets
     const filteredImages = Object.entries(state.omeroFileTreeData || {})
       .filter(([key]) => currentDatasetIds.includes(key))
-      .flatMap(([, datasetNode]) => datasetNode.children || []);
+      .flatMap(([, datasetNode]) => workflowImages(state.omeroFileTreeData, datasetNode.children));
 
     const images = [...new Map([...(state.historicalInputImages || []), ...filteredImages]
       .map(image => [image.id, image])).values()];
@@ -277,7 +278,7 @@ const WorkflowInput = () => {
     state.inputDatasets?.forEach((dataset) => {
       const treeNode = state.omeroFileTreeData[dataset.index];
 
-      if (!treeNode || !treeNode.children || treeNode.children.length === 0) {
+      if (!treeNode || workflowImages(state.omeroFileTreeData, treeNode.children).length === 0) {
         loadImagesForDataset({
           dataset: dataset,
           group: state.user.active_group_id,
@@ -298,6 +299,12 @@ const WorkflowInput = () => {
     // filteredImages is derived via useMemo below — no setFilteredImages needed here.
 
     if (prevIds.length === 0) {
+      const repaired = reconcileImageSelection(selectedImageIds, allIds);
+      if (selectedImageIds.length && (repaired.length !== selectedImageIds.length ||
+          repaired.some((id, index) => id !== selectedImageIds[index]))) {
+        updateWIS({ selectedImageIds: repaired });
+        return;
+      }
       // First mount — if we have stored selections keep them, otherwise select all
       if (selectedImageIds.length === 0) {
         updateWIS({ selectedImageIds: allIds });
@@ -496,7 +503,7 @@ const WorkflowInput = () => {
     // If no images, show message
     if (minRow > maxRow) {
       return (
-        <div className="text-center text-gray-500 text-sm p-4">
+        <div className="text-center bp5-text-muted text-sm p-4">
           No images in this plate
         </div>
       );
@@ -511,13 +518,13 @@ const WorkflowInput = () => {
 
     return (
       <div className="mt-3">
-        <div className="text-sm text-gray-600 mb-2">Plate Layout Preview:</div>
-        <div className="border rounded p-2 bg-gray-50 inline-block">
+        <div className="text-sm bp5-text-muted mb-2">Plate Layout Preview:</div>
+        <div className="border rounded p-2 bg-bp-surface inline-block">
           {/* Column headers */}
           <div className="flex">
             <div className="w-6"></div> {/* Empty corner */}
             {collabels.slice(startCol, endCol + 1).map((colLabel, idx) => (
-              <div key={colLabel} className="w-12 h-6 text-center text-xs font-medium text-gray-700 flex items-center justify-center">
+              <div key={colLabel} className="w-12 h-6 text-center text-xs font-medium text-bp-text flex items-center justify-center">
                 {colLabel}
               </div>
             ))}
@@ -527,7 +534,7 @@ const WorkflowInput = () => {
           {rowlabels.slice(startRow, endRow + 1).map((rowLabel, rowIdx) => (
             <div key={rowLabel} className="flex">
               {/* Row header */}
-              <div className="w-6 h-12 text-center text-xs font-medium text-gray-700 flex items-center justify-center">
+              <div className="w-6 h-12 text-center text-xs font-medium text-bp-text flex items-center justify-center">
                 {rowLabel}
               </div>
               
@@ -536,7 +543,7 @@ const WorkflowInput = () => {
                 <div key={`${rowLabel}${collabels[startCol + colIdx]}`} className="w-12 h-12 p-0.5">
                   {cell ? (
                     <Tooltip content={`${rowLabel}${collabels[startCol + colIdx]}: ${cell.name}`}>
-                      <div className="w-full h-full border border-blue-300 rounded overflow-hidden bg-white shadow-sm">
+                      <div className="w-full h-full border border-blue-300 rounded overflow-hidden bg-bp-surface shadow-sm">
                         <img
                           src={cell.thumb_url}
                           alt={`Well ${rowLabel}${collabels[startCol + colIdx]}`}
@@ -545,7 +552,7 @@ const WorkflowInput = () => {
                       </div>
                     </Tooltip>
                   ) : (
-                    <div className="w-full h-full border border-gray-200 rounded bg-gray-100"></div>
+                    <div className="w-full h-full border border-bp-border rounded bg-bp-surface"></div>
                   )}
                 </div>
               ))}
@@ -946,7 +953,7 @@ const WorkflowInput = () => {
             panel={
               <div className={`flex flex-col gap-2 overflow-y-auto pt-1 pl-1 min-h-[calc(100vh-80vh)] max-h-[45vh] transition-opacity duration-150 ${isPending ? "opacity-50" : ""}`}>
                 {apiLoading && matchedImages.length === 0 && disabledImages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-400">
+                  <div className="flex flex-col items-center justify-center h-32 gap-2 bp5-text-muted">
                     <Spinner size={SpinnerSize.LARGE} />
                     <span className="text-sm">Loading images…</span>
                   </div>
@@ -980,7 +987,7 @@ const WorkflowInput = () => {
                     ))}
                   </>
                 ) : (
-                  <p className="text-gray-500 text-xs">
+                  <p className="bp5-text-muted text-xs">
                     No images match your search.
                   </p>
                 )}
@@ -1014,7 +1021,7 @@ const WorkflowInput = () => {
                   className={`grid grid-cols-${zoom} gap-2 overflow-y-auto p-1 w-full`}
                 >
                   {apiLoading && matchedImages.length === 0 && disabledImages.length === 0 ? (
-                    <div className="col-span-full flex flex-col items-center justify-center h-32 gap-2 text-gray-400">
+                    <div className="col-span-full flex flex-col items-center justify-center h-32 gap-2 bp5-text-muted">
                       <Spinner size={SpinnerSize.LARGE} />
                       <span className="text-sm">Loading images…</span>
                     </div>
@@ -1048,7 +1055,7 @@ const WorkflowInput = () => {
                       ))}
                     </>
                   ) : (
-                    <p className="text-gray-500 text-xs col-span-4">
+                    <p className="bp5-text-muted text-xs col-span-4">
                       No images match your search.
                     </p>
                   )}

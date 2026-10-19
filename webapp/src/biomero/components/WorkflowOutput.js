@@ -308,10 +308,10 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
 
   const renderCardTitle = (icon, title, subtitle = null, cue = null) => (
     <div className="flex items-center gap-2 flex-wrap mb-0.5">
-      <Icon icon={icon} size={14} className="text-gray-500" />
+      <Icon icon={icon} size={14} className="bp5-text-muted" />
       <span className="text-sm font-semibold">{title}</span>
       {cue}
-      {subtitle && <span className="text-xs font-semibold text-gray-500">{subtitle}</span>}
+      {subtitle && <span className="text-xs font-semibold bp5-text-muted">{subtitle}</span>}
     </div>
   );
 
@@ -636,8 +636,8 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
       </div>
 
       {/* ── Workflow Results ───────────────────────────── */}
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Workflow Results</p>
-      <p className="text-xs text-gray-500 mb-3">
+      <p className="text-xs font-semibold bp5-text-muted uppercase tracking-wide mb-1">Workflow Results</p>
+      <p className="text-xs bp5-text-muted mb-3">
         Select <strong className={hasOutputSelection ? "" : "text-red-500"}>one or more</strong> options for how
         the workflow output is imported into OMERO.
       </p>
@@ -700,7 +700,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
       })()}
 
       {/* Optional mask-result presentation */}
-      <div className="ml-4 pl-3 border-l border-gray-200">
+      <div className="ml-4 pl-3 border-l border-bp-border">
         {plateMode ? (
           allowPlateLabelPreview && (selectedContainers?.length ?? 0) > 0 && isImporterEnabled && isShallowZarrEnabled ? (
             <Card
@@ -838,9 +838,9 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
                       aria-label="ROI color picker"
                       value={state.formData.roiColor}
                       onChange={(e) => handleInputChange("roiColor", e.target.value.toUpperCase())}
-                      className="h-8 w-12 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
+                      className="h-8 w-12 cursor-pointer rounded border border-bp-border bg-bp-surface p-0.5"
                     />
-                    <span className="font-mono text-xs text-gray-600">
+                    <span className="font-mono text-xs bp5-text-muted">
                       {state.formData.roiColor}
                     </span>
                   </>
@@ -938,7 +938,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
 
       {/* 1b. Rename result images (dataset mode only) */}
       {!plateMode && (
-        <div className="ml-4 pl-3 border-l border-gray-200">
+        <div className="ml-4 pl-3 border-l border-bp-border">
           {(() => {
             const _enabled = state.formData.enableRename ?? defaultValues.enableRename;
             const _hasDataset = (state.formData.selectedDatasets?.length ?? 0) > 0;
@@ -1136,7 +1136,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
       <Divider className="my-3" />
 
       {/* ── Notifications ───────────────────────────────── */}
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-2">Notifications</p>
+      <p className="text-xs font-semibold bp5-text-muted uppercase tracking-wide mb-2 mt-2">Notifications</p>
       <SwitchCard
         alignIndicator={Alignment.END}
         checked={state.formData.receiveEmail ?? defaultValues.receiveEmail}

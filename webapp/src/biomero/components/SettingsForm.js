@@ -32,7 +32,7 @@ const EnvVarTag = ({ name }) => (
 /** "Environment variable(s): TAG (i)" labeled line, stays within bp5-form-helper-text font size. */
 const EnvVarNote = ({ vars }) => (
   <span className="block mt-0.5">
-    <strong className="text-gray-600">
+    <strong className="bp5-text-muted">
       Environment variable{vars.length > 1 ? "s" : ""}:
     </strong>{" "}
     {vars.map((v, i) => (
@@ -46,14 +46,14 @@ const EnvVarNote = ({ vars }) => (
       }
       placement="right"
     >
-      <Icon icon="info-sign" size={11} className="align-middle cursor-help text-gray-400" />
+      <Icon icon="info-sign" size={11} className="align-middle cursor-help bp5-text-muted" />
     </Tooltip>
   </span>
 );
 
 /** "Example: value" labeled line, stays within bp5-form-helper-text font size. */
 const ExampleNote = ({ children }) => (
-  <span className="block mt-0.5"><strong className="text-gray-600">Example:</strong> <code>{children}</code></span>
+  <span className="block mt-0.5"><strong className="bp5-text-muted">Example:</strong> <code>{children}</code></span>
 );
 
 /** Setting type icon: takes effect immediately after saving, no Slurm Init needed. */
@@ -63,7 +63,7 @@ export const RuntimeIcon = () => (
       content="Runtime setting — takes effect immediately after saving. No Slurm Init needed."
       placement="right"
     >
-      <Icon icon="automatic-updates" size={12} className="cursor-help text-gray-400" />
+      <Icon icon="automatic-updates" size={12} className="cursor-help bp5-text-muted" />
     </Tooltip>
   </span>
 );
@@ -75,7 +75,7 @@ export const SlurmInitIcon = () => (
       content="Slurm Init setting — a Slurm Init run is needed to deploy this change to the cluster."
       placement="right"
     >
-      <Icon icon="refresh" size={12} className="cursor-help text-gray-400" />
+      <Icon icon="refresh" size={12} className="cursor-help bp5-text-muted" />
     </Tooltip>
   </span>
 );
@@ -1279,7 +1279,7 @@ const SettingsForm = () => {
                 }}
                 className="flex-1"
               />
-              <span className="text-gray-500 font-mono px-1">=</span>
+              <span className="bp5-text-muted font-mono px-1">=</span>
               <InputGroup
                 value={param.value}
                 placeholder="value (e.g. biomero)"

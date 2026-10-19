@@ -170,7 +170,7 @@ const ConfigSection = ({
                 {/* Descriptor mismatch hint (soft — not a blocking warning) */}
                 {hasDescriptorMismatch && (
                   <Tooltip content={descriptorMismatchTooltip}>
-                    <Icon icon="help" size={12} className="ml-2 text-gray-400" />
+                    <Icon icon="help" size={12} className="ml-2 bp5-text-muted" />
                   </Tooltip>
                 )}
                 {/* GPU misconfiguration indicator */}

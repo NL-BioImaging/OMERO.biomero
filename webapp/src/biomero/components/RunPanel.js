@@ -61,7 +61,7 @@ const DescriptionWithToggle = ({ description }) => {
 
   return (
     <div>
-      <p ref={textRef} className={`text-sm text-gray-600 ${!isExpanded ? 'line-clamp-5' : ''}`}>
+      <p ref={textRef} className={`text-sm bp5-text-muted ${!isExpanded ? 'line-clamp-5' : ''}`}>
         {description}
       </p>
       {(isOverflowing || isExpanded) && (
@@ -470,12 +470,12 @@ const RunPanel = ({ onWorkflowError }) => {
               Your runs in the active group, newest first. Inspect a run, then restore its data and settings for review.
             </p>}
             {activeWorkflowTab === "images" && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm bp5-text-muted">
                 For analyzing individual images from datasets or plates
               </p>
             )}
             {activeWorkflowTab === "plates" && isImporterEnabled && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm bp5-text-muted">
                 For analyzing entire plates as single units (requires importer integration)
               </p>
             )}
@@ -614,20 +614,20 @@ const RunPanel = ({ onWorkflowError }) => {
               // Still loading workflows from server
               <>
                 <Spinner intent="primary" size={SpinnerSize.SMALL} />
-                <p className="text-sm text-gray-600 mt-4">Loading workflows...</p>
+                <p className="text-sm bp5-text-muted mt-4">Loading workflows...</p>
               </>
             ) : !state.slurmStatus ? (
               // Workflows loaded but SLURM status still checking
               <>
                 <Spinner intent="primary" size={SpinnerSize.SMALL} />
-                <p className="text-sm text-gray-600 mt-4">Checking workflow availability...</p>
+                <p className="text-sm bp5-text-muted mt-4">Checking workflow availability...</p>
               </>
             ) : (
               // Workflows loaded but no results match current filters
               <>
                 <Icon icon="search" size={40} color="#718096" />
-                <H6 className="mt-4 text-gray-600">No workflows found</H6>
-                <p className="text-sm text-gray-500">
+                <H6 className="mt-4 bp5-text-muted">No workflows found</H6>
+                <p className="text-sm bp5-text-muted">
                   {searchTerm ? 
                     `No workflows match "${searchTerm}" in the ${activeWorkflowTab} category.` :
                     `No ${activeWorkflowTab} workflows have been configured yet.`
@@ -657,20 +657,20 @@ const RunPanel = ({ onWorkflowError }) => {
               // Still loading workflows from server
               <>
                 <Spinner intent="primary" size={SpinnerSize.SMALL} />
-                <p className="text-sm text-gray-600 mt-4">Loading workflows...</p>
+                <p className="text-sm bp5-text-muted mt-4">Loading workflows...</p>
               </>
             ) : !state.slurmStatus ? (
               // Workflows loaded but SLURM status still checking - don't show "no workflows" yet
               <>
                 <Spinner intent="primary" size={SpinnerSize.SMALL} />
-                <p className="text-sm text-gray-600 mt-4">Checking workflow availability...</p>
+                <p className="text-sm bp5-text-muted mt-4">Checking workflow availability...</p>
               </>
             ) : (
               // SLURM checked and truly no workflows match filters
               <>
                 <Icon icon="search" size={40} color="#718096" />
-                <H6 className="mt-4 text-gray-600">No workflows found</H6>
-                <p className="text-sm text-gray-500">
+                <H6 className="mt-4 bp5-text-muted">No workflows found</H6>
+                <p className="text-sm bp5-text-muted">
                   {searchTerm ? 
                     `No workflows match "${searchTerm}" in the ${activeWorkflowTab} category.` :
                     `No ${activeWorkflowTab} workflows have been configured yet.`

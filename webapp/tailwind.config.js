@@ -8,7 +8,16 @@ module.exports = {
     'grid-cols-11', 'grid-cols-12', // Add all the grid classes you might need
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        "bp-canvas": "var(--biomero-canvas)",
+        "bp-surface": "var(--biomero-surface)",
+        "bp-muted": "var(--biomero-muted)",
+        "bp-border": "var(--biomero-border)",
+        "bp-text": "var(--biomero-text)",
+        "bp-highlight": "var(--biomero-highlight)",
+      },
+    },
   },
   plugins: [],
 };

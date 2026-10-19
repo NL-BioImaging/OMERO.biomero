@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import useDashboard from "../shared/useDashboard";
 import { useAppContext } from "../AppContext";
 import FileBrowser from "./components/FileBrowser";
 import OmeroDataBrowser from "../shared/components/OmeroDataBrowser";
@@ -28,6 +29,8 @@ const MonitorPanel = ({
   setMetabaseError,
   isAdmin,
   metabaseUrl,
+  dashboardError,
+  retryDashboard,
 }) => {
   const iframeRef = useRef(null);
 
@@ -89,6 +92,10 @@ const MonitorPanel = ({
         </div>
       </div>
       <div className="p-4">
+        {dashboardError && <Callout intent="warning" role="alert">
+          <p>{dashboardError}</p>
+          <Button icon="refresh" onClick={retryDashboard}>Retry monitor</Button>
+        </Callout>}
         {!metabaseError ? (
           <iframe
             title="Metabase dashboard"
@@ -576,7 +583,7 @@ const ImporterApp = () => {
               />
             </div>
           </div>
-          <div className="text-xs text-gray-500 text-align-left w-full select-none">
+          <div className="text-xs bp5-text-muted text-align-left w-full select-none">
             {"Source path: " + itemPathString}
           </div>
           {warningInfo && (
@@ -584,7 +591,7 @@ const ImporterApp = () => {
               <Icon icon="warning-sign" size={14} className="mr-2 mt-0.5 flex-shrink-0 text-amber-600" />
               <div>
                 <p className="font-semibold m-0">{warningInfo.summary}</p>
-                <p className="m-0 mt-0.5 text-gray-600">{warningInfo.details}</p>
+                <p className="m-0 mt-0.5 bp5-text-muted">{warningInfo.details}</p>
               </div>
             </div>
           )}
@@ -608,7 +615,10 @@ const ImporterApp = () => {
     .getAttribute("data-metabase-token-imports");
   const isAdmin =
     document.getElementById("root").getAttribute("data-is-admin") === "true";
-  const iframeUrl = `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=false&refresh=20`;
+  const { iframeUrl, error: dashboardError, retry: retryDashboard } = useDashboard(
+    `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=false&refresh=20`,
+    state.urls.dashboard_imports, activeTab === "Monitor",
+  );
 
   useEffect(() => {
     loadOmeroTreeData();
@@ -981,7 +991,7 @@ const ImporterApp = () => {
           </div>
         </div>
 
-        <div className="absolute flex items-center place-content-between bg-slate-300 w-full p-8 mt-12 bottom-0 left-0">
+        <div className="absolute flex items-center place-content-between bg-bp-surface w-full p-8 mt-12 bottom-0 left-0">
           <Card className="ml-12">
             <span className="text-base">{`${uploadList.length} file${
               uploadList.length > 1 || uploadList.length === 0 ? "s" : ""
@@ -1060,6 +1070,8 @@ const ImporterApp = () => {
                   setMetabaseError={setMetabaseError}
                   isAdmin={isAdmin}
                   metabaseUrl={metabaseUrl}
+                  dashboardError={dashboardError}
+                  retryDashboard={retryDashboard}
                 />
               ) : null
             }

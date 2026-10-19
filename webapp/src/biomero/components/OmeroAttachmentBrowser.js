@@ -307,22 +307,22 @@ const OmeroAttachmentBrowser = ({
           className={`rounded border px-2 py-1.5 cursor-pointer transition-colors ${
             selected
               ? "bg-blue-50 border-blue-400 ring-1 ring-blue-300"
-              : "border-gray-100 hover:border-blue-200 hover:bg-gray-50"
+              : "border-bp-border hover:border-blue-200 hover:bg-bp-surface"
           }`}
           onClick={() => handleSelect(att.id)}
         >
           {/* row 1: icon + truncated name + tick */}
           <div className="flex items-center gap-1.5 min-w-0 mb-0.5">
-            <Icon icon={getFileIcon(att.extension)} size={12} className="text-gray-400 shrink-0" />
+            <Icon icon={getFileIcon(att.extension)} size={12} className="bp5-text-muted shrink-0" />
             <span className="text-xs truncate flex-1 min-w-0">{att.name}</span>
             {selected && <Icon icon="tick-circle" size={11} className="text-blue-500 shrink-0" />}
           </div>
           {/* row 2: date + size */}
           <div className="flex items-center justify-between gap-1">
-            <span className="text-xs text-gray-400">
+            <span className="text-xs bp5-text-muted">
               {att.date ? att.date.slice(0, 10) : ""}
             </span>
-            <span className="text-xs text-gray-400 tabular-nums">
+            <span className="text-xs bp5-text-muted tabular-nums">
               {att.size != null ? formatBytes(att.size) : ""}
             </span>
           </div>
@@ -459,7 +459,7 @@ const OmeroAttachmentBrowser = ({
               <div key={groupKey}>
                 <button
                   type="button"
-                  className="flex items-center gap-1 px-1 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide sticky top-0 z-10 bg-white border-b border-gray-100 w-full text-left hover:bg-gray-50"
+                  className="flex items-center gap-1 px-1 py-1 text-xs font-semibold bp5-text-muted uppercase tracking-wide sticky top-0 z-10 bg-bp-surface border-b border-bp-border w-full text-left hover:bg-bp-surface"
                   onClick={() =>
                     setCollapsedGroups((prev) => {
                       const next = new Set(prev);
@@ -471,7 +471,7 @@ const OmeroAttachmentBrowser = ({
                 >
                   <Icon icon={groupIcon} size={11} className="shrink-0" />
                   <span className="truncate">{groupLabel}</span>
-                  <span className="ml-auto font-normal normal-case text-gray-400 flex items-center gap-1">
+                  <span className="ml-auto font-normal normal-case bp5-text-muted flex items-center gap-1">
                     {items.length}
                     <Icon icon={collapsedGroups.has(groupKey) ? "chevron-right" : "chevron-down"} size={10} />
                   </span>

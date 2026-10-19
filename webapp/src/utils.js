@@ -1,4 +1,15 @@
 // Description: Utility functions for the biomero
+export const codePointNameCompare = (left, right) => {
+  const a = String(left || "").toLocaleLowerCase();
+  const b = String(right || "").toLocaleLowerCase();
+  const length = Math.min(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = a.codePointAt(index) - b.codePointAt(index);
+    if (difference) return difference;
+  }
+  return a.length - b.length;
+};
+
 export const transformStructure = (data) => {
   if (!data || Object.keys(data).length === 0) {
     return {
@@ -12,17 +23,18 @@ export const transformStructure = (data) => {
     };
   }
 
+  const topLevel = [
+    ...(data.projects || []).map((item) => ({ key: `project-${item.id}`, name: item.name })),
+    ...(data.datasets || []).map((item) => ({ key: `dataset-${item.id}`, name: item.name })),
+    ...(data.screens || []).map((item) => ({ key: `screen-${item.id}`, name: item.name })),
+    ...(data.plates || []).map((item) => ({ key: `plate-${item.id}`, name: item.name })),
+  ].sort((left, right) => codePointNameCompare(left.name, right.name));
+
   const items = {
     root: {
       index: "root",
       isFolder: true,
-      children: [
-        ...(data.projects || []).map((project) => `project-${project.id}`),
-        ...(data.datasets || []).map((dataset) => `dataset-${dataset.id}`),
-        ...(data.screens || []).map((screen) => `screen-${screen.id}`),
-        ...(data.plates || []).map((plate) => `plate-${plate.id}`),
-        "orphaned", // Include the orphaned folder
-      ],
+      children: [...topLevel.map((item) => item.key), "orphaned"],
       data: "Home",
       childCount:
         (data.projects?.length || 0) +

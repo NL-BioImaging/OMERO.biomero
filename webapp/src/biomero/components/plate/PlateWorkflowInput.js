@@ -116,7 +116,7 @@ const PlateWorkflowInput = () => {
     // If no images, show message
     if (minRow > maxRow) {
       return (
-        <div className="text-center text-gray-500 text-sm p-4">
+        <div className="text-center bp5-text-muted text-sm p-4">
           No images in this plate
         </div>
       );
@@ -131,13 +131,13 @@ const PlateWorkflowInput = () => {
 
     return (
       <div className="mt-3">
-        <div className="text-sm text-gray-600 mb-2">Plate Layout Preview:</div>
-        <div className="border rounded p-2 bg-gray-50 inline-block">
+        <div className="text-sm bp5-text-muted mb-2">Plate Layout Preview:</div>
+        <div className="border rounded p-2 bg-bp-surface inline-block">
           {/* Column headers */}
           <div className="flex">
             <div className="w-6"></div> {/* Empty corner */}
             {collabels.slice(startCol, endCol + 1).map((colLabel, idx) => (
-              <div key={colLabel} className="w-12 h-6 text-center text-xs font-medium text-gray-700 flex items-center justify-center">
+              <div key={colLabel} className="w-12 h-6 text-center text-xs font-medium text-bp-text flex items-center justify-center">
                 {colLabel}
               </div>
             ))}
@@ -147,7 +147,7 @@ const PlateWorkflowInput = () => {
           {rowlabels.slice(startRow, endRow + 1).map((rowLabel, rowIdx) => (
             <div key={rowLabel} className="flex">
               {/* Row header */}
-              <div className="w-6 h-12 text-center text-xs font-medium text-gray-700 flex items-center justify-center">
+              <div className="w-6 h-12 text-center text-xs font-medium text-bp-text flex items-center justify-center">
                 {rowLabel}
               </div>
               
@@ -156,7 +156,7 @@ const PlateWorkflowInput = () => {
                 <div key={`${rowLabel}${collabels[startCol + colIdx]}`} className="w-12 h-12 p-0.5">
                   {cell ? (
                     <Tooltip content={`${rowLabel}${collabels[startCol + colIdx]}: ${cell.name}`}>
-                      <div className="w-full h-full border border-blue-300 rounded overflow-hidden bg-white shadow-sm">
+                      <div className="w-full h-full border border-blue-300 rounded overflow-hidden bg-bp-surface shadow-sm">
                         <img
                           src={cell.thumb_url}
                           alt={`Well ${rowLabel}${collabels[startCol + colIdx]}`}
@@ -165,7 +165,7 @@ const PlateWorkflowInput = () => {
                       </div>
                     </Tooltip>
                   ) : (
-                    <div className="w-full h-full border border-gray-200 rounded bg-gray-100"></div>
+                    <div className="w-full h-full border border-bp-border rounded bg-bp-surface"></div>
                   )}
                 </div>
               ))}

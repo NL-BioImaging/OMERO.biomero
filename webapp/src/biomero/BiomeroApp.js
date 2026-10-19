@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
+import useDashboard from "../shared/useDashboard";
 import { useAppContext } from "../AppContext";
 import TabContainer from "./components/TabContainer";
 import RunPanel from "./components/RunPanel";
 import GroupSelect from "../shared/components/GroupSelect"; // Add this import
 import SlurmStatusIndicator from "../shared/components/SlurmStatusIndicator";
-import { Tabs, Tab, H4, Tooltip, H6 } from "@blueprintjs/core";
+import { Tabs, Tab, H4, Tooltip, H6, Button, Callout } from "@blueprintjs/core";
 import "@blueprintjs/core/lib/css/blueprint.css";
 import SettingsForm from "./components/SettingsForm";
 
@@ -78,6 +79,8 @@ const StatusPanel = ({
   setMetabaseError,
   isAdmin,
   metabaseUrl,
+  dashboardError,
+  retryDashboard,
 }) => {
   const iframeRef = useRef(null);
 
@@ -138,6 +141,10 @@ const StatusPanel = ({
         </div>
       </div>
       <div className="p-4">
+        {dashboardError && <Callout intent="warning" role="alert">
+          <p>{dashboardError}</p>
+          <Button icon="refresh" onClick={retryDashboard}>Retry monitor</Button>
+        </Callout>}
         {!metabaseError ? (
           <iframe
             title="Metabase dashboard"
@@ -224,7 +231,10 @@ const BiomeroApp = () => {
     .getAttribute("data-metabase-token-monitor-workflows");
   const isAdmin =
     document.getElementById("root").getAttribute("data-is-admin") === "true";
-  const iframeUrl = `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=true&refresh=20`;
+  const { iframeUrl, error: dashboardError, retry: retryDashboard } = useDashboard(
+    `${metabaseUrl}/embed/dashboard/${metabaseToken}#bordered=true&titled=true&refresh=20`,
+    state.urls.dashboard_workflows, activeTab === "Status",
+  );
 
   return (
     <div>
@@ -288,6 +298,8 @@ const BiomeroApp = () => {
                   setMetabaseError={setMetabaseError}
                   isAdmin={isAdmin}
                   metabaseUrl={metabaseUrl}
+                  dashboardError={dashboardError}
+                  retryDashboard={retryDashboard}
                 />
               ) : null
             }

@@ -53,7 +53,7 @@ const NewContainerOverlay = ({
           className="flex items-center justify-center"
         >
           <div className="w-full h-full flex items-center justify-center position-fixed top-0 left-0">
-            <div className="bg-white p-6 rounded shadow-lg w-96">
+            <div className="bg-bp-surface p-6 rounded shadow-lg w-96">
               <h3 className="text-lg font-bold mb-4">{title}</h3>
               <input
                 type="text"

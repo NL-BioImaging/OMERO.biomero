@@ -209,7 +209,7 @@ export default function PreviousRuns({ isOpen = true, onApply, selection, embedd
       </div>)}
       </header>
       <Divider className="!mx-0 !mb-3" />
-      {embedded && !!selection?.IDs?.length && <div className="sticky top-0 z-10 bg-white py-2 mb-2">
+      {embedded && !!selection?.IDs?.length && <div className="sticky top-0 z-10 bg-bp-surface py-2 mb-2">
         <Tooltip content="Keep your selected data and output choices, and load this run's settings for review.">
           <Button intent="primary" disabled={!!detail.rerun_error} icon="import" onClick={() => apply(true)}>Use settings on selected data</Button>
         </Tooltip>

@@ -1,7 +1,12 @@
 import React from "react";
 import { useAppContext } from "../../AppContext";
 import FileTree from "./FileTree";
-import { fetchProjectData, fetchPlatesData } from "../../apiService";
+import {
+  fetchImages,
+  fetchPlateImages,
+  fetchProjectData,
+  fetchPlatesData,
+} from "../../apiService";
 
 const OmeroDataBrowser = ({ onSelectCallback }) => {
   const { state, updateState } = useAppContext();
@@ -24,6 +29,34 @@ const OmeroDataBrowser = ({ onSelectCallback }) => {
         data: plate.name,
         source: "omero",
       }));
+    } else if (nodeType === "dataset") {
+      response = await fetchImages(
+        node.id,
+        1,
+        false,
+        false,
+        state.user.active_group_id
+      );
+      children = response.map((image) => ({
+        id: image.id,
+        category: "images",
+        index: `image-${image.id}`,
+        isFolder: false,
+        children: [],
+        childCount: 0,
+        data: image.name,
+        source: "omero",
+      }));
+    } else if (nodeType === "plate") {
+      response = await fetchPlateImages(node.id);
+      children = response.map((image) => ({
+        ...image,
+        category: "images",
+        isFolder: false,
+        children: [],
+        childCount: 0,
+        data: image.name,
+      }));
     } else {
       response = await fetchProjectData(node);
       children = (response.datasets || []).map((dataset) => ({
@@ -38,23 +71,24 @@ const OmeroDataBrowser = ({ onSelectCallback }) => {
       }));
     }
 
-    const updatedNode = {
-      ...state.omeroFileTreeData[node.index],
-      children: children.map((child) => child.index),
-    };
-
     const newNodes = children.reduce((acc, child) => {
       acc[child.index] = child;
       return acc;
     }, {});
 
-    updateState({
+    // Expansion requests are asynchronous and several nodes can be opened in
+    // quick succession. Merge into the latest tree state so a slower response
+    // cannot replace children that another request has just loaded.
+    updateState((latestState) => ({
       omeroFileTreeData: {
-        ...state.omeroFileTreeData,
+        ...latestState.omeroFileTreeData,
         ...newNodes,
-        [node.index]: updatedNode,
+        [node.index]: {
+          ...latestState.omeroFileTreeData[node.index],
+          children: children.map((child) => child.index),
+        },
       },
-    });
+    }));
     return newNodes;
   };
 

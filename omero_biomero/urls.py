@@ -10,6 +10,8 @@ urlpatterns = [
          name='workflow_history_list'),
     path('api/analyzer/history/<uuid:workflow_id>/', workflow_history.workflow_history_detail,
          name='workflow_history_detail'),
+    path("api/dashboard/<str:dashboard>/", biomero_views.refresh_dashboard,
+         name="refresh_biomero_dashboard"),
     # Importer URLs
     path(
         "api/importer/import_selected/",

@@ -21,7 +21,7 @@ const ScriptCardGroup = ({ folder, folderId, isOpen, onToggle }) => {
         .replace(/\b\w/g, (c) => c.toUpperCase())}
       collapsible={true}
       collapseProps={collapseProps}
-      className="bg-slate-100"
+      className="bg-bp-surface"
     >
       <SectionCard
         padded={false}

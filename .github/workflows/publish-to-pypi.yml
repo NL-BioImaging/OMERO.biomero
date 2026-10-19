@@ -25,7 +25,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '20'
+        node-version: '22'
 
     - name: Install Node dependencies and build frontend
       working-directory: ./webapp
@@ -33,7 +33,8 @@ jobs:
         corepack enable || true
         npm --version || true
         yarn --version || true
-        yarn install --frozen-lockfile || yarn install
+        yarn install --frozen-lockfile
+        CI=true yarn test --watchAll=false --runInBand
         yarn build
 
     - name: Build package

@@ -1,4 +1,7 @@
 import ReactDOM from "react-dom/client";
+import { useState } from "react";
+import BlueprintTheme, { readTheme } from "./shared/BlueprintTheme";
+import useUnsavedChanges from "./shared/useUnsavedChanges";
 import {
   BrowserRouter,
   Routes,
@@ -12,13 +15,17 @@ import "./tailwind.css";
 import { AppProvider } from "./AppContext";
 import BiomeroApp from "./biomero/BiomeroApp";
 import ImporterApp from "./importer/ImporterApp";
+import DataAnalysisApp from "./data-analysis/DataAnalysisApp";
+import { resolveAppName } from "./appRouting";
 import {
   Navbar,
   NavbarGroup,
   NavbarHeading,
   NavbarDivider,
   Button,
+  Alignment,
 } from "@blueprintjs/core";
+
 
 const BiomeroIcon = () => (
   <div className="mr-2 w-[20px]">
@@ -63,17 +70,27 @@ c-64 60 -112 93 -271 188 -375 222 -525 400 -604 719 -18 72 -22 117 -22 257
   </div>
 );
 
-const AppRouter = () => {
+export const AppRouter = () => {
   const [searchParams] = useSearchParams();
   const WEBCLIENT = window.WEBCLIENT;
-  const { IMPORTER_ENABLED, ANALYZER_ENABLED } = WEBCLIENT.UI;
+  const { IMPORTER_ENABLED, ANALYZER_ENABLED, DATA_ANALYSIS_ENABLED } = WEBCLIENT.UI;
   const navigate = useNavigate();
-  const appName =
-    searchParams.get("tab") || (IMPORTER_ENABLED ? "import" : "biomero");
+  const [theme, setTheme] = useState(readTheme);
+  const [analysisDirty, setAnalysisDirty] = useState(false);
+  const { request: requestNavigation, dialog: navigationDialog } = useUnsavedChanges(analysisDirty);
+  const navigateTo = (tab) => requestNavigation(() => {
+    setAnalysisDirty(false);
+    navigate(`?tab=${tab}`);
+  });
+  const appName = resolveAppName(searchParams.get("tab"), {
+    importer_enabled: IMPORTER_ENABLED,
+    analyzer_enabled: ANALYZER_ENABLED,
+    data_analysis_enabled: DATA_ANALYSIS_ENABLED,
+  });
 
   return (
+    <BlueprintTheme theme={theme}>
     <AppProvider>
-      <div className="bg-[#f0f1f5] w-full h-full relative top-0">
         <Navbar className="z-[1] top-[35px]" fixedToTop>
           <NavbarGroup>
             {/* <Icon icon="style" className="mr-[7px]" /> */}
@@ -89,7 +106,7 @@ const AppRouter = () => {
                 }`}
                 icon="cloud-upload"
                 text="Import"
-                onClick={() => navigate("?tab=import")}
+                onClick={() => appName !== "import" && navigateTo("import")}
                 outlined={appName === "import"}
               />
             )}
@@ -102,22 +119,49 @@ const AppRouter = () => {
                 }`}
                 icon="data-sync"
                 text="Analyze"
-                onClick={() => navigate("?tab=biomero")}
+                onClick={() => appName !== "biomero" && navigateTo("biomero")}
                 outlined={appName === "biomero"}
               />
             )}
+            {DATA_ANALYSIS_ENABLED && (
+              <Button
+                className={`bp5-minimal focus:ring-0 focus:ring-offset-0 ${
+                  appName === "data-analysis"
+                    ? "bp5-intent-primary font-bold shadow-md"
+                    : ""
+                }`}
+                icon="applications"
+                text="Data Analysis"
+                onClick={() => appName !== "data-analysis" && navigateTo("data-analysis")}
+                outlined={appName === "data-analysis"}
+              />
+            )}
+          </NavbarGroup>
+          <NavbarGroup align={Alignment.RIGHT}>
+            <Button
+              minimal
+              icon={theme === "dark" ? "flash" : "moon"}
+              text={theme === "dark" ? "Light" : "Dark"}
+              aria-label={`Switch BIOMERO to ${theme === "dark" ? "light" : "dark"} mode`}
+              onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+            />
           </NavbarGroup>
         </Navbar>
         <div className="pt-[50px]">
-          {appName === "biomero" ? <BiomeroApp /> : <ImporterApp />}
+          {appName === "import" && <ImporterApp />}
+          {appName === "biomero" && <BiomeroApp />}
+          {appName === "data-analysis" && <DataAnalysisApp theme={theme} onDirtyChange={setAnalysisDirty} />}
+          {!appName && <div className="p-6">No BIOMERO applications are enabled.</div>}
         </div>
-      </div>
+      {navigationDialog}
     </AppProvider>
+    </BlueprintTheme>
   );
 };
 
 window.onload = function () {
   const rootElement = document.getElementById("root");
+  if (!rootElement) return;
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <BrowserRouter>

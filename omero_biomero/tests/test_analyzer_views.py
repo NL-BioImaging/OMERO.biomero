@@ -190,6 +190,30 @@ class AnalyzerViewsTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("disabled by the administrator", response.content.decode())
 
+    def test_invalid_image_selection_is_rejected_before_script_submission(self):
+        class Script:
+            id = 42
+            def getName(self):
+                return "SLURM_Run_Workflow.py"
+        svc = MagicMock()
+        svc.getScripts.return_value = [Script()]
+        conn = MagicMock()
+        conn.getScriptService.return_value = svc
+        for ids in ([], [None], [True], [0], ["not-an-image"], None):
+            with self.subTest(ids=ids), patch(
+                "omero_biomero.analyzer_views.SlurmClient", self._StubSlurmBase
+            ), patch(
+                "omero_biomero.analyzer_views.prepare_workflow_parameters",
+                lambda *a, **k: {"IDs": ids},
+            ):
+                request = SimpleNamespace(method="POST", body=json.dumps({
+                    "workflow_name": "wfA", "params": {"IDs": ids}
+                }).encode())
+                response = _raw("run_workflow_script")(request, conn=conn)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("Select at least one valid", response.content.decode())
+        svc.runScript.assert_not_called()
+
     def test_run_workflow_missing_roi_script_downgrades_to_warning(self):
         from biomero.constants import workflow
         from omero.rtypes import unwrap
@@ -550,10 +574,10 @@ class AnalyzerViewsTests(TestCase):
         conn.getScriptService.return_value = svc
         with patch("omero_biomero.analyzer_views.SlurmClient", StubSlurm), patch(
             "omero_biomero.analyzer_views.prepare_workflow_parameters",
-            lambda *a, **k: {},
+            lambda *a, **k: {"IDs": [1]},
         ):
             view = _raw("run_workflow_script")
-            payload = {"workflow_name": "wfA", "params": {}}
+            payload = {"workflow_name": "wfA", "params": {"IDs": [1]}}
             request = SimpleNamespace(method="POST", body=json.dumps(payload).encode())
             resp = view(request, conn=conn)
         self.assertEqual(resp.status_code, 500)

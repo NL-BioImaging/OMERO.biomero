@@ -468,9 +468,7 @@ export const AppProvider = ({ children }) => {
       toaster.show({
         intent: "danger",
         icon: "error",
-        message: `Config response: ${err.message}: ${
-          err.response?.data?.error
-        } (Params: ${JSON.stringify(config, null, 2)})`,
+        message: err.response?.data?.error || "Configuration could not be saved.",
         timeout: 0,
       });
       setError(err.message);

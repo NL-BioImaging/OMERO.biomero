@@ -20,7 +20,7 @@ import ConfigSection from "./ConfigSection";
 import ModelCard from "./ModelCard.js";
 import ConverterCard from "./ConverterCard.js";
 import { checkModelVersions, clearGitHubCache, slugify, fetchWorkflowMetadata } from "../../apiService";
-import { getDeletedConfigOptions } from "../configAdmin";
+import { getDeletedConfigOptions, validateWorkflowRows } from "../configAdmin";
 
 const DOCS_URL = "https://nl-bioimaging.github.io/biomero/slurm-configuration.html";
 
@@ -96,6 +96,7 @@ const SettingsForm = () => {
   const [showResetTooltip, setShowResetTooltip] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false); // Track if form has been initialized
+  const [saveError, setSaveError] = useState("");
 
   const [converters, setConverters] = useState([]);
   const [globalSbatchParams, setGlobalSbatchParams] = useState([]);
@@ -144,11 +145,11 @@ const SettingsForm = () => {
     workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
 
   const hasValidationErrors = () => {
-    return invalidShallowWorkers || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
+    return Object.keys(validateWorkflowRows(settingsForm?.WORKFLOWS)).length > 0 || invalidShallowWorkers || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
   };
 
   const validateModelFields = (models, scriptRepo, slurm) => {
-    const newErrors = {};
+    const newErrors = validateWorkflowRows(models);
     const globalGres = slurm?.gpu_gres || '';
     const globalGpus = slurm?.gpu_gpus || '';
     models.forEach((model, index) => {
@@ -197,7 +198,7 @@ const SettingsForm = () => {
         const repoErr = prev[i]?.repo;
         const computed = newErrors[i] || {};
         const entry = { ...computed };
-        if (repoErr) entry.repo = repoErr;
+        if (repoErr && !entry.repo) entry.repo = repoErr;
         if (Object.keys(entry).length > 0) merged[i] = entry;
       });
       return merged;
@@ -516,6 +517,15 @@ const SettingsForm = () => {
 
     // Clear version status when repo URL changes - we'll check on blur
     if (field === "repo" && !options.skipVersionCheck) {
+      setModelErrors(prev => {
+        const next = { ...prev };
+        if (next[index]) {
+          const { repo, ...rest } = next[index];
+          if (Object.keys(rest).length) next[index] = rest;
+          else delete next[index];
+        }
+        return next;
+      });
       setVersionStatus(prev => {
         const updated = { ...prev };
         delete updated[index];
@@ -688,6 +698,7 @@ const SettingsForm = () => {
     }
     
     setLoading(true);
+    setSaveError("");
     try {
       // Prepare the config with current converters for saving
       const configToSave = {
@@ -722,8 +733,11 @@ const SettingsForm = () => {
       
       setShowSaveTooltip(false); // Hide "Don't forget to save"
       setShowResetTooltip(true); // Show "Reload to apply changes"
-    } catch {
-      // AppContext displays the save error; keep the existing form baseline.
+    } catch (error) {
+      const fields = error.response?.data?.fields;
+      setSaveError(fields
+        ? Object.entries(fields).map(([field, message]) => `${field}: ${message}`).join(" ")
+        : error.response?.data?.error || "Configuration could not be saved.");
     } finally {
       setLoading(false);
     }
@@ -828,6 +842,7 @@ const SettingsForm = () => {
   return (
     <Card>
       <H3>Settings</H3>
+        {saveError && <div role="alert" className="text-red-600 mb-3">{saveError}</div>}
       <div className="bp5-form-group">
         <div className="bp5-form-content">
           <div className="bp5-form-helper-text">

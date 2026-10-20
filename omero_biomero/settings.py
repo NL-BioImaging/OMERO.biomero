@@ -82,18 +82,14 @@ def _load_overrides_simple():
 #       code for now, to keep configuration minimal.
 PREPROCESSING_CONFIG = {
     "screen_db": {
-        "container": "cellularimagingcf/image-db-to-ome:latest",
-    },
-    "screen_db_to_tiff": {
-        "container": "cellularimagingcf/cimagexpresstoometiff:v0.7",
-        "extra_params": {"saveoption": "single"},
+        "container": "cellularimagingcf/biomero-converter:0.2.1",
     },
     "dataset_leica_uuid": {
-        "container": "cellularimagingcf/convertleica-docker:v1.7.4",
-        "extra_params": {"image_uuid": "{UUID}"},
+        "container": "cellularimagingcf/biomero-converter:0.2.1",
+        "extra_params": {"image_uuid": "{UUID}", "outputformat": "omezarr04"},
     },
     "incucyte_archive": {
-        "container": "cellularimagingcf/biomero-converter:v0.1.29",
+        "container": "cellularimagingcf/biomero-converter:0.2.1",
     },
     # Add new keys here referencing PREPROCESSING_EXTENSION_MAP as needed.
 }

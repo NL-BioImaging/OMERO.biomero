@@ -82,14 +82,14 @@ def _load_overrides_simple():
 #       code for now, to keep configuration minimal.
 PREPROCESSING_CONFIG = {
     "screen_db": {
-        "container": "cellularimagingcf/biomero-converter:0.2.1",
+        "container": "cellularimagingcf/biomero-converter:0.2.2",
     },
     "dataset_leica_uuid": {
-        "container": "cellularimagingcf/biomero-converter:0.2.1",
+        "container": "cellularimagingcf/biomero-converter:0.2.2",
         "extra_params": {"image_uuid": "{UUID}", "outputformat": "omezarr04"},
     },
     "incucyte_archive": {
-        "container": "cellularimagingcf/biomero-converter:0.2.1",
+        "container": "cellularimagingcf/biomero-converter:0.2.2",
     },
     # Add new keys here referencing PREPROCESSING_EXTENSION_MAP as needed.
 }

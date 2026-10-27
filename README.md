@@ -148,6 +148,13 @@ a live multi-well Plate test.
 
 ### Testing
 
+Workflow submissions default fresh native Zarr exports to OME-NGFF 0.5 / Zarr
+v3, while preserving an explicit 0.4 choice. TIFF-consuming workflows always
+request 0.4 for the legacy HPC converter. Deploy the corresponding
+`biomero-scripts` format-routing fix first: it also ensures that a reused v3
+source becomes temporary v2 conversion material without changing its canonical
+store. Existing native Zarr inputs keep their actual v2 or v3 format.
+
 To run tests, create virtual environment, activate it and install the package in editable mode (this automatically pulls all dependencies from setup.py):
 
 ```

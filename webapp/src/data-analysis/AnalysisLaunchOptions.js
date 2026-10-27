@@ -24,6 +24,7 @@ const sourceKey = (source) => source
 
 const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
   const [launch, setLaunch] = useState({ loading: false, data: null, error: "" });
+  const [imageKeys, setImageKeys] = useState(new Set());
   const [attachmentIds, setAttachmentIds] = useState(new Set());
   const [bindingModes, setBindingModes] = useState({});
   const [libraryIds, setLibraryIds] = useState(new Set());
@@ -37,6 +38,9 @@ const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
     setLaunch({ loading: true, data: null, error: "" });
     try {
       const data = await fetchAnalysisLaunchContext(baseUrl, source, { signal });
+      if (signal?.aborted) return;
+      setImageKeys(new Set((data.image_input_candidates || []).filter(item =>
+        ["Image", "Plate"].includes(source.type)).map(item => `${item.type}:${item.id}`)));
       setLaunch({ loading: false, data, error: "" });
     } catch (error) {
       if (error.name !== "AbortError") {
@@ -46,6 +50,7 @@ const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
   };
 
   useEffect(() => {
+    setImageKeys(new Set());
     setAttachmentIds(new Set());
     setBindingModes({});
     setLibraryIds(new Set());
@@ -66,6 +71,7 @@ const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
   const resolvedSource = resolution.source
     ? {
         ...resolution.source,
+        imageInputs: (launch.data?.image_input_candidates || []).filter(item => imageKeys.has(`${item.type}:${item.id}`)),
         dataAnnotationIds: [...attachmentIds],
         dataBindings: Object.fromEntries(
           [...attachmentIds]
@@ -188,6 +194,22 @@ const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
         </Card>
       )}
 
+      {panelKind === "source" && (
+        <Card className="analysis-launch-section" elevation={1}>
+          <div className="analysis-launch-heading"><H5>Choose image inputs</H5><Tag>{imageKeys.size} selected</Tag></div>
+          <p>Only checked images or plates become inputs to a new workspace. Leave all unchecked for data files only. Existing workspaces keep their saved inputs.</p>
+          <Button onClick={() => setImageKeys(new Set((launch.data.image_input_candidates || []).map(item => `${item.type}:${item.id}`)))}>Select all</Button>{" "}
+          <Button onClick={() => setImageKeys(new Set())}>Clear selection</Button>
+          <div className="analysis-option-list" style={{maxHeight: 260, overflowY: "auto"}}>
+            {(launch.data.image_input_candidates || []).map(item => (
+              <Checkbox key={`${item.type}:${item.id}`} checked={imageKeys.has(`${item.type}:${item.id}`)}
+                onChange={() => toggle(setImageKeys, `${item.type}:${item.id}`)} label={`${item.name} (${item.type} ${item.id})`} />
+            ))}
+            {!(launch.data.image_input_candidates || []).length && <p>No images or plates available for this source.</p>}
+          </div>
+        </Card>
+      )}
+
       {panelKind === "source" && !(source.selectionIds || []).length && (
         <>
           <Card className="analysis-launch-section" elevation={1}>
@@ -303,7 +325,7 @@ const AnalysisLaunchOptions = ({ baseUrl, source, selectionError, onOpen }) => {
         intent="primary"
         icon={resolvedSource?.resumeWorkspaceName ? "history" : "applications"}
         disabled={!resolvedSource}
-        onClick={() => resolvedSource && onOpen(resolvedSource)}
+        onClick={() => resolvedSource && onOpen(panelKind === "source" ? { ...resolvedSource, workspaceId: null, workspaceAnnotationId: null, newWorkspace: crypto.randomUUID() } : resolvedSource)}
       >
         {resolvedSource?.resumeWorkspaceName
           ? `Resume ${resolvedSource.resumeWorkspaceName}`

@@ -205,3 +205,18 @@ test("BIOMERO sends only whitelisted light and dark theme messages", () => {
   );
   expect(postAnalysisTheme(iframeWindow, "sepia")).toBe(false);
 });
+
+
+test("image inputs survive embedded launch without replacing the Dataset context", () => {
+  const parsed = parseAnalysisLaunch("?analysis_type=Dataset&analysis_id=8&analysis_image_inputs=selected&analysis_image_input=Image:12");
+  expect(parsed.imageInputs).toEqual([{type: "Image", id: 12}]);
+  const url = new URL(buildAnalysisUrl("/omero_analysis/", {...parsed, newWorkspace: "new-one"}));
+  expect(url.searchParams.get("type")).toBe("Dataset");
+  expect(url.searchParams.getAll("image_input")).toEqual(["Image:12"]);
+  const empty = parseAnalysisLaunch("?type=Dataset&id=8&image_inputs=selected");
+  expect(empty.imageInputs).toEqual([]);
+  expect(new URL(buildAnalysisUrl("/omero_analysis/", empty)).searchParams.get("image_inputs")).toBe("selected");
+  const resume = new URL(buildAnalysisUrl("/omero_analysis/", {...parsed, workspaceId: "existing"}));
+  expect(resume.searchParams.has("image_inputs")).toBe(false);
+  expect(parseAnalysisLaunch("?type=Dataset&id=8&image_inputs=selected&image_input=Project:7")).toBeNull();
+});

@@ -16,6 +16,8 @@ jest.mock("../analysisIntegration", () => {
   };
 });
 
+beforeEach(() => { Object.defineProperty(global, "crypto", {configurable: true, value: {randomUUID: () => "new-image-workspace"}}); });
+
 test("presents worker policy and sends bindings only for query attachments", async () => {
   fetchAnalysisLaunchContext.mockResolvedValue({
     panel_kind: "source",
@@ -78,4 +80,25 @@ test("presents worker policy and sends bindings only for query attachments", asy
     dataAnnotationIds: expect.arrayContaining([11, 13]),
     dataBindings: { 11: "local" },
   }));
+});
+
+
+test("chooses only checked dataset images and keeps resume inputs unchanged", async () => {
+  Object.defineProperty(global.crypto, "randomUUID", {configurable: true, value: () => "new-image-workspace"});
+  fetchAnalysisLaunchContext.mockResolvedValue({panel_kind: "source", supported_attachments: [],
+    image_input_candidates: [11,12,13].map(id => ({type: "Image", id, name: `Field ${id}`})),
+    analysis_workspaces: [{workspaceId: "existing", workspaceName: "Saved"}]});
+  const onOpen = jest.fn();
+  render(<AnalysisLaunchOptions baseUrl="/omero_analysis/" source={{type: "Dataset", id: 8}} onOpen={onOpen} />);
+  const choice = await screen.findByRole("checkbox", {name: "Field 12 (Image 12)"});
+  expect(choice).not.toBeChecked();
+  fireEvent.click(choice);
+  fireEvent.click(screen.getByRole("button", {name: "New workspace"}));
+  expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({type: "Dataset", id: 8,
+    newWorkspace: "new-image-workspace", imageInputs: [{type: "Image", id: 12, name: "Field 12"}]}));
+  fireEvent.click(screen.getByRole("button", {name: "Clear selection"}));
+  fireEvent.click(screen.getByRole("button", {name: "New workspace"}));
+  expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({imageInputs: []}));
+  fireEvent.click(screen.getByRole("button", {name: "Open Saved"}));
+  expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({workspaceId: "existing", newWorkspace: null}));
 });

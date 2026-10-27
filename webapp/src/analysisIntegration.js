@@ -37,6 +37,16 @@ const sourceFromParams = (params, prefix) => {
   const selectionIds = positiveIntegers(params.getAll(`${prefix}selection_id`));
   if (selectionIds.length && !MULTI_SOURCE_TYPES.has(type)) return null;
 
+  let imageInputs;
+  if (params.has(`${prefix}image_inputs`) || params.has(`${prefix}image_input`)) {
+    if (params.getAll(`${prefix}image_inputs`).join() !== "selected") return null;
+    const values = params.getAll(`${prefix}image_input`);
+    if (values.length > 100 || values.some(value => !/^(Image|Plate):[1-9]\d*$/.test(value))) return null;
+    imageInputs = [...new Set(values)].map(value => {
+      const [type, id] = value.split(":");
+      return {type, id: Number(id)};
+    });
+  }
   const dataAnnotationIds = positiveIntegers(
     params.getAll(`${prefix}data_annotation`)
   );
@@ -57,6 +67,7 @@ const sourceFromParams = (params, prefix) => {
     selectionIds,
     dataAnnotationIds,
     dataBindings,
+    ...(imageInputs !== undefined ? {imageInputs} : {}),
     workspaceId: /^[\w-]{1,128}$/.test(params.get(`${prefix}workspace_id`) || "") ? params.get(`${prefix}workspace_id`) : null,
     newWorkspace: /^[\w-]{1,128}$/.test(params.get(`${prefix}new_workspace`) || "") ? params.get(`${prefix}new_workspace`) : null,
     workspaceAnnotationId: positiveInteger(
@@ -133,6 +144,14 @@ export const buildAnalysisUrl = (baseUrl, source, embedded = true) => {
   (source.selectionIds || []).forEach((id) =>
     url.searchParams.append("selection_id", String(id))
   );
+  if (source.imageInputs !== undefined && !source.workspaceId && !source.workspaceAnnotationId) {
+    if (!Array.isArray(source.imageInputs) || source.imageInputs.length > 100) return "";
+    url.searchParams.set("image_inputs", "selected");
+    for (const item of source.imageInputs) {
+      if (!MULTI_SOURCE_TYPES.has(item.type) || !positiveInteger(item.id)) return "";
+      url.searchParams.append("image_input", `${item.type}:${item.id}`);
+    }
+  }
   if (source.workspaceId) url.searchParams.set("workspace_id", source.workspaceId);
   if (source.newWorkspace) url.searchParams.set("new_workspace", source.newWorkspace);
   if (source.workspaceAnnotationId && !source.workspaceId && !source.newWorkspace) {

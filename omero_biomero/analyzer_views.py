@@ -226,8 +226,11 @@ def run_workflow_script(request, conn=None, **kwargs):
         roi_color = str(params.get("roiColor", "") or "").strip().upper()
         # EXPERIMENTAL: ZARR format support
         use_zarr = params.get("useZarrFormat", False)
-        # Always default to 0.4 so omero-cli-zarr doesn't fall back to 0.5 (Zarr v3)
-        ome_zarr_version = params.get("omeZarrVersion", transfer.OME_ZARR_VERSION_0_4)
+        # Fresh native Zarr exports default to v3; the legacy TIFF converter
+        # still requires v2, including when replaying an explicit v3 request.
+        ome_zarr_version = (
+            params.get("omeZarrVersion") or transfer.OME_ZARR_VERSION_0_5
+        ) if use_zarr else transfer.OME_ZARR_VERSION_0_4
         # Batch processing parameters
         batch_enabled = params.get("batchEnabled", False)
         batch_count = params.get("batchCount", 1)
@@ -358,7 +361,7 @@ def run_workflow_script(request, conn=None, **kwargs):
                 transfer.DATA_TYPE: wrap(data_type),
                 workflow.EMAIL: rbool(out_email),
                 workflow.USE_ZARR_FORMAT: rbool(use_zarr),  # EXPERIMENTAL
-                transfer.OME_VERSION: wrap(ome_zarr_version),  # always explicit, default 0.4
+                transfer.OME_VERSION: wrap(ome_zarr_version),
                 workflow_batched.BATCH_SIZE: wrap(batch_size) if batch_enabled else None,  # Only for batched script
                 workflow.SELECT_IMPORT: rbool(True),
                 workflow.OUTPUT_PARENT: rbool(import_zp),

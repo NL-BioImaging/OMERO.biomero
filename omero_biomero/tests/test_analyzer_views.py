@@ -67,6 +67,49 @@ class AnalyzerViewsTests(TestCase):
         self.assertEqual(resp.status_code, 404)
         self.assertIn("not found", resp.content.decode())
 
+    def test_workflow_input_format_routing(self):
+        from biomero.constants import transfer
+        from omero.rtypes import unwrap
+
+        class Session(dict):
+            modified = False
+
+        cases = [
+            ({}, "0.4"),
+            ({"useZarrFormat": True}, "0.5"),
+            ({"useZarrFormat": True, "omeZarrVersion": "0.4"}, "0.4"),
+            ({"useZarrFormat": True, "omeZarrVersion": "0.5"}, "0.5"),
+            ({"useZarrFormat": False, "omeZarrVersion": "0.5"}, "0.4"),
+        ]
+        for overrides, expected in cases:
+            for batched in (False, True):
+                with self.subTest(overrides=overrides, batched=batched):
+                    svc = MagicMock()
+                    script = MagicMock()
+                    script.id = 42
+                    script.getName.return_value = (
+                        "SLURM_Run_Workflow_Batched.py" if batched
+                        else "SLURM_Run_Workflow.py")
+                    svc.getScripts.return_value = [script]
+                    svc.runScript.return_value.getJob.return_value._id = 99
+                    conn = MagicMock()
+                    conn.getScriptService.return_value = svc
+                    params = {"IDs": [1], "Data_Type": "Image",
+                              "batchEnabled": batched, **overrides}
+                    request = SimpleNamespace(
+                        method="POST", session=Session(),
+                        body=json.dumps({"workflow_name": "wfA",
+                                         "params": params}).encode())
+                    with patch("omero_biomero.analyzer_views.SlurmClient",
+                               self._StubSlurmBase), patch(
+                        "omero_biomero.analyzer_views.prepare_workflow_parameters",
+                        return_value=params,
+                    ):
+                        response = _raw("run_workflow_script")(request, conn=conn)
+                    self.assertEqual(response.status_code, 200, response.content)
+                    sent = svc.runScript.call_args.args[1]
+                    self.assertEqual(unwrap(sent[transfer.OME_VERSION]), expected)
+
     def test_run_workflow_script_success(self):
         class StubSlurm(self._StubSlurmBase):
             pass

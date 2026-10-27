@@ -26,6 +26,30 @@ test("workspace identity and new-workspace launches survive the BIOMERO frame", 
   expect(fresh.searchParams.has("workspace_annotation")).toBe(false);
 });
 
+test("chosen images reach Analysis without asking again, including an explicit empty choice", () => {
+  for (const prefix of ["analysis_", ""]) {
+    const source = parseAnalysisLaunch(`?${prefix}type=Dataset&${prefix}id=102&${prefix}new_workspace=new-one&${prefix}image_inputs=selected&${prefix}image_input=Image:205&${prefix}image_input=Image:205`);
+    expect(source.imageInputs).toEqual([{type: "Image", id: 205}]);
+    for (const embedded of [true, false]) {
+      const url = new URL(buildAnalysisUrl("/omero_analysis/", source, embedded));
+      expect(url.searchParams.get("image_inputs")).toBe("selected");
+      expect(url.searchParams.getAll("image_input")).toEqual(["Image:205"]);
+    }
+    const context = new URL(launchContextUrl("/omero_analysis/", source));
+    expect(context.searchParams.getAll("image_input")).toEqual(["Image:205"]);
+  }
+  const empty = parseAnalysisLaunch("?analysis_type=Dataset&analysis_id=102&analysis_image_inputs=selected");
+  expect(empty.imageInputs).toEqual([]);
+  expect(new URL(buildAnalysisUrl("/omero_analysis/", empty)).searchParams.get("image_inputs")).toBe("selected");
+  expect(parseAnalysisLaunch("?type=Dataset&id=102").imageInputs).toBeUndefined();
+});
+
+test("malformed image selections are rejected", () => {
+  for (const suffix of ["image_inputs=all", "image_input=Image:205", "image_inputs=selected&image_input=Dataset:102", "image_inputs=selected&image_input=Image:-1", "image_inputs=selected&image_inputs=selected"]) {
+    expect(parseAnalysisLaunch(`?type=Dataset&id=102&${suffix}`)).toBeNull();
+  }
+});
+
 test("explicit Analysis parameters are parsed through the supported whitelist", () => {
   const source = parseAnalysisLaunch(
     "?tab=data-analysis&analysis_type=Plate&analysis_id=12" +

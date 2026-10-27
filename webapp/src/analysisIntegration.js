@@ -212,6 +212,10 @@ export const launchContextUrl = (baseUrl, source) => {
   (source.selectionIds || []).forEach((id) =>
     url.searchParams.append("selection_id", String(id))
   );
+  if (source.imageInputs !== undefined && !source.workspaceId && !source.workspaceAnnotationId) {
+    url.searchParams.set("image_inputs", "selected");
+    source.imageInputs.forEach(item => url.searchParams.append("image_input", `${item.type}:${item.id}`));
+  }
   return url.toString();
 };
 

@@ -473,6 +473,41 @@ class AdminConfigTests(TestCase):
                 conn=_fake_conn(),
             )
 
+    def test_orphaned_v3_is_rejected_without_writing_either_config(self):
+        ini = Path(self._create_tempfile('[UI]\nzarr_workflows=[]\n'))
+        json_config = self._tmpdir / 'config.json'
+        json_config.write_text('{"UPLOADER": {"enabled": false}}')
+        before = (ini.read_bytes(), json_config.read_bytes())
+        response = self._post_config({'config': {
+            'UI': {'zarr_v3_workflows': '["seg"]'},
+            'UPLOADER': {'enabled': True},
+        }}, ini, json_config)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('UI.zarr_v3_workflows', json.loads(response.content)['fields'])
+        self.assertEqual((ini.read_bytes(), json_config.read_bytes()), before)
+
+    def test_partial_v3_update_uses_existing_zarr_or_plate_requirement(self):
+        for key in ('zarr_workflows', 'plate_workflows'):
+            with self.subTest(key=key):
+                ini = Path(self._create_tempfile(f'[UI]\n{key}=["seg"]\n'))
+                response = self._post_config({'config': {'UI': {'zarr_v3_workflows': '["seg"]'}}}, ini)
+                self.assertEqual(response.status_code, 200)
+
+    def test_removing_the_last_requirement_cannot_leave_a_v3_opt_in(self):
+        for deletion in (False, True):
+            with self.subTest(deletion=deletion):
+                ini = Path(self._create_tempfile('[UI]\nzarr_workflows=["seg"]\nzarr_v3_workflows=["seg"]\n'))
+                before = ini.read_bytes()
+                payload = ({'config': {}, 'deleted': [{'section': 'UI', 'option': 'zarr_workflows'}]}
+                           if deletion else {'config': {'UI': {'zarr_workflows': '[]'}}})
+                response = self._post_config(payload, ini)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(ini.read_bytes(), before)
+                response = self._post_config({'config': {'UI': {
+                    'zarr_workflows': '[]', 'zarr_v3_workflows': '[]',
+                }}}, ini)
+                self.assertEqual(response.status_code, 200)
+
     def test_empty_workflow_cannot_corrupt_previous_job_or_update_json(self):
         original = (
             "[WORKFLOWS]\ncidenoise=cidenoise\n"

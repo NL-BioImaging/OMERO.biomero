@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Collapse, Button, H5, H6, Icon, Tag, Tooltip } from "@blueprintjs/core";
+import DocumentationLink from "./DocumentationLink";
 
-const CollapsibleSection = ({ title, children, versionSummary, versionCheckLoading, onRefresh, errorCount, nested }) => {
+const CollapsibleSection = ({ title, children, versionSummary, versionCheckLoading, onRefresh, errorCount, nested, documentation }) => {
   const [isOpen, setIsOpen] = useState(false);
   const TitleTag = nested ? H6 : H5;
 
@@ -65,18 +66,21 @@ const CollapsibleSection = ({ title, children, versionSummary, versionCheckLoadi
           )}
         </TitleTag>
 
-        {/* Refresh button - separate from clickable title */}
-        {onRefresh && (
-          <Tooltip content="Refresh version check (clears cache)">
-            <Button
-              minimal
-              small
-              icon="repeat"
-              onClick={() => onRefresh()}
-              disabled={versionCheckLoading}
-            />
-          </Tooltip>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Help and refresh stay outside the clickable title. */}
+          {onRefresh && (
+            <Tooltip content="Refresh version check (clears cache)">
+              <Button
+                minimal
+                small
+                icon="repeat"
+                onClick={() => onRefresh()}
+                disabled={versionCheckLoading}
+              />
+            </Tooltip>
+          )}
+          {documentation && <DocumentationLink {...documentation} />}
+        </div>
       </div>
       <Collapse isOpen={isOpen}>
         <div>{children}</div>

@@ -1,6 +1,7 @@
 """Offline validation for configuration edits; never initializes workflows."""
 
 import re
+import json
 from urllib.parse import urlsplit
 
 
@@ -30,7 +31,8 @@ def valid_repository(value):
     )
 
 
-def validate_ini_sections(sections):
+def validate_ini_sections(sections, *, complete=False):
+    """Validate an edit, or cross-field constraints on a complete merged config."""
     fields = {}
     for section, values in sections.items():
         if (not isinstance(section, str) or not section.strip()
@@ -54,6 +56,32 @@ def validate_ini_sections(sections):
                 fields[field] = "Use a single-line value."
             elif isinstance(value, str) and re.search(r"[\r\n\x00]", value):
                 fields[field] = "Use a single-line value; remove unexpected line breaks."
+
+        if section == "UI" and "zarr_v3_workflows" in values:
+            try:
+                workflows = json.loads(values["zarr_v3_workflows"] or "[]")
+            except (ValueError, TypeError):
+                workflows = None
+            if not isinstance(workflows, list) or any(
+                    not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name)
+                    for name in workflows):
+                fields["UI.zarr_v3_workflows"] = "Use a JSON list of workflow names, or [] for v2 defaults."
+            elif complete and workflows:
+                native_zarr = set()
+                for option in ("zarr_workflows", "plate_workflows"):
+                    try:
+                        names = json.loads(values.get(option) or "[]")
+                    except (ValueError, TypeError):
+                        names = None
+                    if not isinstance(names, list) or any(not isinstance(name, str) for name in names):
+                        fields[f"UI.{option}"] = "Use a JSON list of workflow names."
+                    else:
+                        native_zarr.update(names)
+                if set(workflows) - native_zarr:
+                    fields["UI.zarr_v3_workflows"] = (
+                        "Zarr v3 input requires Zarr Format Required or plate input for: "
+                        + ", ".join(sorted(set(workflows) - native_zarr)) + "."
+                    )
 
         if section not in ("WORKFLOWS", "MODELS"):
             continue

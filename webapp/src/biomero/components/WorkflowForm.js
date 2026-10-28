@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FormGroup, InputGroup, NumericInput, Switch, HTMLSelect, Intent, Tag, Callout, Divider, Tooltip, Icon, Collapse, Button } from "@blueprintjs/core";
 import { useAppContext } from "../../AppContext";
 import { HistoryFieldCue, WorkflowStepIntro } from "./HistoryFeedback";
+import { parseWorkflowList } from "../workflowModes";
 
 const WorkflowForm = () => {
   const { state, updateState } = useAppContext();
@@ -120,23 +121,27 @@ const WorkflowForm = () => {
     }
   }, [selectedVersion, workflowMetadata]);
 
-  // Force ZARR format when workflow requires it (plate workflows or admin-configured ZARR workflows)
+  // Apply admin/descriptor tags to the existing script inputs.
   useEffect(() => {
     if (workflowName) {
       const { isPlateWorkflow, isZarrWorkflow } = getWorkflowFlags(workflowName);
-      
-      if (isPlateWorkflow || isZarrWorkflow) {
-        // Force ZARR for plate workflows or admin-configured ZARR workflows
-        updateState({
-          formData: {
-            ...state.formData,
-            Format: "ZARR", // Force zarr format for configured workflows
-            useZarrFormat: true, // Force zarr backend flag for configured workflows
-          },
-        });
+      const requiresZarr = isPlateWorkflow || isZarrWorkflow;
+      if (!requiresZarr && !state.formData?.useZarrFormat && !state.formData?.omeZarrVersion) {
+        return;
       }
+      const useZarrFormat = requiresZarr || !!state.formData?.useZarrFormat;
+      const useV3 = requiresZarr && parseWorkflowList(
+        state.config?.UI?.zarr_v3_workflows).includes(workflowName);
+      updateState({
+        formData: {
+          ...state.formData,
+          ...(requiresZarr ? { Format: "ZARR" } : {}),
+          useZarrFormat,
+          omeZarrVersion: useV3 ? "0.5" : "0.4",
+        },
+      });
     }
-  }, [workflowName, state.config, workflowMetadata]);
+  }, [workflowName, state.config, workflowMetadata, state.formData?.useZarrFormat]);
 
   if (!workflowMetadata) {
     return <div>Loading workflow...</div>;
@@ -179,16 +184,16 @@ const WorkflowForm = () => {
                   key={id}
                   label={<span>{name} <HistoryFieldCue field={id} /></span>}
                   labelFor={id}
-                  helperText="Format is locked to ZARR for admin-configured workflows"
+                  helperText="Format is locked to OME-Zarr for admin-configured workflows"
                 >
                   <InputGroup
                     id={id}
-                    value="ZARR"
+                    value="OME-Zarr"
                     readOnly={true}
                     disabled={true}
                     intent="primary"
                     rightElement={
-                      <Tooltip content="This workflow requires ZARR format (admin-configured)">
+                      <Tooltip content="This workflow requires OME-Zarr format (admin-configured)">
                         <Icon icon="lock" intent="primary" />
                       </Tooltip>
                     }
@@ -212,7 +217,7 @@ const WorkflowForm = () => {
                   >
                     {choices.map((choice, i) => {
                       const label = choiceLabels[i] != null ? String(choiceLabels[i]) : String(choice);
-                      return <option key={String(choice)} value={String(choice)}>{label}</option>;
+                      return <option key={String(choice)} value={String(choice)}>{isFormatField && label === "ZARR" ? "OME-Zarr" : label}</option>;
                     })}
                   </HTMLSelect>
                 </FormGroup>

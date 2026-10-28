@@ -10,6 +10,22 @@
   `webapp/src/biomero/components/SettingsForm.js`, keep its label, helper text,
   default, environment override, scope, and validation consistent with the
   backend and shipped configuration.
+- Apply the existing `RuntimeIcon` and `SlurmInitIcon` consistently, including
+  collapsed section headings and newly added feature controls. A homogeneous
+  group can share an indicator; mixed groups need both at the heading and the
+  appropriate indicator on each field or subgroup. Trace the actual consumer:
+  resource limits, input modes and version choices are runtime settings; image
+  acquisition and generated scripts require Slurm Init. In Shallow Zarr, the
+  image needs Slurm Init; remote/local selection, receipt version and resources
+  are runtime. Explain that enabling remote shallowing first requires an
+  installed helper, and image/version must match importer trust configuration.
+  Deployment feature flags and environment overrides may require container
+  recreation; do not imply that saving the form applies those changes.
+- Add contextual book links for admin feature groups, using the relevant
+  NL-BIOMERO admin guide or core configuration section. Keep them accessible
+  while sections are collapsed and open docs in a new tab to preserve form
+  edits. Verify URLs and anchors against published docs or the built matching
+  documentation PR; coordinate publication when using its final URLs.
 - Remove obsolete settings completely only when authorized: runtime reads,
   template data attributes, frontend consumers, tests, package dependencies,
   documentation, and deployment environment entries are separate touch points.

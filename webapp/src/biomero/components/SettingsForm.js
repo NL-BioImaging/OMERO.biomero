@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { parseWorkflowList, getDescriptorInputRequirements, getWorkflowInputRequirements } from "../workflowModes";
 import {
   Card,
   FormGroup,
@@ -19,10 +20,11 @@ import CollapsibleSection from "./CollapsibleSection";
 import ConfigSection from "./ConfigSection";
 import ModelCard from "./ModelCard.js";
 import ConverterCard from "./ConverterCard.js";
+import DocumentationLink from "./DocumentationLink";
+import AdminScriptLink from "./AdminScriptLink";
+import { ADMIN_HELP } from "../adminHelp";
 import { checkModelVersions, clearGitHubCache, slugify, fetchWorkflowMetadata } from "../../apiService";
 import { getDeletedConfigOptions, validateWorkflowRows } from "../configAdmin";
-
-const DOCS_URL = "https://nl-bioimaging.github.io/biomero/slurm-configuration.html";
 
 /** Inline Tag showing an environment variable name. */
 const EnvVarTag = ({ name }) => (
@@ -56,11 +58,11 @@ const ExampleNote = ({ children }) => (
   <span className="block mt-0.5"><strong className="bp5-text-muted">Example:</strong> <code>{children}</code></span>
 );
 
-/** Setting type icon: takes effect immediately after saving, no Slurm Init needed. */
+/** Setting type icon: applies to new runs or requests after saving. */
 export const RuntimeIcon = () => (
   <span className="inline-flex align-middle">
     <Tooltip
-      content="Runtime setting — takes effect immediately after saving. No Slurm Init needed."
+      content="Runtime setting — applies to new runs or requests after saving. No Slurm Init needed."
       placement="right"
     >
       <Icon icon="automatic-updates" size={12} className="cursor-help bp5-text-muted" />
@@ -72,7 +74,7 @@ export const RuntimeIcon = () => (
 export const SlurmInitIcon = () => (
   <span className="inline-flex align-middle">
     <Tooltip
-      content="Slurm Init setting — a Slurm Init run is needed to deploy this change to the cluster."
+      content="Slurm Init setting — requires running the Slurm Init script after saving."
       placement="right"
     >
       <Icon icon="refresh" size={12} className="cursor-help bp5-text-muted" />
@@ -103,21 +105,21 @@ const SettingsForm = () => {
   const [errors, setErrors] = useState({});
   const [modelErrors, setModelErrors] = useState({});
   
-  // Descriptor flags derived from already-fetched state.workflows (populated by Run tab on load)
+  // Newly read descriptors and saved workflow metadata use the same interpretation.
+  const [descriptorsByRepo, setDescriptorsByRepo] = useState({});
   const descriptorMetadata = useMemo(() => {
-    if (!settingsForm?.WORKFLOWS || !state.workflows) return {};
+    if (!settingsForm?.WORKFLOWS) return {};
     const result = {};
     settingsForm.WORKFLOWS.forEach((model, index) => {
-      const wf = state.workflows.find((w) => w.name === model.name);
-      if (wf?.metadata) {
-        result[index] = {
-          requiresZarr: wf.metadata['requires-zarr'] ?? null,
-          requiresPlate: wf.metadata['requires-plate'] ?? null,
-        };
+      const wf = state.workflows?.find((w) =>
+        (w.githubUrl || w.metadata?.githubUrl || state.config.WORKFLOWS?.[`${w.name}_repo`]) === model.repo);
+      const metadata = descriptorsByRepo[model.repo] || wf?.metadata;
+      if (metadata) {
+        result[index] = getDescriptorInputRequirements(metadata);
       }
     });
     return result;
-  }, [settingsForm?.WORKFLOWS, state.workflows]);
+  }, [settingsForm?.WORKFLOWS, state.workflows, state.config?.WORKFLOWS, descriptorsByRepo]);
 
   // Version checking state
   const [versionStatus, setVersionStatus] = useState({});
@@ -143,9 +145,11 @@ const SettingsForm = () => {
   const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
   const invalidShallowWorkers = state.ui?.shallow_zarr_enabled && remoteShallowEnabled &&
     workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
+  const invalidZarrVersions = (settingsForm?.WORKFLOWS || []).filter((model, index) =>
+    model.useZarrV3 && !getWorkflowInputRequirements(model, descriptorMetadata[index]).requiresZarr);
 
   const hasValidationErrors = () => {
-    return Object.keys(validateWorkflowRows(settingsForm?.WORKFLOWS)).length > 0 || invalidShallowWorkers || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
+    return Object.keys(validateWorkflowRows(settingsForm?.WORKFLOWS)).length > 0 || invalidShallowWorkers || invalidZarrVersions.length > 0 || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
   };
 
   const validateModelFields = (models, scriptRepo, slurm) => {
@@ -252,6 +256,7 @@ const SettingsForm = () => {
             isPlateWorkflow: isPlateWorkflow, // Boolean flag from UI list
             isDualModeWorkflow: isDualModeWorkflow,
             isZarrWorkflow: isZarrWorkflow, // Boolean flag from UI list
+            useZarrV3: parseWorkflowList(state.config.UI?.zarr_v3_workflows).includes(prefix),
             useGpu: state.config.WORKFLOWS[`${prefix}_use_gpu`] === "true",
             extraParams: extractExtraParams(prefix), // Handle the extraParams here
           };
@@ -449,9 +454,11 @@ const SettingsForm = () => {
     }
 
     if (metadata) {
+      setDescriptorsByRepo(prev => ({ ...prev, [model.repo]: metadata }));
       setSettingsForm((prev) => {
         const updatedModels = structuredClone(prev.WORKFLOWS);
         const m = updatedModels[modelIndex];
+        if (!m || m.repo !== model.repo) return prev;
 
         // Auto-populate name from descriptor if the name field is still empty
         if (!m.name && metadata.name) {
@@ -481,6 +488,9 @@ const SettingsForm = () => {
           m.isZarrWorkflow = true;
         }
 
+        // General Zarr support does not imply v3 support. Keep a valid manual
+        // choice when rereading a descriptor; BIAFLOWS always remains v2.
+        m.useZarrV3 = getWorkflowInputRequirements(m, getDescriptorInputRequirements(metadata)).useZarrV3;
         return { ...prev, WORKFLOWS: updatedModels };
       });
     }
@@ -510,7 +520,10 @@ const SettingsForm = () => {
           !descriptorMetadata[index]?.requiresPlate) {
         updatedModels[index]["isDualModeWorkflow"] = false;
       }
-
+      if (['isZarrWorkflow', 'isPlateWorkflow', 'useZarrV3'].includes(field)) {
+        updatedModels[index].useZarrV3 = getWorkflowInputRequirements(
+          updatedModels[index], descriptorMetadata[index]).useZarrV3;
+      }
 
       return { ...prev, WORKFLOWS: updatedModels };
     });
@@ -769,9 +782,11 @@ const SettingsForm = () => {
     const dualModeWorkflows = settingsForm.WORKFLOWS
       .filter(model => model.isDualModeWorkflow)
       .map(model => model.name);
-    // Collect ZARR workflows into a JSON list
+    // Persist the parent requirement for v3, including descriptor-required input,
+    // so the API can validate the saved configuration without fetching descriptors.
     const zarrWorkflows = settingsForm.WORKFLOWS
-      .filter(model => model.isZarrWorkflow)
+      .filter((model, index) => model.isZarrWorkflow ||
+        (model.useZarrV3 && getWorkflowInputRequirements(model, descriptorMetadata[index]).requiresZarr))
       .map(model => model.name);
 
     const converters = settingsForm.CONVERTERS.reduce((acc, converter) => {
@@ -795,6 +810,11 @@ const SettingsForm = () => {
         ...settingsForm.UI,
         plate_workflows: JSON.stringify(plateWorkflows),
         zarr_workflows: JSON.stringify(zarrWorkflows),
+        // A temporarily unavailable descriptor must not erase a saved choice.
+        // Explicitly disabling Zarr clears it in handleModelChange above.
+        zarr_v3_workflows: JSON.stringify(settingsForm.WORKFLOWS
+          .filter(model => model.useZarrV3)
+          .map(model => model.name)),
         dual_mode_workflows: JSON.stringify(dualModeWorkflows)
       }
     };
@@ -841,8 +861,14 @@ const SettingsForm = () => {
 
   return (
     <Card>
-      <H3>Settings</H3>
+      <div className="flex items-center justify-between gap-2">
+        <H3>Settings</H3>
+        <DocumentationLink {...ADMIN_HELP.manual}>Administrator manual</DocumentationLink>
+      </div>
         {saveError && <div role="alert" className="text-red-600 mb-3">{saveError}</div>}
+        {invalidZarrVersions.length > 0 && <div role="alert" className="text-red-600 mb-3">
+          Zarr v3 input requires Zarr Format Required. Enable it for: {invalidZarrVersions.map(model => model.name).join(', ')}.
+        </div>}
       <div className="bp5-form-group">
         <div className="bp5-form-content">
           <div className="bp5-form-helper-text">
@@ -853,31 +879,24 @@ const SettingsForm = () => {
             Each setting is marked with an icon indicating when it takes effect:
           </div>
           <div className="bp5-form-helper-text flex items-center gap-1">
-            <RuntimeIcon /> <i>runtime</i> — applies immediately after saving.
+            <RuntimeIcon /> <i>runtime</i> — applies to new runs or requests after saving.
           </div>
-          <div className="bp5-form-helper-text flex items-center gap-1">
-            <SlurmInitIcon /> <i>Slurm Init</i> — requires running the <b>Slurm Init</b> script to deploy to the cluster.
+          <div className="bp5-form-helper-text">
+            <SlurmInitIcon /> <i>Slurm Init</i> — requires running the{" "}
+            <AdminScriptLink name="Slurm Init" /> script after saving.
           </div>
 
           <div className="bp5-form-helper-text">
-            Use <b>Slurm Check Setup</b> to verify which workflows are actually installed on your Slurm cluster.
+            Use <AdminScriptLink name="Slurm Check Setup" /> to verify which workflows are actually installed on your Slurm cluster.
           </div>
 
           <div className="bp5-form-helper-text">
-            Please check the{" "}
-            <a
-              href="https://nl-bioimaging.github.io/biomero/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              BIOMERO documentation
-            </a>{" "}
-            for more info.
+            Book icons open the relevant documentation in a new tab.
           </div>
         </div>
       </div>
 
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">SSH Settings <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.ssh} title={<span className="inline-flex items-center gap-1">SSH Settings <SlurmInitIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -905,16 +924,15 @@ const SettingsForm = () => {
           "The alias for the SSH connection for connecting to Slurm."
         )}
       </CollapsibleSection>
-      <CollapsibleSection title="Slurm Settings">
+      <CollapsibleSection documentation={ADMIN_HELP.slurm} title={<span className="inline-flex items-center gap-1">Slurm Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
-              General settings for where to find things on the Slurm cluster.{" "}
-              <a href={DOCS_URL} target="_blank" rel="noopener noreferrer">Documentation ↗</a>
+              General settings for where to find things on the Slurm cluster.
             </div>
           </div>
         </div>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">Paths <SlurmInitIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.paths} title={<span className="inline-flex items-center gap-1">Paths <RuntimeIcon /> <SlurmInitIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -925,35 +943,35 @@ const SettingsForm = () => {
             </div>
           </div>
           {renderEditableField(
-            "Slurm Data Path",
+            <span className="inline-flex items-center gap-1">Slurm Data Path <SlurmInitIcon /></span>,
             "SLURM.slurm_data_path",
             settingsForm.SLURM.slurm_data_path,
             "/data/my-scratch/data",
             "The path on SLURM entrypoint for storing datafiles."
           )}
           {renderEditableField(
-            "Slurm Images Path",
+            <span className="inline-flex items-center gap-1">Slurm Images Path <SlurmInitIcon /></span>,
             "SLURM.slurm_images_path",
             settingsForm.SLURM.slurm_images_path,
             "/data/my-scratch/singularity_images/workflows",
             "The path on SLURM entrypoint for storing container image files."
           )}
           {renderEditableField(
-            "Slurm Converters Path",
+            <span className="inline-flex items-center gap-1">Slurm Converters Path <SlurmInitIcon /></span>,
             "SLURM.slurm_converters_path",
             settingsForm.SLURM.slurm_converters_path,
             "/data/my-scratch/singularity_images/converters",
             "The path on SLURM entrypoint for storing converter image files."
           )}
           {renderEditableField(
-            "Slurm Script Path",
+            <span className="inline-flex items-center gap-1">Slurm Script Path <SlurmInitIcon /></span>,
             "SLURM.slurm_script_path",
             settingsForm.SLURM.slurm_script_path,
             "/data/my-scratch/slurm-scripts",
             "The path on SLURM entrypoint for storing the Slurm job scripts."
           )}
           {renderEditableField(
-            "Slurm Data Bind Path",
+            <span className="inline-flex items-center gap-1">Slurm Data Bind Path <RuntimeIcon /></span>,
             "SLURM.slurm_data_bind_path",
             settingsForm.SLURM.slurm_data_bind_path,
             "",
@@ -982,7 +1000,7 @@ const SettingsForm = () => {
             </>
           )}
         </CollapsibleSection>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">SACCT History Window <RuntimeIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.history} title={<span className="inline-flex items-center gap-1">SACCT History Window <RuntimeIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1014,7 +1032,7 @@ const SettingsForm = () => {
             </>
           )}
         </CollapsibleSection>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">Repositories <SlurmInitIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.repositories} title={<span className="inline-flex items-center gap-1">Repositories <SlurmInitIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1039,7 +1057,7 @@ const SettingsForm = () => {
             "danger"
           )}
         </CollapsibleSection>
-        <CollapsibleSection title="Processing Settings" nested>
+        <CollapsibleSection documentation={ADMIN_HELP.processing} title={<span className="inline-flex items-center gap-1">Processing Settings <RuntimeIcon /> <SlurmInitIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1085,7 +1103,7 @@ const SettingsForm = () => {
               )
             }
           />
-          <H6><span className="inline-flex items-center gap-1">Partition &amp; GPU Fallback <RuntimeIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">Partition &amp; GPU Fallback <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.gpu} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1157,7 +1175,7 @@ const SettingsForm = () => {
               </div>
             </div>
           )}
-          <H6><span className="inline-flex items-center gap-1">Image Pull Settings <SlurmInitIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">Image Pull Settings <SlurmInitIcon /> <DocumentationLink {...ADMIN_HELP.imagePull} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1231,7 +1249,7 @@ const SettingsForm = () => {
               <EnvVarNote vars={["BIOMERO_PULL_PARTITION"]} />
             </>
           )}
-          <H6><span className="inline-flex items-center gap-1">ZIP Command <RuntimeIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">ZIP Command <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.zip} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1253,7 +1271,7 @@ const SettingsForm = () => {
               <EnvVarNote vars={["BIOMERO_SLURM_ZIP_CMD"]} />
             </>
           )}
-          <H6><span className="inline-flex items-center gap-1">Global Sbatch Parameters <RuntimeIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">Global Sbatch Parameters <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.sbatch} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1309,7 +1327,7 @@ const SettingsForm = () => {
         </CollapsibleSection>
       </CollapsibleSection>
       {state.ui?.shallow_zarr_enabled && (
-        <CollapsibleSection title="Shallow Zarr">
+        <CollapsibleSection documentation={ADMIN_HELP.shallow} title={<span className="inline-flex items-center gap-1">Shallow Zarr <RuntimeIcon /> <SlurmInitIcon /></span>}>
           <FormGroup helperText={<>
             Shallow eligible Zarr results on Slurm before transfer. Enabled by default;
             opt out to shallow locally in the importer and avoid additional Slurm compute costs.
@@ -1318,7 +1336,8 @@ const SettingsForm = () => {
             be changed in the deployment, not in this form.
           </>}>
             <Switch
-              label="Remote shallowing"
+              aria-label="Remote shallowing"
+              label={<span className="inline-flex items-center gap-1">Remote shallowing <RuntimeIcon /></span>}
               checked={remoteShallowEnabled}
               onChange={(e) => handleInputChange("SLURM.remote_shallow_zarr", e.target.checked ? "true" : "false")}
             />
@@ -1326,7 +1345,8 @@ const SettingsForm = () => {
           {remoteShallowEnabled && <>
             <p className="bp5-text-muted">
               Image and tool version must match the importer trust configuration.
-              Run Slurm Init after changing the image. Keep the original image available
+              Run <AdminScriptLink name="Slurm Init" /> after changing the image, or before enabling remote
+              shallowing if the helper image has not been installed. Keep the original image available
               until outstanding jobs finish. The helper requests no GPU.
             </p>
             {invalidShallowWorkers && <p role="alert">Shallower workers must be a positive integer.</p>}
@@ -1339,7 +1359,9 @@ const SettingsForm = () => {
               ["time", "Shallower time limit", "", "Leave blank to inherit global sbatch_time, then the scheduler default."],
             ].map(([key, label, placeholder, description]) => (
               <React.Fragment key={key}>
-                {renderEditableField(label, `SLURM.remote_shallower_${key}`,
+                {renderEditableField(
+                  <span className="inline-flex items-center gap-1">{label} {key === "image" ? <SlurmInitIcon /> : <RuntimeIcon />}</span>,
+                  `SLURM.remote_shallower_${key}`,
                   settingsForm.SLURM?.[`remote_shallower_${key}`], placeholder,
                   <>{description}<EnvVarNote vars={[`BIOMERO_REMOTE_SHALLOWER_${key.toUpperCase()}`]} /></>)}
               </React.Fragment>
@@ -1348,7 +1370,7 @@ const SettingsForm = () => {
         </CollapsibleSection>
       )}
 
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">UI Settings <RuntimeIcon /></span>} errorCount={getMaxBatchJobsError() ? 1 : 0}>
+      <CollapsibleSection documentation={ADMIN_HELP.ui} title={<span className="inline-flex items-center gap-1">UI Settings <RuntimeIcon /></span>} errorCount={getMaxBatchJobsError() ? 1 : 0}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1357,13 +1379,25 @@ const SettingsForm = () => {
           </div>
         </div>
         <H6>Workflow Result Options</H6>
-        <Switch
-          checked={settingsForm.UI?.allow_plate_label_preview === "true"}
-          label="Allow users to create a separate Plate mask preview"
-          onChange={(e) =>
-            handleInputChange("UI.allow_plate_label_preview", e.target.checked ? "true" : "false")
-          }
-        />
+        <div className="flex items-center gap-1 mb-2">
+          <Switch
+            className="mb-0"
+            checked={settingsForm.UI?.allow_plate_label_preview === "true"}
+            label="Allow users to create a separate Plate mask preview"
+            onChange={(e) =>
+              handleInputChange("UI.allow_plate_label_preview", e.target.checked ? "true" : "false")
+            }
+          />
+          <Tooltip content={<div className="max-w-sm">
+            Lets users request an extra Plate showing one selected segmentation label
+            in the original well/field layout. The main Plate shows the image intensities,
+            and all labels remain available in the OME-Zarr Viewer. Requires Shallow Zarr
+            and a Plate result imported into a Screen.
+          </div>}>
+            <Button minimal small icon="help" aria-label="About Plate mask previews" />
+          </Tooltip>
+          <DocumentationLink {...ADMIN_HELP.platePreview} />
+        </div>
         <H6>Batch Processing Limits</H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
@@ -1430,7 +1464,7 @@ const SettingsForm = () => {
           )}
         </FormGroup>
       </CollapsibleSection>
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">Analytics Settings <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.analytics} title={<span className="inline-flex items-center gap-1">Analytics Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1439,7 +1473,7 @@ const SettingsForm = () => {
             </div>
           </div>
         </div>
-        <H6>Workflow Tracker Settings</H6>
+        <H6><span className="inline-flex items-center gap-1">Workflow Tracker Settings <RuntimeIcon /></span></H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1464,7 +1498,7 @@ const SettingsForm = () => {
             handleInputChange("ANALYTICS.track_workflows", e.target.checked)
           }
         />
-        <H6>Database configuration</H6>
+        <H6><span className="inline-flex items-center gap-1">Database configuration <RuntimeIcon /></span></H6>
         {renderEditableField(
           "SQLAlchemy URL",
           "ANALYTICS.sqlalchemy_url",
@@ -1479,7 +1513,7 @@ const SettingsForm = () => {
           </>,
           "danger"
         )}
-        <H6>Listener Settings</H6>
+        <H6><span className="inline-flex items-center gap-1">Listener Settings <RuntimeIcon /></span></H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1560,7 +1594,7 @@ const SettingsForm = () => {
             )
           }
         />
-        <H6>Analytics Rebuild Window</H6>
+        <H6><span className="inline-flex items-center gap-1">Analytics Rebuild Window <SlurmInitIcon /></span></H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1594,7 +1628,7 @@ const SettingsForm = () => {
           </>
         )}
       </CollapsibleSection>
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">Converters Settings <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.converters} title={<span className="inline-flex items-center gap-1">Converters Settings <SlurmInitIcon /></span>}>
         <ConfigSection
           items={converters}
           onItemChange={handleConverterChange}
@@ -1605,7 +1639,7 @@ const SettingsForm = () => {
           title="Converter"
           description={[
             "Settings for linking to external data format converters for running on Slurm.",
-            "By default, BIOMERO exports images as ZARR to the HPC. But, the workflow you want to execute might require a different filetype. E.g. most of our example workflows require TIFF input files. This is the default for BIAFLOWS.",
+            "By default, BIOMERO exports images as OME-Zarr to the HPC. But, the workflow you want to execute might require a different filetype. E.g. most of our example workflows require TIFF input files. This is the default for BIAFLOWS.",
             "If you provide nothing, BIOMERO will build a converter on Slurm for you. Instead, you can add converters here to pull those instead. These should be available on DockerHub as a container image. If you don't have singularity build rights on Slurm, you can also use this field instead to pull.",
             "Please pin it to a specific version to reduce unforeseen errors. Key should be the types 'X_to_Y' and value should be the docker image, for example `zarr_to_tiff=cellularimagingcf/convert_zarr_to_tiff:2.0.0-alpha.9`",
           ]}
@@ -1614,7 +1648,8 @@ const SettingsForm = () => {
         />
       </CollapsibleSection>
       <CollapsibleSection 
-        title={<span className="inline-flex items-center gap-1">Workflows Settings <SlurmInitIcon /></span>} 
+        documentation={ADMIN_HELP.workflows}
+        title={<span className="inline-flex items-center gap-1">Workflows Settings <RuntimeIcon /> <SlurmInitIcon /></span>}
         versionSummary={getVersionSummary()}
         versionCheckLoading={versionCheckLoading}
         onRefresh={manualRefreshVersions}

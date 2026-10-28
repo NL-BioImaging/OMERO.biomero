@@ -17,6 +17,10 @@ committed and published together.
 
 ## Pull-request branch workflow
 
+Open pull requests ready for review by default. Use draft status only when the
+user explicitly requests it. Record dependencies and merge order in the PR
+description; do not add a separate pre-review stage.
+
 On an existing non-default branch intended for a pull request, make focused,
 coherent commits and push them as normal completion of authorized development
 work. Do not hold the branch locally merely to run a slow full suite: run cheap,
@@ -97,3 +101,10 @@ Read only the references needed for the task:
 - Reuse constants, API helpers, components, and derived state rather than
   duplicating values. Do not add global state merely to avoid passing a prop.
 - Preserve unrelated worktree changes. Do not use destructive Git commands.
+- Every admin setting needs an accurate Runtime or Slurm Init indicator, either
+  on its label or a homogeneous group heading. Mixed sections must show both
+  indicators and classify their fields/subgroups individually. Trace when the
+  backend reads or installs the setting; do not classify from its section name.
+  Keep hover explanations and NL-BIOMERO admin docs aligned. Runtime means new
+  runs/requests after saving, not changes to an already running job. See the
+  configuration reference for helper-image and deployment prerequisites.

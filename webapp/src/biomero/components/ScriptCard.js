@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAppContext } from "../../AppContext";
 import { Card, Elevation, H6, Button } from "@blueprintjs/core";
+import { launchScript } from "../scriptActions";
 
 const ScriptCard = ({ script }) => {
   const { 
@@ -32,16 +33,7 @@ const ScriptCard = ({ script }) => {
   }, [script.id, fetchScriptDetails]); // Simplified dependencies - only trigger on script ID change
 
   const handleCardClick = () => {
-    const scriptUrl = `/webclient/script_ui/${script.id}`;
-    
-    // Track admin script executions
-    if (script.name === "Slurm Init (Admin Only)") {
-      markSlurmInitExecuted();
-    } else if (script.name === "Slurm Check Setup (Admin Only)") {
-      markSlurmCheckExecuted();
-    }
-    
-    openScriptWindow(scriptUrl);
+    launchScript(script, { openScriptWindow, markSlurmInitExecuted, markSlurmCheckExecuted });
   };
 
   const isSlurmWorkflow = script.name === "Slurm Workflow";

@@ -76,12 +76,14 @@ class AnalyzerViewsTests(TestCase):
 
         cases = [
             ({}, "0.4"),
-            ({"useZarrFormat": True}, "0.5"),
-            ({"useZarrFormat": True, "omeZarrVersion": "0.4"}, "0.4"),
+            ({"useZarrFormat": True}, "0.4"),
             ({"useZarrFormat": True, "omeZarrVersion": "0.5"}, "0.5"),
+            ({"useZarrFormat": True, "omeZarrVersion": "0.4"}, "0.4"),
             ({"useZarrFormat": False, "omeZarrVersion": "0.5"}, "0.4"),
         ]
         for overrides, expected in cases:
+            class StubSlurm(self._StubSlurmBase):
+                pass
             for batched in (False, True):
                 with self.subTest(overrides=overrides, batched=batched):
                     svc = MagicMock()
@@ -101,7 +103,7 @@ class AnalyzerViewsTests(TestCase):
                         body=json.dumps({"workflow_name": "wfA",
                                          "params": params}).encode())
                     with patch("omero_biomero.analyzer_views.SlurmClient",
-                               self._StubSlurmBase), patch(
+                               StubSlurm), patch(
                         "omero_biomero.analyzer_views.prepare_workflow_parameters",
                         return_value=params,
                     ):

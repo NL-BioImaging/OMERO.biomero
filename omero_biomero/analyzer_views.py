@@ -226,11 +226,15 @@ def run_workflow_script(request, conn=None, **kwargs):
         roi_color = str(params.get("roiColor", "") or "").strip().upper()
         # EXPERIMENTAL: ZARR format support
         use_zarr = params.get("useZarrFormat", False)
-        # Fresh native Zarr exports default to v3; the legacy TIFF converter
-        # still requires v2, including when replaying an explicit v3 request.
+        # The web form supplies its configured choice through the script input.
+        # The legacy TIFF helper always needs v2 material.
         ome_zarr_version = (
-            params.get("omeZarrVersion") or transfer.OME_ZARR_VERSION_0_5
+            params.get("omeZarrVersion") or transfer.OME_ZARR_VERSION_0_4
         ) if use_zarr else transfer.OME_ZARR_VERSION_0_4
+        if ome_zarr_version not in (
+            transfer.OME_ZARR_VERSION_0_4, transfer.OME_ZARR_VERSION_0_5
+        ):
+            return JsonResponse({"error": "Unsupported OME-Zarr version"}, status=400)
         # Batch processing parameters
         batch_enabled = params.get("batchEnabled", False)
         batch_count = params.get("batchCount", 1)

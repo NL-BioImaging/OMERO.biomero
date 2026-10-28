@@ -601,7 +601,7 @@ const WorkflowOutput = ({ onSelectionChange, plateMode = false }) => {
         <Callout intent="danger" className="mb-4">
           <strong>Plate workflows require importer integration</strong>
           <br />
-          Plate workflows with ZARR outputs are only supported when IMPORTER_ENABLED=true.
+          Plate workflows with OME-Zarr outputs are only supported when IMPORTER_ENABLED=true.
           Please contact your administrator to enable importer integration.
         </Callout>
       )}

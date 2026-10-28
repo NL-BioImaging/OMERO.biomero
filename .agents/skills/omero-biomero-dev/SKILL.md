@@ -17,6 +17,10 @@ committed and published together.
 
 ## Pull-request branch workflow
 
+Open pull requests ready for review by default. Use draft status only when the
+user explicitly requests it. Record dependencies and merge order in the PR
+description; do not add a separate pre-review stage.
+
 On an existing non-default branch intended for a pull request, make focused,
 coherent commits and push them as normal completion of authorized development
 work. Do not hold the branch locally merely to run a slow full suite: run cheap,

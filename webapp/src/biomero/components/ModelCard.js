@@ -46,11 +46,9 @@ const ModelCard = ({
       : descriptorMeta?.requiresZarr ? 'The workflow descriptor requires OME-Zarr input.' : null;
   const v3DisabledReason = !editable
     ? 'Click Edit Model to change the workflow input format.'
-    : descriptorMeta?.isBilayers === false
-      ? 'BIAFLOWS workflows use Zarr v2 / OME-Zarr 0.4.'
-      : !requiresZarr
-        ? 'Enable Zarr Format Required first, or use a descriptor that requires Zarr or plate input.'
-        : null;
+    : !requiresZarr
+      ? 'Enable Zarr Format Required first, or use a descriptor that requires Zarr or plate input.'
+      : null;
   const [inputValue, setInputValue] = useState("");
   const [showWarning, setShowWarning] = useState(false);
   const [containerImage, setContainerImage] = useState(null);

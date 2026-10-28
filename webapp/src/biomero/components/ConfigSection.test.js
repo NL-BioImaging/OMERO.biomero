@@ -25,8 +25,8 @@ test('plate overview keeps one type icon with the format in its tooltip and acce
   expect(container.querySelectorAll('[data-icon="cube"]')).toHaveLength(0);
 });
 
-test('a known BIAFLOWS descriptor overrides a stale v3 badge', () => {
+test('a native Zarr BIAFLOWS workflow shows its selected v3 format', () => {
   render(<ConfigSection {...props} items={[{ name: 'seg', isZarrWorkflow: true, useZarrV3: true }]}
     descriptorMetadata={{ 0: { isBilayers: false } }} />);
-  expect(screen.getByRole('img', { name: /Zarr v2 \/ OME-Zarr 0.4/ })).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /Zarr v3 \/ OME-Zarr 0.5/ })).toBeInTheDocument();
 });

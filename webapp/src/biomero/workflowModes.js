@@ -25,7 +25,7 @@ export const getWorkflowInputRequirements = (item = {}, descriptor = {}) => {
   return {
     supportsPlates,
     requiresZarr,
-    useZarrV3: requiresZarr && !!item.useZarrV3 && descriptor?.isBilayers !== false,
+    useZarrV3: requiresZarr && !!item.useZarrV3,
   };
 };
 

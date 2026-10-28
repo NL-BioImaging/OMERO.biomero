@@ -220,7 +220,7 @@ test.each(['requires-zarr', 'requires-plate'])(
     fireEvent.change(screen.getByLabelText('seg name'), { target: { value: 'renamed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
     await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
-      expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '["renamed"]' }) }), expect.anything()));
+      expect.objectContaining({ UI: expect.objectContaining({ zarr_workflows: '["renamed"]', zarr_v3_workflows: '["renamed"]' }) }), expect.anything()));
   }
 );
 
@@ -237,17 +237,25 @@ test('descriptor refresh retains a manual version choice without inferring v3 fr
   expect(screen.getByLabelText('seg Zarr v3')).not.toBeChecked();
 });
 
-test('does not save a v3 opt-in for a TIFF-only or known BIAFLOWS workflow', async () => {
+test('rejects an orphaned v3 opt-in until Zarr input is enabled', async () => {
   renderZarrPolicy({ zarr_workflows: '[]', zarr_v3_workflows: '["seg"]' }, { 'schema-version': 'cytomine-0.1' });
   await screen.findByLabelText('seg Zarr v3');
+  expect(screen.getByRole('button', { name: 'Save Settings' })).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('Zarr Format Required');
+  expect(useAppContext().saveConfigData).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText('seg Zarr required'));
+  expect(screen.getByRole('button', { name: 'Save Settings' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
-    expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '[]' }) }), expect.anything()));
+    expect.objectContaining({ UI: expect.objectContaining({ zarr_workflows: '["seg"]', zarr_v3_workflows: '["seg"]' }) }), expect.anything()));
 });
 
-test('an unavailable descriptor does not erase a previously saved manual v3 choice', async () => {
+test('an unavailable descriptor preserves the saved choice but blocks an invalid save', async () => {
   renderZarrPolicy({ zarr_workflows: '[]', zarr_v3_workflows: '["seg"]' }, null);
   await screen.findByLabelText('seg Zarr v3');
+  expect(screen.getByLabelText('seg Zarr v3')).toBeChecked();
+  expect(screen.getByRole('button', { name: 'Save Settings' })).toBeDisabled();
+  fireEvent.click(screen.getByLabelText('seg Zarr required'));
   fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
     expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '["seg"]' }) }), expect.anything()));

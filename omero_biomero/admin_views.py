@@ -335,8 +335,8 @@ def admin_config(request, conn=None, **kwargs):
             parsed.read_string(candidate)
             validate_ini_sections({
                 section: dict(parsed.items(section, raw=True))
-                for section in parsed.sections() if section in ("MODELS", "WORKFLOWS")
-            })
+                for section in parsed.sections() if section in ("MODELS", "WORKFLOWS", "UI")
+            }, complete=True)
             # Serialize JSON before opening either file: invalid candidates must
             # never partially apply a save. File I/O failures remain separate.
             json_candidate = None

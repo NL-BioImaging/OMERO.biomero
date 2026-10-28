@@ -97,3 +97,10 @@ Read only the references needed for the task:
 - Reuse constants, API helpers, components, and derived state rather than
   duplicating values. Do not add global state merely to avoid passing a prop.
 - Preserve unrelated worktree changes. Do not use destructive Git commands.
+- Every admin setting needs an accurate Runtime or Slurm Init indicator, either
+  on its label or a homogeneous group heading. Mixed sections must show both
+  indicators and classify their fields/subgroups individually. Trace when the
+  backend reads or installs the setting; do not classify from its section name.
+  Keep hover explanations and NL-BIOMERO admin docs aligned. Runtime means new
+  runs/requests after saving, not changes to an already running job. See the
+  configuration reference for helper-image and deployment prerequisites.

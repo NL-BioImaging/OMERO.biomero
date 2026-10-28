@@ -154,14 +154,16 @@ The suboption is available when Zarr input is enabled manually or required by
 the descriptor or plate mode. Hover a disabled switch for its prerequisite.
 The existing workflow icon turns green for v3; its tooltip names both versions. This
 stores a JSON list in `[UI] zarr_v3_workflows`; a missing or empty list uses v2.
-BIAFLOWS workflows and the legacy TIFF conversion route always use v2. Saved
+Native Zarr workflows can opt in regardless of descriptor style, including
+BIAFLOWS. The legacy TIFF conversion route always uses v2. Saved
 user forms cannot override this policy. Save Settings applies to new runs;
 resuming a detached run keeps its recorded format.
 
 Bilayers descriptors currently supply Zarr and plate requirements, but no Zarr
 version capability. Refreshing a descriptor preserves the manual version choice;
 Zarr support alone never enables v3. Disabling Zarr clears the v3 suboption when
-no descriptor or plate requirement remains. The existing INI keys and internal
+no descriptor or plate requirement remains. Both the form and API reject saving
+v3 without Zarr or plate input. The existing INI keys and internal
 `ZARR` format value are unchanged.
 
 Deploy the matching core and scripts changes before this plugin. Matching-format

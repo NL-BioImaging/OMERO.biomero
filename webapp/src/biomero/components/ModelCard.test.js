@@ -40,7 +40,6 @@ test.each([{ requiresZarr: true }, { requiresPlate: true }, {}])(
 
 test.each([
   [false, { isBilayers: true }, 'Click Edit Model to change the workflow input format.'],
-  [true, { isBilayers: false }, 'BIAFLOWS workflows use Zarr v2 / OME-Zarr 0.4.'],
 ])('explains a disabled v3 switch', async (editable, metadata, reason) => {
   render(<ModelCard item={item} index={0} editable={editable} descriptorMeta={metadata} />);
   const toggle = screen.getByRole('checkbox', { name: 'Zarr v3 input (OME-Zarr 0.5)' });
@@ -48,12 +47,12 @@ test.each([
   expect(await screen.findByText(reason)).toBeVisible();
 });
 
-test('BIAFLOWS remains v2 even with a stale saved opt-in', () => {
+test('a manually enabled native Zarr BIAFLOWS workflow can select v3', () => {
   render(<ModelCard item={{ ...item, useZarrV3: true }} index={0} editable
     descriptorMeta={{ isBilayers: false }} />);
   const toggle = screen.getByRole('checkbox', { name: 'Zarr v3 input (OME-Zarr 0.5)' });
-  expect(toggle).toBeDisabled();
-  expect(toggle).not.toBeChecked();
+  expect(toggle).toBeEnabled();
+  expect(toggle).toBeChecked();
 });
 
 test('locked workflow cards cannot change format', () => {

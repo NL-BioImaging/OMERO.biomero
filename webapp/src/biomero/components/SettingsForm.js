@@ -20,10 +20,11 @@ import CollapsibleSection from "./CollapsibleSection";
 import ConfigSection from "./ConfigSection";
 import ModelCard from "./ModelCard.js";
 import ConverterCard from "./ConverterCard.js";
+import DocumentationLink from "./DocumentationLink";
+import AdminScriptLink from "./AdminScriptLink";
+import { ADMIN_HELP } from "../adminHelp";
 import { checkModelVersions, clearGitHubCache, slugify, fetchWorkflowMetadata } from "../../apiService";
 import { getDeletedConfigOptions, validateWorkflowRows } from "../configAdmin";
-
-const DOCS_URL = "https://nl-bioimaging.github.io/biomero/slurm-configuration.html";
 
 /** Inline Tag showing an environment variable name. */
 const EnvVarTag = ({ name }) => (
@@ -860,7 +861,10 @@ const SettingsForm = () => {
 
   return (
     <Card>
-      <H3>Settings</H3>
+      <div className="flex items-center justify-between gap-2">
+        <H3>Settings</H3>
+        <DocumentationLink {...ADMIN_HELP.manual}>Administrator manual</DocumentationLink>
+      </div>
         {saveError && <div role="alert" className="text-red-600 mb-3">{saveError}</div>}
         {invalidZarrVersions.length > 0 && <div role="alert" className="text-red-600 mb-3">
           Zarr v3 input requires Zarr Format Required. Enable it for: {invalidZarrVersions.map(model => model.name).join(', ')}.
@@ -877,29 +881,22 @@ const SettingsForm = () => {
           <div className="bp5-form-helper-text flex items-center gap-1">
             <RuntimeIcon /> <i>runtime</i> — applies to new runs or requests after saving.
           </div>
-          <div className="bp5-form-helper-text flex items-center gap-1">
-            <SlurmInitIcon /> <i>Slurm Init</i> — requires running the <b>Slurm Init</b> script after saving.
+          <div className="bp5-form-helper-text">
+            <SlurmInitIcon /> <i>Slurm Init</i> — requires running the{" "}
+            <AdminScriptLink name="Slurm Init" /> script after saving.
           </div>
 
           <div className="bp5-form-helper-text">
-            Use <b>Slurm Check Setup</b> to verify which workflows are actually installed on your Slurm cluster.
+            Use <AdminScriptLink name="Slurm Check Setup" /> to verify which workflows are actually installed on your Slurm cluster.
           </div>
 
           <div className="bp5-form-helper-text">
-            Please check the{" "}
-            <a
-              href="https://nl-bioimaging.github.io/biomero/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              BIOMERO documentation
-            </a>{" "}
-            for more info.
+            Book icons open the relevant documentation in a new tab.
           </div>
         </div>
       </div>
 
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">SSH Settings <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.ssh} title={<span className="inline-flex items-center gap-1">SSH Settings <SlurmInitIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -927,16 +924,15 @@ const SettingsForm = () => {
           "The alias for the SSH connection for connecting to Slurm."
         )}
       </CollapsibleSection>
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">Slurm Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.slurm} title={<span className="inline-flex items-center gap-1">Slurm Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
-              General settings for where to find things on the Slurm cluster.{" "}
-              <a href={DOCS_URL} target="_blank" rel="noopener noreferrer">Documentation ↗</a>
+              General settings for where to find things on the Slurm cluster.
             </div>
           </div>
         </div>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">Paths <RuntimeIcon /> <SlurmInitIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.paths} title={<span className="inline-flex items-center gap-1">Paths <RuntimeIcon /> <SlurmInitIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1004,7 +1000,7 @@ const SettingsForm = () => {
             </>
           )}
         </CollapsibleSection>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">SACCT History Window <RuntimeIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.history} title={<span className="inline-flex items-center gap-1">SACCT History Window <RuntimeIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1036,7 +1032,7 @@ const SettingsForm = () => {
             </>
           )}
         </CollapsibleSection>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">Repositories <SlurmInitIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.repositories} title={<span className="inline-flex items-center gap-1">Repositories <SlurmInitIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1061,7 +1057,7 @@ const SettingsForm = () => {
             "danger"
           )}
         </CollapsibleSection>
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">Processing Settings <RuntimeIcon /> <SlurmInitIcon /></span>} nested>
+        <CollapsibleSection documentation={ADMIN_HELP.processing} title={<span className="inline-flex items-center gap-1">Processing Settings <RuntimeIcon /> <SlurmInitIcon /></span>} nested>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1107,7 +1103,7 @@ const SettingsForm = () => {
               )
             }
           />
-          <H6><span className="inline-flex items-center gap-1">Partition &amp; GPU Fallback <RuntimeIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">Partition &amp; GPU Fallback <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.gpu} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1179,7 +1175,7 @@ const SettingsForm = () => {
               </div>
             </div>
           )}
-          <H6><span className="inline-flex items-center gap-1">Image Pull Settings <SlurmInitIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">Image Pull Settings <SlurmInitIcon /> <DocumentationLink {...ADMIN_HELP.imagePull} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1253,7 +1249,7 @@ const SettingsForm = () => {
               <EnvVarNote vars={["BIOMERO_PULL_PARTITION"]} />
             </>
           )}
-          <H6><span className="inline-flex items-center gap-1">ZIP Command <RuntimeIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">ZIP Command <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.zip} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1275,7 +1271,7 @@ const SettingsForm = () => {
               <EnvVarNote vars={["BIOMERO_SLURM_ZIP_CMD"]} />
             </>
           )}
-          <H6><span className="inline-flex items-center gap-1">Global Sbatch Parameters <RuntimeIcon /></span></H6>
+          <H6><span className="inline-flex items-center gap-1">Global Sbatch Parameters <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.sbatch} /></span></H6>
           <div className="bp5-form-group">
             <div className="bp5-form-content">
               <div className="bp5-form-helper-text">
@@ -1331,7 +1327,7 @@ const SettingsForm = () => {
         </CollapsibleSection>
       </CollapsibleSection>
       {state.ui?.shallow_zarr_enabled && (
-        <CollapsibleSection title={<span className="inline-flex items-center gap-1">Shallow Zarr <RuntimeIcon /> <SlurmInitIcon /></span>}>
+        <CollapsibleSection documentation={ADMIN_HELP.shallow} title={<span className="inline-flex items-center gap-1">Shallow Zarr <RuntimeIcon /> <SlurmInitIcon /></span>}>
           <FormGroup helperText={<>
             Shallow eligible Zarr results on Slurm before transfer. Enabled by default;
             opt out to shallow locally in the importer and avoid additional Slurm compute costs.
@@ -1349,7 +1345,7 @@ const SettingsForm = () => {
           {remoteShallowEnabled && <>
             <p className="bp5-text-muted">
               Image and tool version must match the importer trust configuration.
-              Run Slurm Init after changing the image, or before enabling remote
+              Run <AdminScriptLink name="Slurm Init" /> after changing the image, or before enabling remote
               shallowing if the helper image has not been installed. Keep the original image available
               until outstanding jobs finish. The helper requests no GPU.
             </p>
@@ -1374,7 +1370,7 @@ const SettingsForm = () => {
         </CollapsibleSection>
       )}
 
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">UI Settings <RuntimeIcon /></span>} errorCount={getMaxBatchJobsError() ? 1 : 0}>
+      <CollapsibleSection documentation={ADMIN_HELP.ui} title={<span className="inline-flex items-center gap-1">UI Settings <RuntimeIcon /></span>} errorCount={getMaxBatchJobsError() ? 1 : 0}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1456,7 +1452,7 @@ const SettingsForm = () => {
           )}
         </FormGroup>
       </CollapsibleSection>
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">Analytics Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.analytics} title={<span className="inline-flex items-center gap-1">Analytics Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -1620,7 +1616,7 @@ const SettingsForm = () => {
           </>
         )}
       </CollapsibleSection>
-      <CollapsibleSection title={<span className="inline-flex items-center gap-1">Converters Settings <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.converters} title={<span className="inline-flex items-center gap-1">Converters Settings <SlurmInitIcon /></span>}>
         <ConfigSection
           items={converters}
           onItemChange={handleConverterChange}
@@ -1640,6 +1636,7 @@ const SettingsForm = () => {
         />
       </CollapsibleSection>
       <CollapsibleSection 
+        documentation={ADMIN_HELP.workflows}
         title={<span className="inline-flex items-center gap-1">Workflows Settings <RuntimeIcon /> <SlurmInitIcon /></span>}
         versionSummary={getVersionSummary()}
         versionCheckLoading={versionCheckLoading}

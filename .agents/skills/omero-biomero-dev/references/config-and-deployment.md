@@ -21,6 +21,11 @@
   installed helper, and image/version must match importer trust configuration.
   Deployment feature flags and environment overrides may require container
   recreation; do not imply that saving the form applies those changes.
+- Add contextual book links for admin feature groups, using the relevant
+  NL-BIOMERO admin guide or core configuration section. Keep them accessible
+  while sections are collapsed and open docs in a new tab to preserve form
+  edits. Verify URLs and anchors against published docs or the built matching
+  documentation PR; coordinate publication when using its final URLs.
 - Remove obsolete settings completely only when authorized: runtime reads,
   template data attributes, frontend consumers, tests, package dependencies,
   documentation, and deployment environment entries are separate touch points.

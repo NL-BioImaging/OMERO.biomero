@@ -116,6 +116,36 @@ test('hides shallower settings when shallow Zarr is disabled', async () => {
   expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
 });
 
+test('opens the installed admin scripts from the guidance without saving settings', async () => {
+  const view = renderShallower(false);
+  const context = useAppContext();
+  context.state.scripts = [{ name: 'biomero', ul: [{ name: 'admin', ul: [
+    { id: 123, name: 'Slurm Init (Admin Only)' },
+    { id: 456, name: 'Slurm Check Setup (Admin Only)' },
+  ] }] }];
+  context.openScriptWindow = jest.fn();
+  context.markSlurmInitExecuted = jest.fn();
+  context.markSlurmCheckExecuted = jest.fn();
+  view.rerender(<SettingsForm />);
+  const init = await screen.findByRole('link', { name: 'Open Slurm Init script' });
+  expect(init).toHaveAttribute('href', '/webclient/script_ui/123');
+  fireEvent.click(init);
+  expect(context.openScriptWindow).toHaveBeenLastCalledWith('/webclient/script_ui/123');
+  expect(context.markSlurmInitExecuted).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('link', { name: 'Open Slurm Check Setup script' }));
+  expect(context.openScriptWindow).toHaveBeenLastCalledWith('/webclient/script_ui/456');
+  expect(context.markSlurmCheckExecuted).toHaveBeenCalledTimes(1);
+  expect(context.openScriptWindow).toHaveBeenCalledTimes(2);
+  expect(context.saveConfigData).not.toHaveBeenCalled();
+});
+
+test('does not link to an unavailable admin script', async () => {
+  renderShallower(false);
+  await screen.findByLabelText('Pull Images via sbatch');
+  expect(screen.queryByRole('link', { name: 'Open Slurm Init script' })).not.toBeInTheDocument();
+  expect(screen.getByText('Slurm Check Setup')).toHaveAttribute('aria-disabled', 'true');
+});
+
 test('defaults remote on and retains helper settings across opt-out', async () => {
   renderShallower(true, { remote_shallower_image: 'registry/helper:custom' });
   const toggle = await screen.findByLabelText('Remote shallowing');

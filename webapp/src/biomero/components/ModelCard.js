@@ -15,6 +15,8 @@ import { FaDocker } from "react-icons/fa6";
 import { fetchContainerImage } from "../../apiService";
 import { RuntimeIcon, SlurmInitIcon } from "./SettingsForm";
 import { getWorkflowInputRequirements } from "../workflowModes";
+import { ADMIN_HELP } from "../adminHelp";
+import DocumentationLink from "./DocumentationLink";
 
 /** No Slurm Init needed — save and it applies to new submissions immediately. */
 // RuntimeIcon and SlurmInitIcon are imported from SettingsForm
@@ -391,7 +393,7 @@ const ModelCard = ({
 
       {/* Workflow Input Configuration */}
       <FormGroup
-        label={<span className="inline-flex items-center gap-1">Workflow Input Requirements <RuntimeIcon /></span>}
+        label={<span className="inline-flex items-center gap-1">Workflow Input Requirements <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.zarr} /></span>}
         subLabel="Configure input format requirements for this workflow."
       >
         <div className="flex items-center justify-between">

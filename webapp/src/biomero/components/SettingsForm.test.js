@@ -116,12 +116,15 @@ test('hides shallower settings when shallow Zarr is disabled', async () => {
   expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
 });
 
-test('opens the installed admin scripts from the guidance without saving settings', async () => {
+test.each([
+  ['display names', 'Slurm Init (Admin Only)', 'Slurm Check Setup (Admin Only)'],
+  ['file names', 'SLURM_Init_environment.py', 'SLURM_check_setup.py'],
+])('opens installed admin scripts using %s without saving settings', async (_, initName, checkName) => {
   const view = renderShallower(false);
   const context = useAppContext();
   context.state.scripts = [{ name: 'biomero', ul: [{ name: 'admin', ul: [
-    { id: 123, name: 'Slurm Init (Admin Only)' },
-    { id: 456, name: 'Slurm Check Setup (Admin Only)' },
+    { id: 123, name: initName },
+    { id: 456, name: checkName },
   ] }] }];
   context.openScriptWindow = jest.fn();
   context.markSlurmInitExecuted = jest.fn();

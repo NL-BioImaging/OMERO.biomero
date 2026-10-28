@@ -575,6 +575,7 @@ const ModelCard = ({
               <Icon icon="help" size={12} />
             </Tooltip>
             <RuntimeIcon />
+            <DocumentationLink {...ADMIN_HELP.sbatchOptions} />
           </span>
         }
         subLabel={
@@ -584,7 +585,7 @@ const ModelCard = ({
             <div>
               See Slurm{" "}
               <a
-                href="https://slurm.schedmd.com/sbatch.html#SECTION_OPTIONS"
+                href={ADMIN_HELP.sbatchOptions.href}
                 target="_blank"
                 rel="noopener noreferrer"
               >

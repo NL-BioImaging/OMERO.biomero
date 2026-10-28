@@ -36,6 +36,9 @@ jest.mock("@blueprintjs/core", () => {
     Button: ({ children, icon: _icon, minimal: _minimal, small: _small, ...props }) => (
       <button {...props}>{children}</button>
     ),
+    AnchorButton: ({ children, text, icon: _icon, intent: _intent, outlined: _outlined, minimal: _minimal, small: _small, ...props }) => (
+      <a {...props}>{text}{children}</a>
+    ),
     Switch: ({ label, ...props }) => (
       <label>
         {label}

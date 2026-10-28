@@ -1379,13 +1379,25 @@ const SettingsForm = () => {
           </div>
         </div>
         <H6>Workflow Result Options</H6>
-        <Switch
-          checked={settingsForm.UI?.allow_plate_label_preview === "true"}
-          label="Allow users to create a separate Plate mask preview"
-          onChange={(e) =>
-            handleInputChange("UI.allow_plate_label_preview", e.target.checked ? "true" : "false")
-          }
-        />
+        <div className="flex items-center gap-1 mb-2">
+          <Switch
+            className="mb-0"
+            checked={settingsForm.UI?.allow_plate_label_preview === "true"}
+            label="Allow users to create a separate Plate mask preview"
+            onChange={(e) =>
+              handleInputChange("UI.allow_plate_label_preview", e.target.checked ? "true" : "false")
+            }
+          />
+          <Tooltip content={<div className="max-w-sm">
+            Lets users request an extra Plate showing one selected segmentation label
+            in the original well/field layout. The main Plate shows the image intensities,
+            and all labels remain available in the OME-Zarr Viewer. Requires Shallow Zarr
+            and a Plate result imported into a Screen.
+          </div>}>
+            <Button minimal small icon="help" aria-label="About Plate mask previews" />
+          </Tooltip>
+          <DocumentationLink {...ADMIN_HELP.platePreview} />
+        </div>
         <H6>Batch Processing Limits</H6>
         <div className="bp5-form-group">
           <div className="bp5-form-content">

@@ -67,7 +67,6 @@ const CollapsibleSection = ({ title, children, versionSummary, versionCheckLoadi
         </TitleTag>
 
         <div className="flex items-center gap-1 shrink-0">
-          {documentation && <DocumentationLink {...documentation} />}
           {/* Help and refresh stay outside the clickable title. */}
           {onRefresh && (
             <Tooltip content="Refresh version check (clears cache)">
@@ -80,6 +79,7 @@ const CollapsibleSection = ({ title, children, versionSummary, versionCheckLoadi
               />
             </Tooltip>
           )}
+          {documentation && <DocumentationLink {...documentation} />}
         </div>
       </div>
       <Collapse isOpen={isOpen}>

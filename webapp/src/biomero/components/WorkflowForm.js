@@ -126,6 +126,9 @@ const WorkflowForm = () => {
     if (workflowName) {
       const { isPlateWorkflow, isZarrWorkflow } = getWorkflowFlags(workflowName);
       const requiresZarr = isPlateWorkflow || isZarrWorkflow;
+      if (!requiresZarr && !state.formData?.useZarrFormat && !state.formData?.omeZarrVersion) {
+        return;
+      }
       const useZarrFormat = requiresZarr || !!state.formData?.useZarrFormat;
       const useV3 = requiresZarr && parseWorkflowList(
         state.config?.UI?.zarr_v3_workflows).includes(workflowName);

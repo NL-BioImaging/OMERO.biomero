@@ -14,6 +14,7 @@ import {
 import { FaDocker } from "react-icons/fa6";
 import { fetchContainerImage } from "../../apiService";
 import { RuntimeIcon, SlurmInitIcon } from "./SettingsForm";
+import { getWorkflowInputRequirements } from "../workflowModes";
 
 /** No Slurm Init needed — save and it applies to new submissions immediately. */
 // RuntimeIcon and SlurmInitIcon are imported from SettingsForm
@@ -38,7 +39,18 @@ const ModelCard = ({
   globalJobParams, // { sbatchParams, defaultPartition } from SLURM settings
 }) => {
   const hasScriptRepo = !!config?.SLURM?.slurm_script_repo;
-  const supportsPlates = (item.isPlateWorkflow || false) || descriptorMeta?.requiresPlate === true;
+  const { supportsPlates, requiresZarr, useZarrV3 } = getWorkflowInputRequirements(item, descriptorMeta);
+  const zarrDisabledReason = !editable
+    ? 'Click Edit Model to change the workflow input format.'
+    : supportsPlates ? 'Plate input requires OME-Zarr.'
+      : descriptorMeta?.requiresZarr ? 'The workflow descriptor requires OME-Zarr input.' : null;
+  const v3DisabledReason = !editable
+    ? 'Click Edit Model to change the workflow input format.'
+    : descriptorMeta?.isBilayers === false
+      ? 'BIAFLOWS workflows use Zarr v2 / OME-Zarr 0.4.'
+      : !requiresZarr
+        ? 'Enable Zarr Format Required first, or use a descriptor that requires Zarr or plate input.'
+        : null;
   const [inputValue, setInputValue] = useState("");
   const [showWarning, setShowWarning] = useState(false);
   const [containerImage, setContainerImage] = useState(null);
@@ -388,10 +400,10 @@ const ModelCard = ({
           <div className="flex flex-col">
             <span className="text-sm font-medium flex items-center gap-1">
               <Icon icon="grid-view" size={12} intent="primary" />
-              Plate Workflow (ZARR Only)
+              Plate Workflow (Zarr Only)
             </span>
             <span className="text-xs bp5-text-muted">
-              Enable for workflows that process entire plates and require ZARR format
+              Enable for workflows that process entire plates and require OME-Zarr format
             </span>
           </div>
           <Switch
@@ -403,7 +415,7 @@ const ModelCard = ({
             }}
           />
         </div>
-        {descriptorMeta !== null && descriptorMeta !== undefined && descriptorMeta.requiresPlate !== null && (item.isPlateWorkflow || false) !== descriptorMeta.requiresPlate && (
+        {descriptorMeta !== null && descriptorMeta !== undefined && descriptorMeta.requiresPlate != null && (item.isPlateWorkflow || false) !== descriptorMeta.requiresPlate && (
           <div className="bp5-text-muted text-xs mt-1 flex items-center gap-1">
             <Icon icon="help" size={10} />
             {descriptorMeta.requiresPlate
@@ -412,23 +424,6 @@ const ModelCard = ({
           </div>
         )}
         
-
-        <div className="flex items-center justify-between mt-3">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Zarr v3 input (OME-Zarr 0.5)</span>
-            <span className="text-xs bp5-text-muted">
-              Default: Zarr v2 / OME-Zarr 0.4. Enable only when this workflow supports v3.
-              BIAFLOWS and TIFF conversion always use v2. Existing data stays in its
-              original format; conversion creates temporary workflow input.
-            </span>
-          </div>
-          <Switch
-            aria-label="Zarr v3 input (OME-Zarr 0.5)"
-            checked={!!item.useZarrV3 && descriptorMeta?.isBilayers !== false}
-            disabled={!editable || descriptorMeta?.isBilayers === false}
-            onChange={(e) => onChange(index, "useZarrV3", e.target.checked)}
-          />
-        </div>
 
         <div className="flex items-center justify-between mt-3">
           <div className="flex flex-col">
@@ -455,32 +450,58 @@ const ModelCard = ({
           <div className="flex flex-col">
             <span className="text-sm font-medium flex items-center gap-1">
               <Icon icon="cube" size={12} className="bp5-text-muted" />
-              ZARR Format Required
+              Zarr Format Required
             </span>
             <span className="text-xs bp5-text-muted">
               {supportsPlates
                 ? "Automatically enabled when plate workflow is selected"
-                : "Enable for workflows that require ZARR input format (skips TIFF conversion)"
+                : descriptorMeta?.requiresZarr
+                  ? "Required by the workflow descriptor (skips TIFF conversion)"
+                  : "Enable for workflows that require OME-Zarr input (skips TIFF conversion)"
               }
             </span>
           </div>
-          <Switch
-            checked={(item.isZarrWorkflow || false) || supportsPlates}
-            disabled={!editable || supportsPlates} // Plate support always requires ZARR
-            onChange={(e) => {
-              const isChecked = e.target.checked;
-              onChange(index, "isZarrWorkflow", isChecked);
-            }}
-          />
+          <Tooltip content={zarrDisabledReason || 'Pass OME-Zarr input directly to the workflow.'}>
+            <span tabIndex={zarrDisabledReason ? 0 : undefined}>
+              <Switch
+                aria-label="Zarr Format Required"
+                checked={requiresZarr}
+                disabled={!!zarrDisabledReason}
+                onChange={(e) => onChange(index, "isZarrWorkflow", e.target.checked)}
+              />
+            </span>
+          </Tooltip>
         </div>
-        {descriptorMeta !== null && descriptorMeta !== undefined && descriptorMeta.requiresZarr !== null && (item.isZarrWorkflow || false) !== descriptorMeta.requiresZarr && (
+        {descriptorMeta !== null && descriptorMeta !== undefined && descriptorMeta.requiresZarr != null && (item.isZarrWorkflow || false) !== descriptorMeta.requiresZarr && (
           <div className="bp5-text-muted text-xs mt-1 flex items-center gap-1">
             <Icon icon="help" size={10} />
             {descriptorMeta.requiresZarr
-              ? 'Descriptor indicates Zarr input — enable Zarr Workflow?'
+              ? 'The workflow descriptor requires Zarr input.'
               : 'Zarr Workflow enabled but not in descriptor — intentional?'}
           </div>
         )}
+
+        <div className="flex items-center justify-between mt-2 ml-4 pl-3 border-l border-gray-300">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium flex items-center gap-1">
+              <Icon icon="cube" size={12} intent={useZarrV3 ? 'success' : 'none'} />
+              Zarr v3 input (OME-Zarr 0.5)
+            </span>
+            <span className="text-xs bp5-text-muted">
+              Off: Zarr v2 / OME-Zarr 0.4. Enable only when this workflow supports v3.
+            </span>
+          </div>
+          <Tooltip content={v3DisabledReason || 'Use Zarr v3 / OME-Zarr 0.5 for new runs.'}>
+            <span tabIndex={v3DisabledReason ? 0 : undefined}>
+              <Switch
+                aria-label="Zarr v3 input (OME-Zarr 0.5)"
+                checked={useZarrV3}
+                disabled={!!v3DisabledReason}
+                onChange={(e) => onChange(index, "useZarrV3", e.target.checked)}
+              />
+            </span>
+          </Tooltip>
+        </div>
 
         <div className="flex items-center justify-between mt-3">
           <div className="flex flex-col">

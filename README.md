@@ -146,20 +146,31 @@ a live multi-well Plate test.
 6. In new terminal, enter `omero-biomero` repository and execute `./omero-init.sh`. This will start the OMERO Webclient server **in background mode**. It also installs the plugin in editable mode, so changes to the plugin code are automatically reflected in the Webclient.
 7. After making changes to the code **outside of the folder webapp**, they should be automatically reflected in the webclient. You can also execute `./omero-update.sh` to restart the Webclient server and apply changes.
 
-### Testing
+### Workflow input formats
 
 Workflow input defaults to OME-Zarr 0.4 / Zarr v2. Administrators can enable
-**Zarr v3 input (OME-Zarr 0.5)** on individual workflow cards in Settings. This
+**Zarr v3 input (OME-Zarr 0.5)** below **Zarr Format Required** on workflow cards.
+The suboption is available when Zarr input is enabled manually or required by
+the descriptor or plate mode. Hover a disabled switch for its prerequisite.
+The existing workflow icon turns green for v3; its tooltip names both versions. This
 stores a JSON list in `[UI] zarr_v3_workflows`; a missing or empty list uses v2.
 BIAFLOWS workflows and the legacy TIFF conversion route always use v2. Saved
 user forms cannot override this policy. Save Settings applies to new runs;
 resuming a detached run keeps its recorded format.
+
+Bilayers descriptors currently supply Zarr and plate requirements, but no Zarr
+version capability. Refreshing a descriptor preserves the manual version choice;
+Zarr support alone never enables v3. Disabling Zarr clears the v3 suboption when
+no descriptor or plate requirement remains. The existing INI keys and internal
+`ZARR` format value are unchanged.
 
 Deploy the matching core and scripts changes before this plugin. Matching-format
 backing stores are reused directly; mismatches become temporary workflow inputs
 with pixels and labels preserved. Canonical stores retain their original format.
 Returned data with a different canonical format stays full, without cross-format
 shallowing or a second canonical copy.
+
+### Testing
 
 To run tests, create virtual environment, activate it and install the package in editable mode (this automatically pulls all dependencies from setup.py):
 

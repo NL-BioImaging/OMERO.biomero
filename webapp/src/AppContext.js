@@ -148,7 +148,7 @@ export const WorkflowSubmitToast = ({
       <SectionRow label={`Input: ${inputCount} ${dataType}${inputCount !== 1 ? "s" : ""}${attachmentCount > 0 ? ` + ${attachmentCount} file${attachmentCount !== 1 ? "s" : ""}` : ""}`} sectionKey="input">
         {params.IDs?.slice(0, MAX_INPUT_IDS_SHOWN).map((id) => <div key={id}>• {dataType} #{id}</div>)}
         {inputCount > MAX_INPUT_IDS_SHOWN && <div className="opacity-60">…and {inputCount - MAX_INPUT_IDS_SHOWN} more</div>}
-        {params.useZarrFormat && <div>• Format: ZARR</div>}
+        {params.useZarrFormat && <div>• Format: OME-Zarr</div>}
         {batchInfo && <div>• Batch: {batchInfo}</div>}
         {fileAttachmentEntries.flatMap(([k, v]) => {
           const ids = Array.isArray(v) ? v.filter((x) => x != null && x !== "") : (v != null && v !== "" ? [v] : []);

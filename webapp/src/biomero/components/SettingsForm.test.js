@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SettingsForm from "./SettingsForm";
 import { useAppContext } from "../../AppContext";
+import { fetchWorkflowMetadata } from "../../apiService";
 
 // This Jest/jsdom version predates structuredClone; form state is plain data.
 beforeAll(() => {
@@ -53,16 +54,19 @@ jest.mock("@blueprintjs/core", () => {
 });
 
 jest.mock("./CollapsibleSection", () => ({ children }) => <section>{children}</section>);
-jest.mock("./ConfigSection", () => ({ onAddItem, title, items, onItemChange, onDeleteItem, onResetItem }) => (
+jest.mock("./ConfigSection", () => ({ onAddItem, title, items, onItemChange, onDeleteItem, onResetItem, onRepoBlur }) => (
   <div>
     <button onClick={onAddItem}>Add {title}</button>
     {items.filter(item => item.name).map((item, index) => <div key={index}>
+      <input aria-label={`${item.name} Zarr required`} type="checkbox" checked={!!item.isZarrWorkflow}
+        onChange={event => onItemChange(index, "isZarrWorkflow", event.target.checked)} />
       <input aria-label={`${item.name} Zarr v3`} type="checkbox" checked={!!item.useZarrV3}
         onChange={event => onItemChange(index, "useZarrV3", event.target.checked)} />
       <input aria-label={`${item.name} name`} value={item.name}
         onChange={event => onItemChange(index, "name", event.target.value)} />
       <button onClick={() => onResetItem(index)}>Reset {item.name}</button>
       <button onClick={() => onDeleteItem(index)}>Delete {item.name}</button>
+      <button onClick={() => onRepoBlur(index)}>Read descriptor {item.name}</button>
     </div>)}
   </div>
 ));
@@ -178,11 +182,11 @@ test("an added empty workflow disables saving", async () => {
   expect(useAppContext().saveConfigData).not.toHaveBeenCalled();
 });
 
-function renderZarrPolicy(ui = {}) {
+function renderZarrPolicy(ui = {}, metadata = { "schema-version": "bilayers:0.1.0" }) {
   useAppContext.mockReturnValue({
-    state: { config: { ...config, UI: ui, WORKFLOWS: {
+    state: { config: { ...config, UI: { zarr_workflows: '["seg"]', ...ui }, WORKFLOWS: {
       seg: "seg", seg_repo: "https://github.com/org/seg/tree/v1", seg_job: "jobs/seg.sh",
-    } }, workflows: [{ name: "seg", metadata: { "schema-version": "bilayers:0.1.0" } }] },
+    } }, workflows: [{ name: "seg", githubUrl: "https://github.com/org/seg/tree/v1", metadata }] },
     updateState: jest.fn(), loadBiomeroConfig: jest.fn(), saveConfigData: jest.fn(),
   });
   render(<SettingsForm />);
@@ -197,6 +201,56 @@ test('defaults to v2 and saves an explicit per-workflow v3 opt-in', async () => 
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
     expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '["seg"]' }) }),
     expect.anything()));
+});
+
+test('turning off Zarr clears its v3 suboption and persists both lists', async () => {
+  renderZarrPolicy({ zarr_v3_workflows: '["seg"]' });
+  fireEvent.click(await screen.findByLabelText('seg Zarr required'));
+  expect(screen.getByLabelText('seg Zarr v3')).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ zarr_workflows: '[]', zarr_v3_workflows: '[]' }) }),
+    expect.anything()));
+});
+
+test.each(['requires-zarr', 'requires-plate'])(
+  'descriptor-required input permits v3 and preserves the choice through a rename: %s', async (requirement) => {
+    renderZarrPolicy({ zarr_workflows: '[]' }, { 'schema-version': 'bilayers:0.1.0', [requirement]: true });
+    fireEvent.click(await screen.findByLabelText('seg Zarr v3'));
+    fireEvent.change(screen.getByLabelText('seg name'), { target: { value: 'renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+    await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '["renamed"]' }) }), expect.anything()));
+  }
+);
+
+test('descriptor refresh retains a manual version choice without inferring v3 from Zarr support', async () => {
+  renderZarrPolicy({ zarr_v3_workflows: '["seg"]' });
+  await screen.findByLabelText('seg Zarr v3');
+  fetchWorkflowMetadata.mockResolvedValue({ 'schema-version': 'bilayers:0.1.0', 'requires-zarr': true });
+  fireEvent.click(screen.getByRole('button', { name: 'Read descriptor seg' }));
+  await waitFor(() => expect(fetchWorkflowMetadata).toHaveBeenCalled());
+  expect(screen.getByLabelText('seg Zarr v3')).toBeChecked();
+  fireEvent.click(screen.getByLabelText('seg Zarr v3'));
+  fireEvent.click(screen.getByRole('button', { name: 'Read descriptor seg' }));
+  await waitFor(() => expect(fetchWorkflowMetadata).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText('seg Zarr v3')).not.toBeChecked();
+});
+
+test('does not save a v3 opt-in for a TIFF-only or known BIAFLOWS workflow', async () => {
+  renderZarrPolicy({ zarr_workflows: '[]', zarr_v3_workflows: '["seg"]' }, { 'schema-version': 'cytomine-0.1' });
+  await screen.findByLabelText('seg Zarr v3');
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '[]' }) }), expect.anything()));
+});
+
+test('an unavailable descriptor does not erase a previously saved manual v3 choice', async () => {
+  renderZarrPolicy({ zarr_workflows: '[]', zarr_v3_workflows: '["seg"]' }, null);
+  await screen.findByLabelText('seg Zarr v3');
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '["seg"]' }) }), expect.anything()));
 });
 
 test('loads, resets, renames and deletes the v3 workflow selection', async () => {

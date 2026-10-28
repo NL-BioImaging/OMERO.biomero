@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Collapse, Button, H4, Icon, Tooltip } from "@blueprintjs/core";
+import { getWorkflowInputRequirements, getZarrVersionLabel } from "../workflowModes";
 
 const ConfigSection = ({
   items,
@@ -23,25 +24,6 @@ const ConfigSection = ({
 }) => {
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [editableIndex, setEditableIndex] = useState(null);
-
-  // Helper function to get workflow type from name
-  const getWorkflowTypeIcons = (workflowName) => {
-    if (!workflowName || !config || !config.UI) return null;
-    
-    const plateWorkflows = config.UI.plate_workflows ? 
-      JSON.parse(config.UI.plate_workflows || '[]') : [];
-    const isPlateWorkflow = plateWorkflows.includes(workflowName);
-    
-    const dualModeWorkflows = config.UI.dual_mode_workflows ?
-      JSON.parse(config.UI.dual_mode_workflows || '[]') : [];
-    const isDualModeWorkflow = dualModeWorkflows.includes(workflowName);
-
-    const zarrWorkflows = config.UI.zarr_workflows ? 
-      JSON.parse(config.UI.zarr_workflows || '[]') : [];
-    const isZarrWorkflow = zarrWorkflows.includes(workflowName);
-    
-    return { isPlateWorkflow, isZarrWorkflow, isDualModeWorkflow };
-  };
 
   const toggleItem = (index) => {
     setExpandedIndex(expandedIndex === index ? null : index);
@@ -74,8 +56,8 @@ const ConfigSection = ({
         {items.map((item, index) => {
           const dmeta = descriptorMetadata ? descriptorMetadata[index] : null;
           const hasDescriptorMismatch = dmeta && (
-            (dmeta.requiresPlate !== null && (item.isPlateWorkflow || false) !== dmeta.requiresPlate) ||
-            (dmeta.requiresZarr !== null && (item.isZarrWorkflow || false) !== dmeta.requiresZarr)
+            (dmeta.requiresPlate != null && (item.isPlateWorkflow || false) !== dmeta.requiresPlate) ||
+            (dmeta.requiresZarr != null && (item.isZarrWorkflow || false) !== dmeta.requiresZarr)
           );
           // GPU misconfiguration: useGpu is on but global GPU resources aren't configured
           // and no per-workflow sbatch overrides cover the gap.
@@ -104,10 +86,10 @@ const ConfigSection = ({
           })();
           const descriptorMismatchTooltip = dmeta && (() => {
             const parts = [];
-            if (dmeta.requiresPlate !== null && (item.isPlateWorkflow || false) !== dmeta.requiresPlate)
+            if (dmeta.requiresPlate != null && (item.isPlateWorkflow || false) !== dmeta.requiresPlate)
               parts.push(dmeta.requiresPlate ? 'Descriptor indicates plate input — enable Plate Workflow?' : 'Plate Workflow enabled but not in descriptor — intentional?');
-            if (dmeta.requiresZarr !== null && (item.isZarrWorkflow || false) !== dmeta.requiresZarr)
-              parts.push(dmeta.requiresZarr ? 'Descriptor indicates Zarr input — enable Zarr Workflow?' : 'Zarr Workflow enabled but not in descriptor — intentional?');
+            if (dmeta.requiresZarr != null && (item.isZarrWorkflow || false) !== dmeta.requiresZarr)
+              parts.push(dmeta.requiresZarr ? 'The workflow descriptor requires Zarr input.' : 'Zarr Workflow enabled but not in descriptor — intentional?');
             return parts.join(' · ');
           })();
           const isVersionOutdated = versionStatus && versionStatus[index] &&
@@ -183,23 +165,26 @@ const ConfigSection = ({
               <div className="flex items-center">
                 {/* Workflow type indicators - right aligned, multiple can show at once */}
                 {(() => {
-                  const workflowTypeIcons = getWorkflowTypeIcons(item.name);
+                  const { supportsPlates, requiresZarr, useZarrV3 } = getWorkflowInputRequirements(item, dmeta);
+                  const formatLabel = getZarrVersionLabel(useZarrV3);
+                  const plateLabel = `${item.isDualModeWorkflow ? 'Plate and image workflow' : 'Plate workflow'} (${formatLabel})`;
+                  const zarrLabel = `Zarr workflow (${formatLabel}; requires importer for results)`;
                   const extraItemKeys = Object.keys(item.extraParams || {}).map(k => k.toLowerCase());
                   const isGpuWorkflow = item.useGpu || extraItemKeys.some(k => k.endsWith('_job_gres') || k.endsWith('_job_gpus'));
                   return (
                     <>
-                      {workflowTypeIcons?.isPlateWorkflow && (
-                        <Tooltip content={
-                          workflowTypeIcons.isDualModeWorkflow
-                            ? "Plate and image workflow (one SLURM workflow)"
-                            : "Plate Workflow (operates on OME-ZARR plates)"
-                        }>
-                          <Icon icon="grid-view" size={14} intent="primary" className="mr-1" />
+                      {supportsPlates && (
+                        <Tooltip content={plateLabel}>
+                          <span role="img" aria-label={plateLabel}>
+                            <Icon icon="grid-view" size={14} intent={useZarrV3 ? 'success' : 'primary'} className="mr-1" />
+                          </span>
                         </Tooltip>
                       )}
-                      {!workflowTypeIcons?.isPlateWorkflow && workflowTypeIcons?.isZarrWorkflow && (
-                        <Tooltip content="ZARR Workflow (requires importer for results)">
-                          <Icon icon="cube" size={14} intent="none" className="mr-1" />
+                      {!supportsPlates && requiresZarr && (
+                        <Tooltip content={zarrLabel}>
+                          <span role="img" aria-label={zarrLabel}>
+                            <Icon icon="cube" size={14} intent={useZarrV3 ? 'success' : 'none'} className="mr-1" />
+                          </span>
                         </Tooltip>
                       )}
                       {isGpuWorkflow && (

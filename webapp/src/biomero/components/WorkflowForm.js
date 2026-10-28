@@ -179,16 +179,16 @@ const WorkflowForm = () => {
                   key={id}
                   label={<span>{name} <HistoryFieldCue field={id} /></span>}
                   labelFor={id}
-                  helperText="Format is locked to ZARR for admin-configured workflows"
+                  helperText="Format is locked to OME-Zarr for admin-configured workflows"
                 >
                   <InputGroup
                     id={id}
-                    value="ZARR"
+                    value="OME-Zarr"
                     readOnly={true}
                     disabled={true}
                     intent="primary"
                     rightElement={
-                      <Tooltip content="This workflow requires ZARR format (admin-configured)">
+                      <Tooltip content="This workflow requires OME-Zarr format (admin-configured)">
                         <Icon icon="lock" intent="primary" />
                       </Tooltip>
                     }
@@ -212,7 +212,7 @@ const WorkflowForm = () => {
                   >
                     {choices.map((choice, i) => {
                       const label = choiceLabels[i] != null ? String(choiceLabels[i]) : String(choice);
-                      return <option key={String(choice)} value={String(choice)}>{label}</option>;
+                      return <option key={String(choice)} value={String(choice)}>{isFormatField && label === "ZARR" ? "OME-Zarr" : label}</option>;
                     })}
                   </HTMLSelect>
                 </FormGroup>

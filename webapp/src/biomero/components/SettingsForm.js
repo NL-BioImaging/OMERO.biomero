@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { parseWorkflowList } from "../workflowModes";
+import { parseWorkflowList, getDescriptorInputRequirements, getWorkflowInputRequirements } from "../workflowModes";
 import {
   Card,
   FormGroup,
@@ -104,22 +104,21 @@ const SettingsForm = () => {
   const [errors, setErrors] = useState({});
   const [modelErrors, setModelErrors] = useState({});
   
-  // Descriptor flags derived from already-fetched state.workflows (populated by Run tab on load)
+  // Newly read descriptors and saved workflow metadata use the same interpretation.
+  const [descriptorsByRepo, setDescriptorsByRepo] = useState({});
   const descriptorMetadata = useMemo(() => {
-    if (!settingsForm?.WORKFLOWS || !state.workflows) return {};
+    if (!settingsForm?.WORKFLOWS) return {};
     const result = {};
     settingsForm.WORKFLOWS.forEach((model, index) => {
-      const wf = state.workflows.find((w) => w.name === model.name);
-      if (wf?.metadata) {
-        result[index] = {
-          requiresZarr: wf.metadata['requires-zarr'] ?? null,
-          requiresPlate: wf.metadata['requires-plate'] ?? null,
-          isBilayers: String(wf.metadata['schema-version'] || '').startsWith('bilayers'),
-        };
+      const wf = state.workflows?.find((w) =>
+        (w.githubUrl || w.metadata?.githubUrl || state.config.WORKFLOWS?.[`${w.name}_repo`]) === model.repo);
+      const metadata = descriptorsByRepo[model.repo] || wf?.metadata;
+      if (metadata) {
+        result[index] = getDescriptorInputRequirements(metadata);
       }
     });
     return result;
-  }, [settingsForm?.WORKFLOWS, state.workflows]);
+  }, [settingsForm?.WORKFLOWS, state.workflows, state.config?.WORKFLOWS, descriptorsByRepo]);
 
   // Version checking state
   const [versionStatus, setVersionStatus] = useState({});
@@ -452,9 +451,11 @@ const SettingsForm = () => {
     }
 
     if (metadata) {
+      setDescriptorsByRepo(prev => ({ ...prev, [model.repo]: metadata }));
       setSettingsForm((prev) => {
         const updatedModels = structuredClone(prev.WORKFLOWS);
         const m = updatedModels[modelIndex];
+        if (!m || m.repo !== model.repo) return prev;
 
         // Auto-populate name from descriptor if the name field is still empty
         if (!m.name && metadata.name) {
@@ -484,6 +485,9 @@ const SettingsForm = () => {
           m.isZarrWorkflow = true;
         }
 
+        // General Zarr support does not imply v3 support. Keep a valid manual
+        // choice when rereading a descriptor; BIAFLOWS always remains v2.
+        m.useZarrV3 = getWorkflowInputRequirements(m, getDescriptorInputRequirements(metadata)).useZarrV3;
         return { ...prev, WORKFLOWS: updatedModels };
       });
     }
@@ -513,7 +517,10 @@ const SettingsForm = () => {
           !descriptorMetadata[index]?.requiresPlate) {
         updatedModels[index]["isDualModeWorkflow"] = false;
       }
-
+      if (['isZarrWorkflow', 'isPlateWorkflow', 'useZarrV3'].includes(field)) {
+        updatedModels[index].useZarrV3 = getWorkflowInputRequirements(
+          updatedModels[index], descriptorMetadata[index]).useZarrV3;
+      }
 
       return { ...prev, WORKFLOWS: updatedModels };
     });
@@ -798,8 +805,11 @@ const SettingsForm = () => {
         ...settingsForm.UI,
         plate_workflows: JSON.stringify(plateWorkflows),
         zarr_workflows: JSON.stringify(zarrWorkflows),
+        // A temporarily unavailable descriptor must not erase a saved choice.
+        // Explicitly disabling Zarr clears it in handleModelChange above.
         zarr_v3_workflows: JSON.stringify(settingsForm.WORKFLOWS
-          .filter(model => model.useZarrV3).map(model => model.name)),
+          .filter((model, index) => model.useZarrV3 && descriptorMetadata[index]?.isBilayers !== false)
+          .map(model => model.name)),
         dual_mode_workflows: JSON.stringify(dualModeWorkflows)
       }
     };
@@ -1610,7 +1620,7 @@ const SettingsForm = () => {
           title="Converter"
           description={[
             "Settings for linking to external data format converters for running on Slurm.",
-            "By default, BIOMERO exports images as ZARR to the HPC. But, the workflow you want to execute might require a different filetype. E.g. most of our example workflows require TIFF input files. This is the default for BIAFLOWS.",
+            "By default, BIOMERO exports images as OME-Zarr to the HPC. But, the workflow you want to execute might require a different filetype. E.g. most of our example workflows require TIFF input files. This is the default for BIAFLOWS.",
             "If you provide nothing, BIOMERO will build a converter on Slurm for you. Instead, you can add converters here to pull those instead. These should be available on DockerHub as a container image. If you don't have singularity build rights on Slurm, you can also use this field instead to pull.",
             "Please pin it to a specific version to reduce unforeseen errors. Key should be the types 'X_to_Y' and value should be the docker image, for example `zarr_to_tiff=cellularimagingcf/convert_zarr_to_tiff:2.0.0-alpha.9`",
           ]}

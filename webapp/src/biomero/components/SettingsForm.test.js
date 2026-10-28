@@ -53,8 +53,18 @@ jest.mock("@blueprintjs/core", () => {
 });
 
 jest.mock("./CollapsibleSection", () => ({ children }) => <section>{children}</section>);
-jest.mock("./ConfigSection", () => ({ onAddItem, title }) => (
-  <button onClick={onAddItem}>Add {title}</button>
+jest.mock("./ConfigSection", () => ({ onAddItem, title, items, onItemChange, onDeleteItem, onResetItem }) => (
+  <div>
+    <button onClick={onAddItem}>Add {title}</button>
+    {items.filter(item => item.name).map((item, index) => <div key={index}>
+      <input aria-label={`${item.name} Zarr v3`} type="checkbox" checked={!!item.useZarrV3}
+        onChange={event => onItemChange(index, "useZarrV3", event.target.checked)} />
+      <input aria-label={`${item.name} name`} value={item.name}
+        onChange={event => onItemChange(index, "name", event.target.value)} />
+      <button onClick={() => onResetItem(index)}>Reset {item.name}</button>
+      <button onClick={() => onDeleteItem(index)}>Delete {item.name}</button>
+    </div>)}
+  </div>
 ));
 jest.mock("./ModelCard.js", () => () => null);
 jest.mock("./ConverterCard.js", () => () => null);
@@ -166,4 +176,45 @@ test("an added empty workflow disables saving", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Add.*Workflow/i }));
   expect(screen.getByRole("button", { name: "Save Settings" })).toBeDisabled();
   expect(useAppContext().saveConfigData).not.toHaveBeenCalled();
+});
+
+function renderZarrPolicy(ui = {}) {
+  useAppContext.mockReturnValue({
+    state: { config: { ...config, UI: ui, WORKFLOWS: {
+      seg: "seg", seg_repo: "https://github.com/org/seg/tree/v1", seg_job: "jobs/seg.sh",
+    } }, workflows: [{ name: "seg", metadata: { "schema-version": "bilayers:0.1.0" } }] },
+    updateState: jest.fn(), loadBiomeroConfig: jest.fn(), saveConfigData: jest.fn(),
+  });
+  render(<SettingsForm />);
+}
+
+test('defaults to v2 and saves an explicit per-workflow v3 opt-in', async () => {
+  renderZarrPolicy();
+  const toggle = await screen.findByLabelText('seg Zarr v3');
+  expect(toggle).not.toBeChecked();
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '["seg"]' }) }),
+    expect.anything()));
+});
+
+test('loads, resets, renames and deletes the v3 workflow selection', async () => {
+  renderZarrPolicy({ zarr_v3_workflows: '["seg"]', custom_setting: 'keep' });
+  const toggle = await screen.findByLabelText('seg Zarr v3');
+  expect(toggle).toBeChecked();
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: 'Reset seg' }));
+  expect(toggle).toBeChecked();
+  fireEvent.change(screen.getByLabelText('seg name'), { target: { value: 'renamed' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({
+      zarr_v3_workflows: '["renamed"]', custom_setting: 'keep',
+    }) }), expect.anything()));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete renamed' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ zarr_v3_workflows: '[]' }) }),
+    expect.anything()));
 });

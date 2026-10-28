@@ -226,11 +226,10 @@ def run_workflow_script(request, conn=None, **kwargs):
         roi_color = str(params.get("roiColor", "") or "").strip().upper()
         # EXPERIMENTAL: ZARR format support
         use_zarr = params.get("useZarrFormat", False)
-        # Fresh native Zarr exports default to v3; the legacy TIFF converter
-        # still requires v2, including when replaying an explicit v3 request.
-        ome_zarr_version = (
-            params.get("omeZarrVersion") or transfer.OME_ZARR_VERSION_0_5
-        ) if use_zarr else transfer.OME_ZARR_VERSION_0_4
+        # Input compatibility is an administrator policy, including replay of
+        # old form data. The worker also enforces the descriptor's workflow type.
+        ome_zarr_version = SlurmClient.resolve_workflow_zarr_version(
+            workflow_name, use_zarr=use_zarr)
         # Batch processing parameters
         batch_enabled = params.get("batchEnabled", False)
         batch_count = params.get("batchCount", 1)

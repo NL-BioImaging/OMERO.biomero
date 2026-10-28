@@ -1,4 +1,5 @@
 import json
+import configparser
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -38,6 +39,14 @@ class AnalyzerViewsTests(TestCase):
         def from_config(cls, config_only=True):  # pragma: no cover trivial
             return cls()
 
+        @classmethod
+        def resolve_workflow_zarr_version(cls, name, **kwargs):
+            from biomero.slurm_client import SlurmClient
+            config = configparser.ConfigParser()
+            config.read_dict({"UI": {"zarr_v3_workflows": json.dumps(
+                getattr(cls, "v3_workflows", []))}})
+            return SlurmClient.resolve_workflow_zarr_version(name, configs=config, **kwargs)
+
     # --- run_workflow_script tests ---
     def test_run_workflow_missing_name(self):
         view = _raw("run_workflow_script")
@@ -75,13 +84,17 @@ class AnalyzerViewsTests(TestCase):
             modified = False
 
         cases = [
-            ({}, "0.4"),
-            ({"useZarrFormat": True}, "0.5"),
-            ({"useZarrFormat": True, "omeZarrVersion": "0.4"}, "0.4"),
-            ({"useZarrFormat": True, "omeZarrVersion": "0.5"}, "0.5"),
-            ({"useZarrFormat": False, "omeZarrVersion": "0.5"}, "0.4"),
+            ({}, [], "0.4"),
+            ({"useZarrFormat": True}, [], "0.4"),
+            ({"useZarrFormat": True, "omeZarrVersion": "0.5"}, [], "0.4"),
+            ({"useZarrFormat": True}, ["wfA"], "0.5"),
+            ({"useZarrFormat": True, "omeZarrVersion": "0.4"}, ["wfA"], "0.5"),
+            ({"useZarrFormat": True}, ["other"], "0.4"),
+            ({"useZarrFormat": False, "omeZarrVersion": "0.5"}, ["wfA"], "0.4"),
         ]
-        for overrides, expected in cases:
+        for overrides, opted_in, expected in cases:
+            class StubSlurm(self._StubSlurmBase):
+                v3_workflows = opted_in
             for batched in (False, True):
                 with self.subTest(overrides=overrides, batched=batched):
                     svc = MagicMock()
@@ -101,7 +114,7 @@ class AnalyzerViewsTests(TestCase):
                         body=json.dumps({"workflow_name": "wfA",
                                          "params": params}).encode())
                     with patch("omero_biomero.analyzer_views.SlurmClient",
-                               self._StubSlurmBase), patch(
+                               StubSlurm), patch(
                         "omero_biomero.analyzer_views.prepare_workflow_parameters",
                         return_value=params,
                     ):

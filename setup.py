@@ -52,7 +52,9 @@ setup(
     install_requires=[
         "omero-web>=5.31.0,<6",
         "pyjwt>=2.12.1,<3",
-        "biomero>=2.9.0b16,<3",
+        # Development integration dependency; restore the published range
+        # before merging/releasing: "biomero>=2.9.0b18,<3".
+        "biomero @ git+https://github.com/NL-BioImaging/biomero.git@35900d4c25162d47e93573b4c38836ffb19606f7",
         "biomero-schema>=0.3.0b2,<0.4",
         "configupdater>=3.2,<4",
         "sqlalchemy>=2,<3",

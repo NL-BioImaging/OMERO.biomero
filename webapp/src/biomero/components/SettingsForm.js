@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { parseWorkflowList } from "../workflowModes";
 import {
   Card,
   FormGroup,
@@ -113,6 +114,7 @@ const SettingsForm = () => {
         result[index] = {
           requiresZarr: wf.metadata['requires-zarr'] ?? null,
           requiresPlate: wf.metadata['requires-plate'] ?? null,
+          isBilayers: String(wf.metadata['schema-version'] || '').startsWith('bilayers'),
         };
       }
     });
@@ -252,6 +254,7 @@ const SettingsForm = () => {
             isPlateWorkflow: isPlateWorkflow, // Boolean flag from UI list
             isDualModeWorkflow: isDualModeWorkflow,
             isZarrWorkflow: isZarrWorkflow, // Boolean flag from UI list
+            useZarrV3: parseWorkflowList(state.config.UI?.zarr_v3_workflows).includes(prefix),
             useGpu: state.config.WORKFLOWS[`${prefix}_use_gpu`] === "true",
             extraParams: extractExtraParams(prefix), // Handle the extraParams here
           };
@@ -795,6 +798,8 @@ const SettingsForm = () => {
         ...settingsForm.UI,
         plate_workflows: JSON.stringify(plateWorkflows),
         zarr_workflows: JSON.stringify(zarrWorkflows),
+        zarr_v3_workflows: JSON.stringify(settingsForm.WORKFLOWS
+          .filter(model => model.useZarrV3).map(model => model.name)),
         dual_mode_workflows: JSON.stringify(dualModeWorkflows)
       }
     };

@@ -1,6 +1,7 @@
 """Offline validation for configuration edits; never initializes workflows."""
 
 import re
+import json
 from urllib.parse import urlsplit
 
 
@@ -54,6 +55,16 @@ def validate_ini_sections(sections):
                 fields[field] = "Use a single-line value."
             elif isinstance(value, str) and re.search(r"[\r\n\x00]", value):
                 fields[field] = "Use a single-line value; remove unexpected line breaks."
+
+        if section == "UI" and "zarr_v3_workflows" in values:
+            try:
+                workflows = json.loads(values["zarr_v3_workflows"] or "[]")
+            except (ValueError, TypeError):
+                workflows = None
+            if not isinstance(workflows, list) or any(
+                    not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name)
+                    for name in workflows):
+                fields["UI.zarr_v3_workflows"] = "Use a JSON list of workflow names, or [] for v2 defaults."
 
         if section not in ("WORKFLOWS", "MODELS"):
             continue

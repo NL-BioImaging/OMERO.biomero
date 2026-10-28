@@ -1,4 +1,4 @@
-const parseWorkflowList = (value) => {
+export const parseWorkflowList = (value) => {
   if (Array.isArray(value)) return value;
   if (!value) return [];
 

@@ -415,6 +415,23 @@ const ModelCard = ({
 
         <div className="flex items-center justify-between mt-3">
           <div className="flex flex-col">
+            <span className="text-sm font-medium">Zarr v3 input (OME-Zarr 0.5)</span>
+            <span className="text-xs bp5-text-muted">
+              Default: Zarr v2 / OME-Zarr 0.4. Enable only when this workflow supports v3.
+              BIAFLOWS and TIFF conversion always use v2. Existing data stays in its
+              original format; conversion creates temporary workflow input.
+            </span>
+          </div>
+          <Switch
+            aria-label="Zarr v3 input (OME-Zarr 0.5)"
+            checked={!!item.useZarrV3 && descriptorMeta?.isBilayers !== false}
+            disabled={!editable || descriptorMeta?.isBilayers === false}
+            onChange={(e) => onChange(index, "useZarrV3", e.target.checked)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex flex-col">
             <span className="text-sm font-medium flex items-center gap-1">
               <Icon icon="applications" size={12} intent="primary" />
               Also Allow Image Input

@@ -1,6 +1,6 @@
 ---
 name: omero-biomero-dev
-description: Development runbook for the OMERO.biomero Django and React web plugin. Use when changing omero_biomero views, URLs, templates, settings, or tests; changing webapp React components, BlueprintJS/Tailwind UI, API calls, polling, state, or generated frontend assets; adding database-backed monitoring; updating configuration or deployment surfaces; or debugging OMERO.biomero integration with BIOMERO importer and converter services.
+description: Development runbook for the OMERO.biomero Django and React web plugin. Use when changing omero_biomero views, URLs, templates, settings, or tests; changing webapp React components, BlueprintJS/Tailwind UI, API calls, polling, state, or generated frontend assets; adding database-backed monitoring; updating configuration or deployment surfaces; or debugging OMERO.biomero integration with BIOMERO importer and converter services. Also use when drafting component release notes.
 ---
 
 # OMERO.biomero Development
@@ -108,3 +108,9 @@ Read only the references needed for the task:
   Keep hover explanations and NL-BIOMERO admin docs aligned. Runtime means new
   runs/requests after saving, not changes to an already running job. See the
   configuration reference for helper-image and deployment prerequisites.
+
+## Release notes
+
+Before drafting a stable or beta release body, read the current
+[shared component release-note guide](https://github.com/NL-BioImaging/NL-BIOMERO/blob/master/.agents/skills/omero-biomero-expert/references/component-release-notes.md).
+Keep the format in that single source; do not copy it into this repository.

@@ -60,9 +60,10 @@ def validate_ini_sections(sections, *, complete=False):
         if section == "SLURM" and "ssh_recovery_timeout" in values:
             timeout = values["ssh_recovery_timeout"]
             if (isinstance(timeout, bool) or
-                    not re.fullmatch(r"[0-9]+", str(timeout).strip())):
+                    not re.fullmatch(r"[0-9]*", str(timeout).strip())):
                 fields["SLURM.ssh_recovery_timeout"] = (
-                    "Recovery window must be a whole number of seconds, zero or greater."
+                    "Recovery window must be a whole number of seconds, zero or greater, "
+                    "or blank for the default."
                 )
 
         if section == "UI" and "zarr_v3_workflows" in values:

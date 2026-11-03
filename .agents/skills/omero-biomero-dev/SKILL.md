@@ -10,8 +10,10 @@ current branch, `git status`, and the nearest related implementation and tests
 before editing. Match local conventions and make the smallest coherent change;
 do not reformat or rewrite unrelated code.
 
-Preserve released behavior and deployment compatibility unless the user
-explicitly authorizes a breaking change. Treat generated frontend bundles as
+Preserve supported APIs, configuration and deployment compatibility. Correct
+faulty behavior by default; do not make a bug fix opt-in merely to preserve the
+bug. Feature gates are for optional capabilities, not a substitute for testing
+fixes in existing environments. Treat generated frontend bundles as
 tracked deployment artifacts: frontend source and its production bundle must be
 committed and published together.
 
@@ -84,6 +86,17 @@ Read only the references needed for the task:
 - [references/importer-converter-debug.md](references/importer-converter-debug.md):
   Docker/Podman importer-converter debugging, logs, OMERO database checks, and
   physical-unit registration pitfalls.
+
+## Documentation placement
+
+General guides describe normal behavior, usage and configuration for their
+intended audience. Explain deployment prerequisites in setup/admin guides when
+needed to operate the product. Put version-to-version upgrade or migration
+steps in dedicated upgrade documentation, and release-specific changes in
+release notes. Keep investigation history, validation plans, PR dependencies
+and release coordination in PRs or maintainer records. An unreleased feature
+does not need an invented upgrade narrative; a bug fix does not automatically
+need a new compatibility section in the user guide.
 
 ## Core Rules
 

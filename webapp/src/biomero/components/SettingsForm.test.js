@@ -112,19 +112,47 @@ function renderShallower(enabled, slurm = {}) {
   return render(<SettingsForm />);
 }
 
-test('missing SSH recovery window defaults to legacy mode and saves to SLURM', async () => {
+test('missing SSH recovery window shows the recovery default and saves a custom value', async () => {
   renderShallower(false);
   const input = await screen.findByLabelText('SSH recovery window (seconds)');
-  expect(input).toHaveValue('0');
-  fireEvent.change(input, { target: { value: '900' } });
+  expect(input).toHaveValue('900');
+  fireEvent.change(input, { target: { value: '1200' } });
   fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
-    expect.objectContaining({ SLURM: expect.objectContaining({ ssh_recovery_timeout: '900' }) }),
+    expect.objectContaining({ SLURM: expect.objectContaining({ ssh_recovery_timeout: '1200' }) }),
     expect.any(Array)));
   expect(screen.getByText('BIOMERO_SSH_RECOVERY_TIMEOUT')).toBeInTheDocument();
 });
 
-test.each(['-1', '1.5', 'nan', ''])('invalid SSH recovery window %s prevents saving', async value => {
+test('saving an unchanged missing recovery window does not opt out', async () => {
+  renderShallower(false);
+  expect(await screen.findByLabelText('SSH recovery window (seconds)')).toHaveValue('900');
+  fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalled());
+  expect(useAppContext().saveConfigData.mock.calls[0][0].SLURM)
+    .not.toHaveProperty('ssh_recovery_timeout');
+});
+
+test.each(['', '0', '1200'])('preserves saved SSH recovery value %s', async value => {
+  renderShallower(false, { ssh_recovery_timeout: value });
+  expect(await screen.findByLabelText('SSH recovery window (seconds)')).toHaveValue(value);
+  fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
+    expect.objectContaining({ SLURM: expect.objectContaining({ ssh_recovery_timeout: value }) }),
+    expect.any(Array)));
+});
+
+test('clearing an explicit recovery opt-out saves an inherited default', async () => {
+  renderShallower(false, { ssh_recovery_timeout: '0' });
+  fireEvent.change(await screen.findByLabelText('SSH recovery window (seconds)'), { target: { value: '' } });
+  expect(screen.getByRole('button', { name: /Save Settings/i })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
+    expect.objectContaining({ SLURM: expect.objectContaining({ ssh_recovery_timeout: '' }) }),
+    expect.any(Array)));
+});
+
+test.each(['-1', '1.5', 'nan'])('invalid SSH recovery window %s prevents saving', async value => {
   renderShallower(false);
   fireEvent.change(await screen.findByLabelText('SSH recovery window (seconds)'), { target: { value } });
   expect(screen.getByRole('button', { name: /Save Settings/i })).toBeDisabled();

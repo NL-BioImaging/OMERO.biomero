@@ -26,6 +26,8 @@ import { ADMIN_HELP } from "../adminHelp";
 import { checkModelVersions, clearGitHubCache, slugify, fetchWorkflowMetadata } from "../../apiService";
 import { getDeletedConfigOptions, validateWorkflowRows } from "../configAdmin";
 
+const DEFAULT_SSH_RECOVERY_TIMEOUT = "900";
+
 /** Inline Tag showing an environment variable name. */
 const EnvVarTag = ({ name }) => (
   <Tag minimal className="font-mono">{name}</Tag>
@@ -143,8 +145,8 @@ const SettingsForm = () => {
   const remoteShallowEnabled = !["false", "0", "no", "off"].includes(
     String(settingsForm?.SLURM?.remote_shallow_zarr ?? "true").trim().toLowerCase());
   const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
-  const recoveryWindow = String(settingsForm?.SLURM?.ssh_recovery_timeout ?? "0").trim();
-  const invalidRecoveryWindow = !/^[0-9]+$/.test(recoveryWindow);
+  const recoveryWindow = String(settingsForm?.SLURM?.ssh_recovery_timeout ?? DEFAULT_SSH_RECOVERY_TIMEOUT).trim();
+  const invalidRecoveryWindow = recoveryWindow !== "" && !/^[0-9]+$/.test(recoveryWindow);
   const invalidShallowWorkers = state.ui?.shallow_zarr_enabled && remoteShallowEnabled &&
     workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
   const invalidZarrVersions = (settingsForm?.WORKFLOWS || []).filter((model, index) =>
@@ -928,14 +930,15 @@ const SettingsForm = () => {
         {renderEditableField(
           <span>SSH recovery window (seconds) <RuntimeIcon /></span>,
           "SLURM.ssh_recovery_timeout",
-          settingsForm?.SLURM?.ssh_recovery_timeout ?? "0",
-          "0",
+          settingsForm?.SLURM?.ssh_recovery_timeout ?? DEFAULT_SSH_RECOVERY_TIMEOUT,
+          DEFAULT_SSH_RECOVERY_TIMEOUT,
           <>
-            Retry temporary SSH failures for this many seconds per interruption. Healthy job runtime does not consume this window.
-            Set 0 for the existing single-attempt behavior. Applies to new runs after saving; no Slurm Init needed.
+            Retry temporary SSH failures for up to 900 seconds (15 minutes) by default, in both inline and detached workflows.
+            Leave blank to use the default, enter a positive number to change the window, or set 0 to disable recovery.
+            Healthy job runtime does not consume this window. Applies to new runs after saving; no Slurm Init needed.
             Only operations that are safe to replay are retried; authentication and permission errors still stop the run.
             {invalidRecoveryWindow && <span role="alert" className="block text-red-600">
-              Recovery window must be a whole number of seconds, zero or greater.
+              Recovery window must be a whole number of seconds, zero or greater, or blank for the default.
             </span>}
             <EnvVarNote vars={["BIOMERO_SSH_RECOVERY_TIMEOUT"]} />
             <DocumentationLink {...ADMIN_HELP.sshRecovery} />

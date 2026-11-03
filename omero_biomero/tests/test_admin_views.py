@@ -561,7 +561,7 @@ class AdminConfigTests(TestCase):
 
     def test_ssh_recovery_window_round_trip(self):
         ini = Path(self._create_tempfile("[SLURM]\nkeep=value\n"))
-        for seconds in ("0", "900"):
+        for seconds in ("", "   ", "0", "900"):
             with self.subTest(seconds=seconds):
                 response = self._post_config({"config": {"SLURM": {
                     "ssh_recovery_timeout": seconds,
@@ -569,11 +569,11 @@ class AdminConfigTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 parsed = configparser.ConfigParser()
                 parsed.read(ini)
-                self.assertEqual(parsed["SLURM"]["ssh_recovery_timeout"], seconds)
+                self.assertEqual(parsed["SLURM"]["ssh_recovery_timeout"], seconds.strip())
                 self.assertEqual(parsed["SLURM"]["keep"], "value")
 
     def test_invalid_ssh_recovery_window_does_not_write_either_file(self):
-        for seconds in ("-1", "1.5", "nan", "inf", "", True, None):
+        for seconds in ("-1", "1.5", "nan", "inf", True, None):
             with self.subTest(seconds=seconds):
                 ini = Path(self._create_tempfile("[SLURM]\nkeep=value\n"))
                 json_config = self._tmpdir / "config.json"

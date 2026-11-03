@@ -112,6 +112,25 @@ function renderShallower(enabled, slurm = {}) {
   return render(<SettingsForm />);
 }
 
+test('missing SSH recovery window defaults to legacy mode and saves to SLURM', async () => {
+  renderShallower(false);
+  const input = await screen.findByLabelText('SSH recovery window (seconds)');
+  expect(input).toHaveValue('0');
+  fireEvent.change(input, { target: { value: '900' } });
+  fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
+    expect.objectContaining({ SLURM: expect.objectContaining({ ssh_recovery_timeout: '900' }) }),
+    expect.any(Array)));
+  expect(screen.getByText('BIOMERO_SSH_RECOVERY_TIMEOUT')).toBeInTheDocument();
+});
+
+test.each(['-1', '1.5', 'nan', ''])('invalid SSH recovery window %s prevents saving', async value => {
+  renderShallower(false);
+  fireEvent.change(await screen.findByLabelText('SSH recovery window (seconds)'), { target: { value } });
+  expect(screen.getByRole('button', { name: /Save Settings/i })).toBeDisabled();
+  expect(screen.getByText(/Recovery window must be a whole number/)).toBeInTheDocument();
+});
+
 test('hides shallower settings when shallow Zarr is disabled', async () => {
   renderShallower(false);
   await screen.findByLabelText('Pull Images via sbatch');

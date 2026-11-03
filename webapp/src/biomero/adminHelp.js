@@ -4,6 +4,7 @@ const ADMIN_GUIDE = 'https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/
 export const ADMIN_HELP = {
   manual: { href: `${ADMIN_GUIDE}#analyzer-admin-configuration`, label: 'Administrator manual' },
   ssh: { href: `${ADMIN_GUIDE}#ssh-settings`, label: 'SSH settings documentation' },
+  sshRecovery: { href: `${ADMIN_GUIDE}#ssh-recovery-window`, label: 'SSH recovery documentation' },
   slurm: { href: `${ADMIN_GUIDE}#slurm-settings`, label: 'Slurm settings documentation' },
   paths: { href: `${ADMIN_GUIDE}#paths`, label: 'Slurm paths documentation' },
   history: { href: `${ADMIN_GUIDE}#sacct-history-window`, label: 'SACCT history documentation' },

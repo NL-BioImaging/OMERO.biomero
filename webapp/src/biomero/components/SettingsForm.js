@@ -143,13 +143,15 @@ const SettingsForm = () => {
   const remoteShallowEnabled = !["false", "0", "no", "off"].includes(
     String(settingsForm?.SLURM?.remote_shallow_zarr ?? "true").trim().toLowerCase());
   const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
+  const recoveryWindow = String(settingsForm?.SLURM?.ssh_recovery_timeout ?? "0").trim();
+  const invalidRecoveryWindow = !/^[0-9]+$/.test(recoveryWindow);
   const invalidShallowWorkers = state.ui?.shallow_zarr_enabled && remoteShallowEnabled &&
     workers !== "" && (!/^\d+$/.test(workers) || Number(workers) < 1);
   const invalidZarrVersions = (settingsForm?.WORKFLOWS || []).filter((model, index) =>
     model.useZarrV3 && !getWorkflowInputRequirements(model, descriptorMetadata[index]).requiresZarr);
 
   const hasValidationErrors = () => {
-    return Object.keys(validateWorkflowRows(settingsForm?.WORKFLOWS)).length > 0 || invalidShallowWorkers || invalidZarrVersions.length > 0 || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
+    return Object.keys(validateWorkflowRows(settingsForm?.WORKFLOWS)).length > 0 || invalidRecoveryWindow || invalidShallowWorkers || invalidZarrVersions.length > 0 || getMaxBatchJobsError() !== null || Object.keys(errors).length > 0 || Object.keys(modelErrors).length > 0;
   };
 
   const validateModelFields = (models, scriptRepo, slurm) => {
@@ -896,7 +898,7 @@ const SettingsForm = () => {
         </div>
       </div>
 
-      <CollapsibleSection documentation={ADMIN_HELP.ssh} title={<span className="inline-flex items-center gap-1">SSH Settings <SlurmInitIcon /></span>}>
+      <CollapsibleSection documentation={ADMIN_HELP.ssh} title={<span className="inline-flex items-center gap-1">SSH Settings <SlurmInitIcon /> <RuntimeIcon /></span>}>
         <div className="bp5-form-group">
           <div className="bp5-form-content">
             <div className="bp5-form-helper-text">
@@ -917,11 +919,28 @@ const SettingsForm = () => {
           </div>
         </div>
         {renderEditableField(
-          "SSH Host",
+          <span>SSH Host <SlurmInitIcon /></span>,
           "SSH.host",
           settingsForm.SSH.host,
           "Enter SSH Host",
           "The alias for the SSH connection for connecting to Slurm."
+        )}
+        {renderEditableField(
+          <span>SSH recovery window (seconds) <RuntimeIcon /></span>,
+          "SLURM.ssh_recovery_timeout",
+          settingsForm?.SLURM?.ssh_recovery_timeout ?? "0",
+          "0",
+          <>
+            Retry temporary SSH failures for this many seconds per interruption. Healthy job runtime does not consume this window.
+            Set 0 for the existing single-attempt behavior. Applies to new runs after saving; no Slurm Init needed.
+            Only operations that are safe to replay are retried; authentication and permission errors still stop the run.
+            {invalidRecoveryWindow && <span role="alert" className="block text-red-600">
+              Recovery window must be a whole number of seconds, zero or greater.
+            </span>}
+            <EnvVarNote vars={["BIOMERO_SSH_RECOVERY_TIMEOUT"]} />
+            <DocumentationLink {...ADMIN_HELP.sshRecovery} />
+          </>,
+          invalidRecoveryWindow ? "danger" : ""
         )}
       </CollapsibleSection>
       <CollapsibleSection documentation={ADMIN_HELP.slurm} title={<span className="inline-flex items-center gap-1">Slurm Settings <RuntimeIcon /> <SlurmInitIcon /></span>}>

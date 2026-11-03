@@ -4,8 +4,9 @@
 
 - Trace each setting from its source through parsing, Django context or API,
   React state, admin controls, documentation, and deployment configuration.
-- Match existing parsing and naming conventions. Preserve the old default so an
-  existing deployment behaves the same unless it opts in.
+- Match existing parsing and naming conventions. Keep supported deployments
+  working when correcting a default; do not preserve faulty behavior merely
+  to avoid a default change. Use feature gates for optional capabilities.
 - When a setting is editable in
   `webapp/src/biomero/components/SettingsForm.js`, keep its label, helper text,
   default, environment override, scope, and validation consistent with the
@@ -52,8 +53,10 @@
 
 - Edit `webapp/src` rather than generated files under
   `omero_biomero/static/omero_biomero/assets`.
-- Never run `build`, `clear-assets`, or start `watch`; the developer-owned
-  `corepack yarn watch` process handles generated assets.
+- During local-only work, preserve the developer-owned watcher output; do not
+  run `build`, invoke `clear-assets` directly, or start another watcher. When
+  publishing frontend changes, follow `SKILL.md`: build immediately before
+  the final commit and push, and include the generated assets.
 - Treat manifest, hashed bundle, source map, license, and replaced-hash changes
   as watcher output. Preserve them and report unexpected changes; never
   hand-edit hashes or the asset manifest.

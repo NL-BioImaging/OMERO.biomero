@@ -172,6 +172,24 @@ with pixels and labels preserved. Canonical stores retain their original format.
 Returned data with a different canonical format stays full, without cross-format
 shallowing or a second canonical copy.
 
+### Workflow result storage
+
+The workflow card's **Original image pixels need not be returned** setting
+allows shallow result processing to reuse the known input image without
+comparing returned original pixels. Derived images, labels and sidecars are
+retained. This runtime setting applies to new runs after saving and is stored
+as a JSON workflow-name list in `[UI] original_pixels_not_required_workflows`.
+A missing or blank value, or `[]`, leaves the workflow shortcut disabled.
+
+Usable RO-Crate output declarations are interpreted automatically while shallow
+storage is enabled; this setting is only the alternative when usable output
+evidence is absent. With neither, the configured pixel comparison applies.
+Disabling shallow storage takes precedence over both paths and keeps full
+results. The setting does not enable shallow storage or infer a Bilayers
+descriptor preset. See the
+[shallow-storage administrator guide](https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/omero-biomero-admin.html#shallow-zarr)
+for the matching worker/importer setup.
+
 ### Testing
 
 To run tests, create virtual environment, activate it and install the package in editable mode (this automatically pulls all dependencies from setup.py):

@@ -4,6 +4,16 @@ from omero_biomero.config_validation import ConfigValidationError, validate_ini_
 
 
 class WorkflowFormatConfigTests(SimpleTestCase):
+    def test_rejects_malformed_original_pixel_policy_lists(self):
+        for value in ('true', '{}', '[1]', '"seg"', 'seg', '["bad name"]'):
+            with self.subTest(value=value), self.assertRaises(ConfigValidationError):
+                validate_ini_sections({"UI": {"original_pixels_not_required_workflows": value}})
+
+    def test_original_pixel_policy_is_independent_of_input_format(self):
+        for value in ('', '[]', '["seg", "plate-test"]', None):
+            with self.subTest(value=value):
+                validate_ini_sections({"UI": {"original_pixels_not_required_workflows": value}}, complete=True)
+
     def test_rejects_malformed_workflow_lists(self):
         for value in ('true', '{}', '[1]', '"seg"', 'seg', '["bad name"]'):
             with self.subTest(value=value), self.assertRaises(ConfigValidationError):

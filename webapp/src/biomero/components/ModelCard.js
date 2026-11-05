@@ -568,6 +568,23 @@ const ModelCard = ({
       </FormGroup>
 
       <FormGroup
+        label={<span className="inline-flex items-center gap-1">Shallow result storage <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.shallow} /></span>}
+        helperText={
+          <>
+            <p>When shallow storage is enabled and no usable output declaration exists, reuse the known input image instead of comparing returned original pixels. Derived images, labels and other results are retained.</p>
+            <p>Usable RO-Crate output declarations are handled automatically, whether this setting is on or off. Disabling shallow storage always keeps full results.</p>
+          </>
+        }
+      >
+        <Switch
+          label="Original image pixels need not be returned"
+          checked={item.originalPixelsNotRequired || false}
+          disabled={!editable}
+          onChange={(e) => onChange(index, "originalPixelsNotRequired", e.target.checked)}
+        />
+      </FormGroup>
+
+      <FormGroup
         label={
           <span className="inline-flex items-center gap-1">
             Additional Slurm Parameters

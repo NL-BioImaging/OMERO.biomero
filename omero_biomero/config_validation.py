@@ -66,6 +66,18 @@ def validate_ini_sections(sections, *, complete=False):
                     "or blank for the default."
                 )
 
+        if section == "UI" and "original_pixels_not_required_workflows" in values:
+            try:
+                workflows = json.loads(values["original_pixels_not_required_workflows"] or "[]")
+            except (ValueError, TypeError):
+                workflows = None
+            if not isinstance(workflows, list) or any(
+                    not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name)
+                    for name in workflows):
+                fields["UI.original_pixels_not_required_workflows"] = (
+                    "Use a JSON list of workflow names, or [] to disable the workflow shortcut."
+                )
+
         if section == "UI" and "zarr_v3_workflows" in values:
             try:
                 workflows = json.loads(values["zarr_v3_workflows"] or "[]")

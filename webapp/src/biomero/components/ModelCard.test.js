@@ -7,6 +7,25 @@ jest.mock("../../apiService", () => ({ fetchContainerImage: jest.fn() }));
 
 const item = { name: "seg", repo: "", job: "jobs/seg.sh", isZarrWorkflow: true };
 
+test('offers independent original-pixel policy with full-storage and automatic metadata explanation', () => {
+  const change = jest.fn();
+  render(<ModelCard item={{ ...item, isZarrWorkflow: false }} index={0} editable onChange={change} />);
+  const toggle = screen.getByRole('checkbox', { name: 'Original image pixels need not be returned' });
+  expect(toggle).toBeEnabled();
+  expect(toggle).not.toBeChecked();
+  fireEvent.click(toggle);
+  expect(change).toHaveBeenCalledWith(0, 'originalPixelsNotRequired', true);
+  expect(screen.getByText(/Usable RO-Crate output declarations are handled automatically/)).toBeVisible();
+  expect(screen.getByText(/Disabling shallow storage always keeps full results/)).toBeVisible();
+});
+
+test('locked workflow cards cannot change original-pixel policy', () => {
+  render(<ModelCard item={{ ...item, originalPixelsNotRequired: true }} index={0} editable={false} />);
+  const toggle = screen.getByRole('checkbox', { name: 'Original image pixels need not be returned' });
+  expect(toggle).toBeChecked();
+  expect(toggle).toBeDisabled();
+});
+
 test('offers an explicit v3 switch, off by default', () => {
   const change = jest.fn();
   render(<ModelCard item={item} index={0} editable onChange={change}

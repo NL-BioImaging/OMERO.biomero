@@ -1,4 +1,5 @@
 import json
+import configparser
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -39,6 +40,70 @@ class AnalyzerViewsTests(TestCase):
             return cls()
 
     # --- run_workflow_script tests ---
+    def test_original_pixel_policy_defaults_from_admin_ui_list(self):
+        from omero_biomero.analyzer_views import original_pixel_comparison_default
+
+        cases = [(None, False), ('', False), ('[]', False), ('["wfA"]', True),
+                 ('["other"]', False), ('true', False), ('{"wfA":true}', False),
+                 ('["wfA", 1]', False), ('invalid', False)]
+        for configured, expected in cases:
+            with self.subTest(configured=configured):
+                config = configparser.ConfigParser()
+                if configured is not None:
+                    config['UI'] = {'original_pixels_not_required_workflows': configured}
+                with patch('omero_biomero.analyzer_views.SlurmClient.load_config', return_value=config):
+                    self.assertEqual(original_pixel_comparison_default('wfA'), expected)
+
+    def test_original_pixel_policy_is_a_typed_script_input_for_both_launches(self):
+        from biomero.constants import workflow
+        from omero.rtypes import unwrap, rbool
+
+        class Session(dict):
+            modified = False
+
+        key = workflow.SKIP_ORIGINAL_PIXEL_COMPARISON
+        for batched in (False, True):
+            for explicit, default, expected in ((None, True, True), (None, False, False),
+                                                (False, True, False), (True, False, True)):
+                with self.subTest(batched=batched, explicit=explicit, default=default):
+                    svc = MagicMock()
+                    script = MagicMock()
+                    script.id = 42
+                    script.getName.return_value = ('SLURM_Run_Workflow_Batched.py'
+                                                   if batched else 'SLURM_Run_Workflow.py')
+                    svc.getScripts.return_value = [script]
+                    svc.runScript.return_value.getJob.return_value._id = 99
+                    conn = MagicMock()
+                    conn.getScriptService.return_value = svc
+                    params = {'IDs': [1], 'Data_Type': 'Image', 'batchEnabled': batched}
+                    if explicit is not None:
+                        params[key] = explicit
+                    request = SimpleNamespace(method='POST', session=Session(), body=json.dumps({
+                        'workflow_name': 'wfA', 'params': params}).encode())
+                    with patch('omero_biomero.analyzer_views.prepare_workflow_parameters', return_value=params), patch(
+                            'omero_biomero.analyzer_views.original_pixel_comparison_default', return_value=default) as bias:
+                        response = _raw('run_workflow_script')(request, conn=conn)
+                    self.assertEqual(response.status_code, 200, response.content)
+                    sent = svc.runScript.call_args.args[1]
+                    self.assertIsInstance(sent[key], type(rbool(False)))
+                    self.assertEqual(unwrap(sent[key]), expected)
+                    self.assertNotIn(f'wfA_|_{key}', sent)
+                    if explicit is not None:
+                        bias.assert_not_called()
+
+    def test_original_pixel_policy_rejects_non_boolean_explicit_input(self):
+        from biomero.constants import workflow
+
+        for value in ('false', 'true', 0, 1, None, []):
+            with self.subTest(value=value):
+                conn = MagicMock()
+                request = SimpleNamespace(method='POST', body=json.dumps({
+                    'workflow_name': 'wfA', 'params': {
+                        workflow.SKIP_ORIGINAL_PIXEL_COMPARISON: value}}).encode())
+                response = _raw('run_workflow_script')(request, conn=conn)
+                self.assertEqual(response.status_code, 400, response.content)
+                conn.getScriptService.assert_not_called()
+
     def test_run_workflow_missing_name(self):
         view = _raw("run_workflow_script")
         request = SimpleNamespace(method="POST", body=json.dumps({}).encode())

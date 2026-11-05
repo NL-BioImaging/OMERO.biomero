@@ -31,6 +31,22 @@ def plate_label_preview_allowed():
         logger.warning("Could not read Plate label preview policy: %s", exc)
         return False
 
+
+def original_pixel_comparison_default(workflow_name):
+    """Resolve the web UI's workflow default; absent or invalid stays false."""
+    try:
+        config = SlurmClient.load_config()
+        names = json.loads(config.get(
+            "UI", "original_pixels_not_required_workflows", fallback=""
+        ) or "[]")
+        return (isinstance(names, list)
+                and all(isinstance(name, str) for name in names)
+                and workflow_name in names)
+    except Exception as exc:
+        logger.warning("Could not read original-pixel comparison policy: %s", exc)
+        return False
+
+
 def get_roi_script_capability(script_service, scripts=None):
     """Ask OMERO whether the optional Labels2Rois script is installed."""
     scripts = scripts if scripts is not None else script_service.getScripts()
@@ -62,6 +78,16 @@ def run_workflow_script(request, conn=None, **kwargs):
         if not workflow_name:
             return JsonResponse({"error": "workflow_name is required"}, status=400)
         params = data.get("params", {})
+        if workflow.SKIP_ORIGINAL_PIXEL_COMPARISON in params:
+            skip_original_pixel_comparison = params[
+                workflow.SKIP_ORIGINAL_PIXEL_COMPARISON]
+            if type(skip_original_pixel_comparison) is not bool:
+                return JsonResponse({
+                    "error": f"{workflow.SKIP_ORIGINAL_PIXEL_COMPARISON} must be a Boolean"
+                }, status=400)
+        else:
+            skip_original_pixel_comparison = original_pixel_comparison_default(
+                workflow_name)
         launch_warnings = []
         execution_mode = (
             "detached"
@@ -327,6 +353,7 @@ def run_workflow_script(request, conn=None, **kwargs):
             "cytomine_public_key",
             "version",
             "useZarrFormat",  # EXPERIMENTAL: ZARR format support
+            workflow.SKIP_ORIGINAL_PIXEL_COMPARISON,
             "omeZarrVersion",  # handled explicitly below
             "batchEnabled",   # Frontend flag (not sent to script)
             "batchCount",     # Frontend calculated (not sent to script)
@@ -365,6 +392,8 @@ def run_workflow_script(request, conn=None, **kwargs):
                 transfer.DATA_TYPE: wrap(data_type),
                 workflow.EMAIL: rbool(out_email),
                 workflow.USE_ZARR_FORMAT: rbool(use_zarr),  # EXPERIMENTAL
+                workflow.SKIP_ORIGINAL_PIXEL_COMPARISON: rbool(
+                    skip_original_pixel_comparison),
                 transfer.OME_VERSION: wrap(ome_zarr_version),
                 workflow_batched.BATCH_SIZE: wrap(batch_size) if batch_enabled else None,  # Only for batched script
                 workflow.SELECT_IMPORT: rbool(True),

@@ -89,6 +89,10 @@ Read only the references needed for the task:
 
 ## Documentation placement
 
+Keep detailed administrator settings in NL-BIOMERO's dedicated admin guide.
+The component README should give a short overview and link there, rather than
+accumulating a new option-by-option manual for each feature.
+
 General guides describe normal behavior, usage and configuration for their
 intended audience. Explain deployment prerequisites in setup/admin guides when
 needed to operate the product. Put version-to-version upgrade or migration
@@ -100,6 +104,12 @@ need a new compatibility section in the user guide.
 
 ## Core Rules
 
+- `[UI]` settings are OMERO.biomero defaults and preferences. Resolve them here
+  before launch and pass normal typed OMERO script inputs, using keys from
+  `biomero.constants`. Scripts and core must not read UI policy themselves.
+  Preserve an explicitly supplied input, including `False`, rather than
+  overwriting it with the UI default. Direct script calls retain their own
+  declared defaults independently of the web configuration.
 - Prefer BlueprintJS components, then existing Tailwind utilities. Add custom
   CSS only when neither expresses the required behavior.
 - Keep feature-local state local. Put data in `AppContext` only when multiple

@@ -52,7 +52,7 @@ setup(
     install_requires=[
         "omero-web>=5.31.0,<6",
         "pyjwt>=2.12.1,<3",
-        "biomero>=2.9.0b22,<3",
+        "biomero>=2.9.0b23,<3",
         "biomero-schema>=0.3.0b3,<0.4",
         "configupdater>=3.2,<4",
         "sqlalchemy>=2,<3",

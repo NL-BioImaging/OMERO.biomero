@@ -65,6 +65,8 @@ jest.mock("./ConfigSection", () => ({ onAddItem, title, items, onItemChange, onD
         onChange={event => onItemChange(index, "isZarrWorkflow", event.target.checked)} />
       <input aria-label={`${item.name} Zarr v3`} type="checkbox" checked={!!item.useZarrV3}
         onChange={event => onItemChange(index, "useZarrV3", event.target.checked)} />
+      <input aria-label={`${item.name} originals not required`} type="checkbox" checked={!!item.originalPixelsNotRequired}
+        onChange={event => onItemChange(index, "originalPixelsNotRequired", event.target.checked)} />
       <input aria-label={`${item.name} name`} value={item.name}
         onChange={event => onItemChange(index, "name", event.target.value)} />
       <button onClick={() => onResetItem(index)}>Reset {item.name}</button>
@@ -274,6 +276,40 @@ function renderZarrPolicy(ui = {}, metadata = { "schema-version": "bilayers:0.1.
   });
   render(<SettingsForm />);
 }
+
+test.each([undefined, '', '[]'])('defaults original-pixel policy off for %s and persists a manual selection', async (value) => {
+  renderZarrPolicy({ original_pixels_not_required_workflows: value });
+  const toggle = await screen.findByLabelText('seg originals not required');
+  expect(toggle).not.toBeChecked();
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ original_pixels_not_required_workflows: '["seg"]' }) }),
+    expect.anything()));
+});
+
+test('original-pixel selection survives descriptor refresh and follows rename, reset and deletion', async () => {
+  renderZarrPolicy({ original_pixels_not_required_workflows: '["seg"]', custom_setting: 'keep' });
+  const toggle = await screen.findByLabelText('seg originals not required');
+  expect(toggle).toBeChecked();
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole('button', { name: 'Reset seg' }));
+  expect(toggle).toBeChecked();
+  fetchWorkflowMetadata.mockResolvedValue({ 'schema-version': 'bilayers:0.1.0', 'requires-zarr': true });
+  fireEvent.click(screen.getByRole('button', { name: 'Read descriptor seg' }));
+  await waitFor(() => expect(fetchWorkflowMetadata).toHaveBeenCalled());
+  expect(toggle).toBeChecked();
+  fireEvent.change(screen.getByLabelText('seg name'), { target: { value: 'renamed' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ original_pixels_not_required_workflows: '["renamed"]', custom_setting: 'keep' }) }),
+    expect.anything()));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete renamed' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ UI: expect.objectContaining({ original_pixels_not_required_workflows: '[]' }) }),
+    expect.anything()));
+});
 
 test('defaults to v2 and saves an explicit per-workflow v3 opt-in', async () => {
   renderZarrPolicy();

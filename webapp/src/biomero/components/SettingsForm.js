@@ -261,6 +261,7 @@ const SettingsForm = () => {
             isDualModeWorkflow: isDualModeWorkflow,
             isZarrWorkflow: isZarrWorkflow, // Boolean flag from UI list
             useZarrV3: parseWorkflowList(state.config.UI?.zarr_v3_workflows).includes(prefix),
+            originalPixelsNotRequired: parseWorkflowList(state.config.UI?.original_pixels_not_required_workflows).includes(prefix),
             useGpu: state.config.WORKFLOWS[`${prefix}_use_gpu`] === "true",
             extraParams: extractExtraParams(prefix), // Handle the extraParams here
           };
@@ -818,6 +819,9 @@ const SettingsForm = () => {
         // Explicitly disabling Zarr clears it in handleModelChange above.
         zarr_v3_workflows: JSON.stringify(settingsForm.WORKFLOWS
           .filter(model => model.useZarrV3)
+          .map(model => model.name)),
+        original_pixels_not_required_workflows: JSON.stringify(settingsForm.WORKFLOWS
+          .filter(model => model.originalPixelsNotRequired)
           .map(model => model.name)),
         dual_mode_workflows: JSON.stringify(dualModeWorkflows)
       }

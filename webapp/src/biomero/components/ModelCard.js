@@ -568,6 +568,23 @@ const ModelCard = ({
       </FormGroup>
 
       <FormGroup
+        label={<span className="inline-flex items-center gap-1">Shallow result storage <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.shallow} /></span>}
+        helperText={
+          <>
+            <p>Shallow storage saves space, but comparing returned pixels with the input takes time. Enable this for a workflow you know leaves original pixels unchanged, such as one that adds segmentation labels. Skipping the comparison reduces processing time per run. Original input pixels are never modified; new labels and other results are retained.</p>
+            <p>Usable RO-Crate output declarations already skip this comparison automatically, whether this setting is on or off. Disabling shallow storage always keeps full results.</p>
+          </>
+        }
+      >
+        <Switch
+          label="Skip original-pixel comparison"
+          checked={item.originalPixelsNotRequired || false}
+          disabled={!editable}
+          onChange={(e) => onChange(index, "originalPixelsNotRequired", e.target.checked)}
+        />
+      </FormGroup>
+
+      <FormGroup
         label={
           <span className="inline-flex items-center gap-1">
             Additional Slurm Parameters

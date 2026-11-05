@@ -172,6 +172,9 @@ with pixels and labels preserved. Canonical stores retain their original format.
 Returned data with a different canonical format stays full, without cross-format
 shallowing or a second canonical copy.
 
+Configure workflow and storage options through the
+[NL-BIOMERO administrator guide](https://nl-bioimaging.github.io/NL-BIOMERO/latest/sysadmin/omero-biomero-admin.html).
+
 ### Testing
 
 To run tests, create virtual environment, activate it and install the package in editable mode (this automatically pulls all dependencies from setup.py):

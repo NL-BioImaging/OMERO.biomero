@@ -572,6 +572,29 @@ class AdminConfigTests(TestCase):
                 self.assertEqual(parsed["SLURM"]["ssh_recovery_timeout"], seconds.strip())
                 self.assertEqual(parsed["SLURM"]["keep"], "value")
 
+    def test_original_pixel_policy_round_trip_without_zarr_input_requirement(self):
+        ini = Path(self._create_tempfile("[UI]\nkeep=value\n"))
+        for workflows in ('["seg"]', '[]', ''):
+            with self.subTest(workflows=workflows):
+                response = self._post_config({"config": {"UI": {
+                    "original_pixels_not_required_workflows": workflows,
+                }}}, ini)
+                self.assertEqual(response.status_code, 200)
+                parsed = configparser.ConfigParser()
+                parsed.read(ini)
+                self.assertEqual(parsed["UI"]["original_pixels_not_required_workflows"], workflows)
+                self.assertEqual(parsed["UI"]["keep"], "value")
+
+    def test_invalid_original_pixel_policy_keeps_existing_configuration(self):
+        ini = Path(self._create_tempfile('[UI]\noriginal_pixels_not_required_workflows=["seg"]\n'))
+        before = ini.read_bytes()
+        response = self._post_config({"config": {"UI": {
+            "original_pixels_not_required_workflows": 'true',
+        }}}, ini)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("UI.original_pixels_not_required_workflows", json.loads(response.content)["fields"])
+        self.assertEqual(ini.read_bytes(), before)
+
     def test_invalid_ssh_recovery_window_does_not_write_either_file(self):
         for seconds in ("-1", "1.5", "nan", "inf", True, None):
             with self.subTest(seconds=seconds):

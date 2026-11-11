@@ -5,6 +5,10 @@ description: Development runbook for the OMERO.biomero Django and React web plug
 
 # OMERO.biomero Development
 
+Read the [shared NL-BIOMERO engineering rules](https://github.com/NL-BioImaging/NL-BIOMERO/blob/master/.agents/skills/nl-biomero-engineering/SKILL.md)
+first; they cover branches, pull requests, review, agent guidance and local
+checkouts, and apply here. This skill adds only OMERO.biomero specifics.
+
 Work from the repository root, the directory containing `.agents`. Inspect the
 current branch, `git status`, and the nearest related implementation and tests
 before editing. Match local conventions and make the smallest coherent change;
@@ -16,25 +20,6 @@ bug. Feature gates are for optional capabilities, not a substitute for testing
 fixes in existing environments. Treat generated frontend bundles as
 tracked deployment artifacts: frontend source and its production bundle must be
 committed and published together.
-
-## Pull-request branch workflow
-
-Open pull requests ready for review by default. Use draft status only when the
-user explicitly requests it. Record dependencies and merge order in the PR
-description; do not add a separate pre-review stage.
-
-On an existing non-default branch intended for a pull request, make focused,
-coherent commits and push them as normal completion of authorized development
-work. Do not hold the branch locally merely to run a slow full suite: run cheap,
-relevant checks that catch immediate mistakes, inspect the diff, then let the
-required GitHub Actions checks be the full-suite gate. If CI fails, inspect it
-and push a follow-up fix. Incremental branch commits may stay small because the
-pull request will normally be squash-merged.
-
-Use proportionate local verification before a direct default-branch push,
-release, change without suitable CI coverage, or higher-risk operation. This
-workflow does not authorize unrelated publication, merging, deployment, or
-destructive actions.
 
 ## Workflow
 
@@ -123,7 +108,6 @@ need a new compatibility section in the user guide.
   infrastructure errors out of responses.
 - Reuse constants, API helpers, components, and derived state rather than
   duplicating values. Do not add global state merely to avoid passing a prop.
-- Preserve unrelated worktree changes. Do not use destructive Git commands.
 - Every admin setting needs an accurate Runtime or Slurm Init indicator, either
   on its label or a homogeneous group heading. Mixed sections must show both
   indicators and classify their fields/subgroups individually. Trace when the

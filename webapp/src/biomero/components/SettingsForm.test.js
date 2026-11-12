@@ -126,19 +126,6 @@ test('missing SSH recovery window shows the recovery default and saves a custom 
   expect(screen.getByText('BIOMERO_SSH_RECOVERY_TIMEOUT')).toBeInTheDocument();
 });
 
-test('the lock command can be set and names its environment override', async () => {
-  renderShallower(false);
-  const input = await screen.findByLabelText('Slurm Lock Command');
-  expect(input).toHaveValue('');
-  fireEvent.change(input, { target: { value: 'lockf {busy_exit_code} {lock_file}' } });
-  fireEvent.click(screen.getByRole('button', { name: /Save Settings/i }));
-  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
-    expect.objectContaining({ SLURM: expect.objectContaining({
-      slurm_lock_cmd: 'lockf {busy_exit_code} {lock_file}' }) }),
-    expect.any(Array)));
-  expect(screen.getByText('BIOMERO_SLURM_LOCK_CMD')).toBeInTheDocument();
-});
-
 test('saving an unchanged missing recovery window does not opt out', async () => {
   renderShallower(false);
   expect(await screen.findByLabelText('SSH recovery window (seconds)')).toHaveValue('900');

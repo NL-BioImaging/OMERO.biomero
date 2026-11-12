@@ -938,7 +938,7 @@ const SettingsForm = () => {
           DEFAULT_SSH_RECOVERY_TIMEOUT,
           <>
             Retry temporary SSH failures for up to 900 seconds (15 minutes) by default, in both inline and detached workflows.
-            Leave blank to use the default, enter a positive number to change the window, or set 0 to disable recovery.
+            Leave blank to use the default, enter a positive number to change the window, or set 0 for no retries (the same operations still run once).
             Healthy job runtime does not consume this window. Applies to new runs after saving; no Slurm Init needed.
             Only operations that are safe to replay are retried; authentication and permission errors still stop the run.
             {invalidRecoveryWindow && <span role="alert" className="block text-red-600">
@@ -1295,6 +1295,21 @@ const SettingsForm = () => {
               <code>zip</code> selects Info-ZIP syntax and requires the matching <code>unzip</code> executable.
               <ExampleNote>zip</ExampleNote>
               <EnvVarNote vars={["BIOMERO_SLURM_ZIP_CMD"]} />
+            </>
+          )}
+          <H6><span className="inline-flex items-center gap-1">Lock Command <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.sshRecovery} /></span></H6>
+          {renderEditableField(
+            "Slurm Lock Command",
+            "SLURM.slurm_lock_cmd",
+            settingsForm.SLURM?.slurm_lock_cmd,
+            "",
+            <>
+              Template of the command that locks a file on the cluster before a script that must not run twice at once
+              (job submission, input extraction, result archive creation). Leave blank for
+              <code>flock -w {'{wait_seconds}'} -E {'{busy_exit_code}'} {'{lock_file}'}</code>.
+              <code>{'{lock_file}'}</code> and <code>{'{busy_exit_code}'}</code> are required, <code>{'{wait_seconds}'}</code> is optional.
+              Slurm Init checks that the command and <code>sacct</code> exist and warns if not.
+              <EnvVarNote vars={["BIOMERO_SLURM_LOCK_CMD"]} />
             </>
           )}
           <H6><span className="inline-flex items-center gap-1">Global Sbatch Parameters <RuntimeIcon /> <DocumentationLink {...ADMIN_HELP.sbatch} /></span></H6>

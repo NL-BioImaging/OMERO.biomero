@@ -201,8 +201,23 @@ test('does not link to an unavailable admin script', async () => {
   expect(screen.getByText('Slurm Check Setup')).toHaveAttribute('aria-disabled', 'true');
 });
 
-test('defaults remote on and retains helper settings across opt-out', async () => {
-  renderShallower(true, { remote_shallower_image: 'registry/helper:custom' });
+test.each([
+  ['missing', {}],
+  ['empty', { remote_shallow_zarr: '' }],
+  ['false', { remote_shallow_zarr: 'false' }],
+])('remote shallowing is off when the setting is %s', async (_, slurm) => {
+  renderShallower(true, slurm);
+  expect(await screen.findByLabelText('Remote shallowing')).not.toBeChecked();
+  expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
+});
+
+test.each(['true', 'TRUE', '1', 'yes', 'on'])('saved value %s turns remote shallowing on', async (value) => {
+  renderShallower(true, { remote_shallow_zarr: value });
+  expect(await screen.findByLabelText('Remote shallowing')).toBeChecked();
+});
+
+test('retains helper settings across switching remote shallowing off and on', async () => {
+  renderShallower(true, { remote_shallow_zarr: 'true', remote_shallower_image: 'registry/helper:custom' });
   const toggle = await screen.findByLabelText('Remote shallowing');
   expect(toggle).toBeChecked();
   expect(screen.getByLabelText('Shallower image')).toHaveValue('registry/helper:custom');
@@ -218,8 +233,17 @@ test('honours saved remote opt-out', async () => {
   expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
 });
 
+test('enabling remote shallowing from the default saves true', async () => {
+  renderShallower(true);
+  fireEvent.click(await screen.findByLabelText('Remote shallowing'));
+  fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+  await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
+    expect.objectContaining({ SLURM: expect.objectContaining({ remote_shallow_zarr: 'true' }) }),
+    expect.anything()));
+});
+
 test('saves opt-out without deleting hidden helper values', async () => {
-  renderShallower(true, { remote_shallower_workers: '4' });
+  renderShallower(true, { remote_shallow_zarr: 'true', remote_shallower_workers: '4' });
   fireEvent.click(await screen.findByLabelText('Remote shallowing'));
   fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
   await waitFor(() => expect(useAppContext().saveConfigData).toHaveBeenCalledWith(
@@ -229,7 +253,7 @@ test('saves opt-out without deleting hidden helper values', async () => {
 });
 
 test('rejects non-positive workers only while remote shallowing is enabled', async () => {
-  renderShallower(true, { remote_shallower_workers: '0' });
+  renderShallower(true, { remote_shallow_zarr: 'true', remote_shallower_workers: '0' });
   const toggle = await screen.findByLabelText('Remote shallowing');
   expect(screen.getByRole('alert')).toHaveTextContent('positive integer');
   expect(screen.getByRole('button', { name: 'Save Settings' })).toBeDisabled();

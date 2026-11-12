@@ -142,8 +142,9 @@ const SettingsForm = () => {
     return validateMaxBatchJobs(settingsForm?.UI?.max_batch_jobs);
   };
   
-  const remoteShallowEnabled = !["false", "0", "no", "off"].includes(
-    String(settingsForm?.SLURM?.remote_shallow_zarr ?? "true").trim().toLowerCase());
+  // Remote shallowing is off unless the setting says otherwise, as in BIOMERO core.
+  const remoteShallowEnabled = ["true", "1", "yes", "y", "on"].includes(
+    String(settingsForm?.SLURM?.remote_shallow_zarr ?? "").trim().toLowerCase());
   const workers = String(settingsForm?.SLURM?.remote_shallower_workers ?? "").trim();
   const recoveryWindow = String(settingsForm?.SLURM?.ssh_recovery_timeout ?? DEFAULT_SSH_RECOVERY_TIMEOUT).trim();
   const invalidRecoveryWindow = recoveryWindow !== "" && !/^[0-9]+$/.test(recoveryWindow);
@@ -1355,8 +1356,9 @@ const SettingsForm = () => {
       {state.ui?.shallow_zarr_enabled && (
         <CollapsibleSection documentation={ADMIN_HELP.shallow} title={<span className="inline-flex items-center gap-1">Shallow Zarr <RuntimeIcon /> <SlurmInitIcon /></span>}>
           <FormGroup helperText={<>
-            Shallow eligible Zarr results on Slurm before transfer. Enabled by default;
-            opt out to shallow locally in the importer and avoid additional Slurm compute costs.
+            Shallow eligible Zarr results on Slurm before transfer. Off unless enabled here
+            (or in the deployment); otherwise results are shallowed locally in the importer,
+            which avoids additional Slurm compute costs.
             <EnvVarNote vars={["BIOMERO_REMOTE_SHALLOW_ZARR"]} />
             Keep the worker and importer settings aligned. Environment overrides must
             be changed in the deployment, not in this form.

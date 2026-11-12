@@ -216,6 +216,18 @@ test.each(['true', 'TRUE', '1', 'yes', 'on'])('saved value %s turns remote shall
   expect(await screen.findByLabelText('Remote shallowing')).toBeChecked();
 });
 
+test('the form reads the ini spellings of core: y is not one of them', async () => {
+  renderShallower(true, { remote_shallow_zarr: 'y' });
+  expect(await screen.findByLabelText('Remote shallowing')).not.toBeChecked();
+});
+
+test('says the toggle shows slurm-config.ini and depends on BIOMERO_SHALLOW_ZARR', async () => {
+  renderShallower(true);
+  await screen.findByLabelText('Remote shallowing');
+  expect(screen.getByText(/BIOMERO_SHALLOW_ZARR/)).toBeInTheDocument();
+  expect(screen.getByText(/not shown here/)).toBeInTheDocument();
+});
+
 test('retains helper settings across switching remote shallowing off and on', async () => {
   renderShallower(true, { remote_shallow_zarr: 'true', remote_shallower_image: 'registry/helper:custom' });
   const toggle = await screen.findByLabelText('Remote shallowing');

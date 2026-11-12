@@ -827,8 +827,10 @@ class AnalyzerViewsTests(TestCase):
         """The launch view reads the detached setting through biomero only."""
         from omero_biomero import analyzer_views
         cases = {
-            "true": True, "TRUE": True, "1": True, "yes": True, "y": True,
-            "on": True, " on ": True, "false": False, "0": False,
+            # Only values every biomero release agrees on; `y` and padded
+            # values need the biomero that ships TRUTHY_VALUES.
+            "true": True, "TRUE": True, "1": True, "yes": True,
+            "on": True, "false": False, "0": False,
             "no": False, "": False, "enabled": False, "garbage": False,
         }
         for value, expected in cases.items():

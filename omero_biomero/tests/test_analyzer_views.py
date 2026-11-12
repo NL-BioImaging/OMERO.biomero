@@ -823,6 +823,22 @@ class AnalyzerViewsTests(TestCase):
         self.assertGreaterEqual(len(data["error_logs"]), 1)  # at least one error
 
     # --- prepare_workflow_parameters ---
+    def test_execution_mode_follows_the_core_reader_vocabulary(self):
+        """The launch view reads the detached setting through biomero only."""
+        from omero_biomero import analyzer_views
+        cases = {
+            "true": True, "TRUE": True, "1": True, "yes": True, "y": True,
+            "on": True, " on ": True, "false": False, "0": False,
+            "no": False, "": False, "enabled": False, "garbage": False,
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value), patch.dict(
+                    "os.environ", {"BIOMERO_DETACHED_WORKFLOWS": value}):
+                self.assertIs(analyzer_views.detached_mode_enabled(), expected)
+        with patch.dict("os.environ", clear=False) as env:
+            env.pop("BIOMERO_DETACHED_WORKFLOWS", None)
+            self.assertFalse(analyzer_views.detached_mode_enabled())
+
     def test_prepare_workflow_parameters_type_conversion(self):
         from omero_biomero.analyzer_views import prepare_workflow_parameters
 

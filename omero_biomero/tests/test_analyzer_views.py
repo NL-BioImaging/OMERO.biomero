@@ -324,6 +324,50 @@ class AnalyzerViewsTests(TestCase):
                 self.assertIn("Select at least one valid", response.content.decode())
         svc.runScript.assert_not_called()
 
+    def test_run_workflow_execution_mode_follows_the_setting(self):
+        """The view reports detached only for values the core reader accepts."""
+        class Script:
+            id = 42
+
+            def getName(self):
+                return "SLURM_Run_Workflow.py"
+
+        class Proc:
+            class Job:
+                _id = 99
+
+            def getJob(self):
+                return self.Job()
+
+        class _Session(dict):
+            modified = False
+
+        # `enabled` was accepted by the old web parser; it now means inline.
+        for value, expected in (("enabled", "inline"), ("true", "detached"),
+                                ("false", "inline")):
+            with self.subTest(value=value):
+                svc = MagicMock()
+                svc.getScripts.return_value = [Script()]
+                svc.runScript.return_value = Proc()
+                conn = MagicMock()
+                conn.getScriptService.return_value = svc
+                params = {"IDs": [1], "Data_Type": "Image"}
+                request = SimpleNamespace(
+                    method="POST",
+                    body=json.dumps({"workflow_name": "wfA",
+                                     "params": params}).encode(),
+                    session=_Session())
+                with patch.dict(
+                    "os.environ", {"BIOMERO_DETACHED_WORKFLOWS": value}
+                ), patch(
+                    "omero_biomero.analyzer_views.prepare_workflow_parameters",
+                    lambda *a, **k: params,
+                ):
+                    response = _raw("run_workflow_script")(request, conn=conn)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(json.loads(response.content)["executionMode"],
+                                 expected)
+
     def test_run_workflow_missing_roi_script_downgrades_to_warning(self):
         from biomero.constants import workflow
         from omero.rtypes import unwrap

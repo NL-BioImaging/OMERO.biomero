@@ -80,16 +80,20 @@ def _load_overrides_simple():
 #       are optionally batched in one additional order.
 # NOTE: I/O paths (inputfile/outputfolder/alt_outputfolder) are fixed in
 #       code for now, to keep configuration minimal.
+# Converter routes pin outputformat: biomero-converter's own default changes
+# between releases (OME-Zarr 0.5 since 0.2.5).
 PREPROCESSING_CONFIG = {
     "screen_db": {
-        "container": "cellularimagingcf/biomero-converter:0.2.2",
+        "container": "cellularimagingcf/biomero-converter:0.2.5",
+        "extra_params": {"outputformat": "omezarr04"},
     },
     "dataset_leica_uuid": {
-        "container": "cellularimagingcf/biomero-converter:0.2.2",
+        "container": "cellularimagingcf/biomero-converter:0.2.5",
         "extra_params": {"image_uuid": "{UUID}", "outputformat": "omezarr04"},
     },
     "incucyte_archive": {
-        "container": "cellularimagingcf/biomero-converter:0.2.2",
+        "container": "cellularimagingcf/biomero-converter:0.2.5",
+        "extra_params": {"outputformat": "omezarr04"},
     },
     # Add new keys here referencing PREPROCESSING_EXTENSION_MAP as needed.
 }

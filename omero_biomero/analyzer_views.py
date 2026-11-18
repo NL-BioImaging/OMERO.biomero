@@ -15,6 +15,7 @@ from omeroweb.webclient.decorators import login_required
 from omero.rtypes import unwrap, rbool, wrap, rlong, rlist
 import omero.model
 
+from biomero.detached import detached_mode_enabled
 from .utils import parse_bool_env
 
 logger = logging.getLogger(__name__)
@@ -89,15 +90,9 @@ def run_workflow_script(request, conn=None, **kwargs):
             skip_original_pixel_comparison = original_pixel_comparison_default(
                 workflow_name)
         launch_warnings = []
+        # One reader of the setting, shared with the scripts and the worker.
         execution_mode = (
-            "detached"
-            if parse_bool_env(
-                os.environ.get(
-                    constants.slurm_env.BIOMERO_DETACHED_WORKFLOWS
-                ),
-                default=False,
-            )
-            else "inline"
+            "detached" if detached_mode_enabled() else "inline"
         )
         if params.get("importPlateLabelPreview", False) and not plate_label_preview_allowed():
             return JsonResponse({

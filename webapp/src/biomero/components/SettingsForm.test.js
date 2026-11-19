@@ -178,7 +178,7 @@ test('hides shallower settings when shallow Zarr is disabled', async () => {
   renderShallower(false);
   await screen.findByLabelText('Pull Images via sbatch');
   expect(screen.queryByLabelText('Remote shallowing')).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Shallower workers')).not.toBeInTheDocument();
 });
 
 test.each([
@@ -221,7 +221,7 @@ test.each([
 ])('remote shallowing is off when the setting is %s', async (_, slurm) => {
   renderShallower(true, slurm);
   expect(await screen.findByLabelText('Remote shallowing')).not.toBeChecked();
-  expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Shallower workers')).not.toBeInTheDocument();
 });
 
 test.each(['true', 'TRUE', '1', 'yes', 'on'])('saved value %s turns remote shallowing on', async (value) => {
@@ -242,20 +242,31 @@ test('says the toggle shows slurm-config.ini and depends on BIOMERO_SHALLOW_ZARR
 });
 
 test('retains helper settings across switching remote shallowing off and on', async () => {
-  renderShallower(true, { remote_shallow_zarr: 'true', remote_shallower_image: 'registry/helper:custom' });
+  renderShallower(true, { remote_shallow_zarr: 'true', remote_shallower_workers: '4' });
   const toggle = await screen.findByLabelText('Remote shallowing');
   expect(toggle).toBeChecked();
-  expect(screen.getByLabelText('Shallower image')).toHaveValue('registry/helper:custom');
+  expect(screen.getByLabelText('Shallower workers')).toHaveValue('4');
   fireEvent.click(toggle);
+  expect(screen.queryByLabelText('Shallower workers')).not.toBeInTheDocument();
+  fireEvent.click(toggle);
+  expect(screen.getByLabelText('Shallower workers')).toHaveValue('4');
+});
+
+test('the helper image and tool version are not settings', async () => {
+  // An INI written by an earlier prerelease may still contain the old keys.
+  renderShallower(true, {
+    remote_shallow_zarr: 'true', remote_shallower_image: 'registry/helper:old',
+    remote_shallower_version: '0.1.0b8',
+  });
+  await screen.findByLabelText('Shallower workers');
   expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
-  fireEvent.click(toggle);
-  expect(screen.getByLabelText('Shallower image')).toHaveValue('registry/helper:custom');
+  expect(screen.queryByLabelText('Shallower tool version')).not.toBeInTheDocument();
 });
 
 test('honours saved remote opt-out', async () => {
   renderShallower(true, { remote_shallow_zarr: 'false' });
   expect(await screen.findByLabelText('Remote shallowing')).not.toBeChecked();
-  expect(screen.queryByLabelText('Shallower image')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Shallower workers')).not.toBeInTheDocument();
 });
 
 test('enabling remote shallowing from the default saves true', async () => {

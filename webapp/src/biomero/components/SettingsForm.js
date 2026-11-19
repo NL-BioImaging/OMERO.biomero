@@ -1391,15 +1391,13 @@ const SettingsForm = () => {
           </FormGroup>
           {remoteShallowEnabled && <>
             <p className="bp5-text-muted">
-              Image and tool version must match the importer trust configuration.
-              Run <AdminScriptLink name="Slurm Init" /> after changing the image, or before enabling remote
-              shallowing if the helper image has not been installed. Keep the original image available
+              The helper image comes from the installed shallower package. Run{" "}
+              <AdminScriptLink name="Slurm Init" /> after upgrading it, or before enabling remote
+              shallowing if the helper image has not been installed. Keep the original image installed
               until outstanding jobs finish. The helper requests no GPU.
             </p>
             {invalidShallowWorkers && <p role="alert">Shallower workers must be a positive integer.</p>}
             {[
-              ["image", "Shallower image", "cellularimagingcf/biomero-shallower:0.1.0", "Versioned container reference; an immutable digest is supported."],
-              ["version", "Shallower tool version", "0.1.0", "Tool version expected in the helper receipt."],
               ["workers", "Shallower workers", "1", "Positive integer; also sets CPUs per task. Default: 1."],
               ["partition", "Shallower partition", "", "Leave blank to inherit slurm_default_partition, then sbatch_partition, then the scheduler default."],
               ["mem", "Shallower memory", "", "Leave blank to inherit global sbatch_mem, then the scheduler default."],
@@ -1407,7 +1405,7 @@ const SettingsForm = () => {
             ].map(([key, label, placeholder, description]) => (
               <React.Fragment key={key}>
                 {renderEditableField(
-                  <span className="inline-flex items-center gap-1">{label} {key === "image" ? <SlurmInitIcon /> : <RuntimeIcon />}</span>,
+                  <span className="inline-flex items-center gap-1">{label} <RuntimeIcon /></span>,
                   `SLURM.remote_shallower_${key}`,
                   settingsForm.SLURM?.[`remote_shallower_${key}`], placeholder,
                   <>{description}<EnvVarNote vars={[`BIOMERO_REMOTE_SHALLOWER_${key.toUpperCase()}`]} /></>)}
